@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "bun ./node_modules/@nuxt/cli/bin/nuxi.mjs dev --port 31954 --host",
     "build": "nuxt build",
-    "generate": "nuxt generate",
+    "generate": "bun ./node_modules/@nuxt/cli/bin/nuxi.mjs generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "typecheck": "nuxt typecheck",
@@ -15,7 +15,6 @@
     "db:studio": "drizzle-kit studio",
     "start": "bun .output/server/index.mjs",
     "stress": "bun run scripts/stress-streams.ts",
-    "gateway": "cd media-node && NODE_ORIGIN=http://localhost:31954 SELF_ORIGIN=localhost RTMP_PORT=1935 SRS_ADDR=localhost:11935 SRS_API_BASE=http://localhost:1985/api/v1 MEDIA_NODE_AUTH_TOKEN=dev-insecure-rtmp-token go run .",
     "compose:down": "docker compose -f docker/docker-compose.yml down",
     "compose:down:backend": "docker compose -f docker/docker-compose.yml stop server media-node srs-media",
     "compose:down:go": "docker compose -f docker/docker-compose.yml stop media-node srs-media",

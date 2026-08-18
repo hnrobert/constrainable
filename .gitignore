@@ -6,3 +6,4 @@ records/
 .env
 dist/
 .DS_Store
+dist

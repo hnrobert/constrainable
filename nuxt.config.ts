@@ -102,6 +102,13 @@ export default defineNuxtConfig({
     },
   },
 
+  // Static split deployments (API_ORIGIN set): data pages must NOT hydrate
+  // from build-time payloads — those were prerendered against the throwaway
+  // generate-time DB and would show stale/empty data forever. Disabling
+  // payload extraction makes useFetch re-run on the client against the live
+  // API origin.
+  ...(process.env.API_ORIGIN ? { experimental: { payloadExtraction: false } } : {}),
+
   runtimeConfig: {
     // server-only (overridable via NUXT_* env at runtime)
     sessionSecret: process.env.SESSION_SECRET || 'dev-insecure-secret-change-me',
