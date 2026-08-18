@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "bun ./node_modules/@nuxt/cli/bin/nuxi.mjs dev --port 31954 --host",
     "build": "nuxt build",
-    "generate": "bun ./node_modules/@nuxt/cli/bin/nuxi.mjs generate",
+    "generate": "bun ./node_modules/@nuxt/cli/bin/nuxi.mjs generate && cp -f .output/public/200.html .output/public/index.html",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "typecheck": "nuxt typecheck",
