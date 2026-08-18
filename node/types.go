@@ -5,11 +5,12 @@ package node
 
 // RegisterPayload is what a media node sends on (re)connect to identify itself.
 type RegisterPayload struct {
-	Origin   string `json:"origin"`   // this node's public HTTP origin (SELF_ORIGIN)
-	RTMPPort int    `json:"rtmpPort"` // RTMP ingest port
-	SRTPort  int    `json:"srtPort"`  // SRT ingest port (scaffold)
-	Hostname string `json:"hostname"` // human-readable name
-	Version  string `json:"version"`  // media-node binary version
+	Origin     string `json:"origin"`     // this node's public HTTP origin (SELF_ORIGIN)
+	RTMPPort   int    `json:"rtmpPort"`   // RTMP ingest port
+	SRTPort    int    `json:"srtPort"`    // SRT ingest port (scaffold)
+	SRSFlvBase string `json:"srsFlvBase"` // how the control plane pulls FLV from this node's SRS
+	Hostname   string `json:"hostname"`   // human-readable name
+	Version    string `json:"version"`    // media-node binary version
 }
 
 // RegisteredAck is Node's response to a successful registration.

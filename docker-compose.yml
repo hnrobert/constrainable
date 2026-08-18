@@ -1,5 +1,7 @@
-# Standalone media-node deployment: connects to a remote constrainable-app backend.
-# Self-contained — SRS config is embedded, rendered at startup, SRS runs as a child.
+# Standalone media-node deployment: connects to a remote constrainable-app
+# backend. Two containers: the Go node + its SRS sidecar. The node renders the
+# SRS config (template embedded in its image) onto a shared volume; the SRS
+# container waits for it, then starts — the node stays the config owner.
 #
 # Usage:
 #   NODE_ORIGIN=https://api.example.com docker compose up -d
@@ -21,17 +23,56 @@ services:
       MEDIA_NODE_AUTH_TOKEN: ${MEDIA_NODE_AUTH_TOKEN:-}
       # RTMP ingest
       RTMP_PORT: "1935"
-      # Colocated SRS (child process, config rendered at startup)
-      SRS_ADDR: localhost:1935
-      SRS_API_BASE: http://localhost:1985/api/v1
-      SRS_BIN: /usr/local/srs/objs/srs
+      # SRS sidecar (separate container; this node renders its config)
+      SRS_BIN: "" # empty = SRS runs as the sidecar container below
+      SRS_ADDR: srs:1935
+      SRS_API_BASE: http://srs:1985/api/v1
+      # How the control plane pulls FLV from this node's SRS (empty = derived
+      # from SELF_ORIGIN + SRS_HTTP_PORT). On a shared Docker network with the
+      # app, point it at the service name instead.
+      SRS_FLV_BASE: ${SRS_FLV_BASE:-}
+      # SRS http_server (FLV) port — rendered into the config and used for the
+      # SRS_FLV_BASE default. 38080 by default to avoid common-port clashes.
+      SRS_HTTP_PORT: ${SRS_HTTP_PORT:-38080}
       SRS_RTC_CANDIDATE: ${SRS_RTC_CANDIDATE:-127.0.0.1}
-      # Recording storage
+      # Recording storage (shared volume with the SRS sidecar — it writes,
+      # this node scans + reports)
       RECORD_DIR: /records
       ALLOW_DIRECT_SRS: "false"
     volumes:
       - ./records:/records
+      - srs-conf:/srs-config
     ports:
-      - "1935:1935"   # RTMP ingest (OBS pushes here)
-      - "8080:8080"   # HTTP-FLV playback (optional, for direct browser access)
+      - "1935:1935" # RTMP ingest (OBS pushes here)
+    networks:
+      - media
     restart: unless-stopped
+
+  # SRS sidecar: waits for the config the node renders onto the shared volume,
+  # then starts. DVR segments land in ./records.
+  srs:
+    image: ossrs/srs:6
+    container_name: media-node-srs
+    command:
+      - sh
+      - -c
+      - "until [ -f /srs-config/srs.conf ]; do sleep 0.2; done; exec /usr/local/srs/objs/srs -c /srs-config/srs.conf"
+    volumes:
+      - ./records:/records
+      - srs-conf:/srs-config
+    networks:
+      - media
+    depends_on:
+      - media-node
+    restart: unless-stopped
+    # Publish ONLY when the control plane runs on another host and pulls FLV
+    # over the network (set SRS_FLV_BASE to match, e.g. http://this-host:38080):
+    # ports:
+    #   - "38080:38080"
+
+volumes:
+  srs-conf:
+
+networks:
+  media:
+    driver: bridge

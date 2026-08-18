@@ -90,6 +90,18 @@ func (m *Manager) Start(
 	log.Printf("[session] started %s (session=%d record=%v)", streamName, sessionID, record)
 }
 
+// Lookup returns a live session's control-plane identity. Nil pointers/zero
+// values with ok=false mean the session isn't active.
+func (m *Manager) Lookup(streamName string) (sessionID int64, eventID *int64, ok bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	s, found := m.sessions[streamName]
+	if !found {
+		return 0, nil, false
+	}
+	return s.SessionID, s.EventID, true
+}
+
 // End stops tracking and reports final metrics + duration.
 // Recording finalization is handled by SRS DVR (on_unpublish closes the file).
 func (m *Manager) End(streamName string) {

@@ -31,6 +31,7 @@ import (
 	"log"
 	"net"
 	"strings"
+	"sync"
 )
 
 // AppClient abstracts the auth calls the RTMP handler needs (salt/verify/policy).
@@ -48,6 +49,47 @@ type PolicyResult = node.PolicyResult
 
 // SRSAddr is the colocated SRS RTMP relay target (set from config at startup).
 var SRSAddr = "localhost:1935"
+
+// Session hooks (set from main before serving). The gate runs after the local
+// policy checks pass AND the upstream relay to SRS is up — the control plane
+// makes the final call (session row, limits, record flag). OnUnpublish fires
+// exactly once per gate-approved publish, on every teardown path: OBS
+// disconnect, upstream death, write failure, or KillStream.
+var (
+	OnPublishGate func(streamName, token, authedUser string) bool
+	OnUnpublish   func(streamName string)
+)
+
+// Active relays by stream name — KillStream (the node:kick path) closes both
+// halves. Registered after the gate allows; unregistered by the defer in
+// HandleOBS when the connection ends.
+var (
+	relaysMu sync.Mutex
+	relays   = map[string]relayHandle{}
+)
+
+type relayHandle struct {
+	conn net.Conn
+	up   *Upstream
+}
+
+// KillStream closes the upstream relay AND the OBS connection of a live
+// stream (node:kick). The connection teardown runs the normal unpublish path
+// (session end + recording report). Returns false if no such stream is live.
+func KillStream(streamName string) bool {
+	relaysMu.Lock()
+	h, ok := relays[streamName]
+	if ok {
+		delete(relays, streamName)
+	}
+	relaysMu.Unlock()
+	if !ok {
+		return false
+	}
+	h.up.Close()
+	_ = h.conn.Close()
+	return true
+}
 
 // RandHex returns a query-safe random hex string.
 func RandHex(n int) string {
@@ -78,6 +120,18 @@ func HandleOBS(conn net.Conn, app AppClient) {
 	authed := false  // true only after a successful authmod verify (stage 3)
 	authedUser := "" // the email that was verified (must match the stream name)
 	var up *Upstream
+	published := "" // final stream name once the control plane approves the publish
+	defer func() {
+		if published == "" {
+			return
+		}
+		relaysMu.Lock()
+		delete(relays, published)
+		relaysMu.Unlock()
+		if OnUnpublish != nil {
+			OnUnpublish(published)
+		}
+	}()
 	bytesIn := 0 // total payload bytes received from OBS (for acknowledgements)
 	lastAck := 0
 	for {
@@ -301,6 +355,22 @@ func HandleOBS(conn net.Conn, app AppClient) {
 					log.Printf("%s upstream gone — closing OBS connection", remote)
 					conn.Close()
 				}()
+				// Session gate: the control plane opens the session (row, limits,
+				// record flag) before we tell OBS "go". Deny or ack timeout is
+				// fail-closed — BadName is terminal for OBS, no retry loop.
+				if OnPublishGate == nil || !OnPublishGate(final, token, authedUser) {
+					log.Printf("%s publish '%s' denied by control plane", remote, final)
+					_ = cw.WriteMessage(&Message{Type: 20, CSID: 5, StreamID: 1, Payload: CmdOnStatusError(
+						"NetStream.Publish.BadName",
+						"Authentication failed: the server rejected this stream.")})
+					up.Close()
+					_ = conn.Close()
+					return
+				}
+				published = final
+				relaysMu.Lock()
+				relays[published] = relayHandle{conn: conn, up: up}
+				relaysMu.Unlock()
 				// StreamBegin(msid 1) — standard server signal that accompanies
 				// Publish.Start.
 				_ = cw.WriteMessage(&Message{Type: 4, CSID: 2, Payload: append([]byte{0, 0}, PutBE4(1)...)})

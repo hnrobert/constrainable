@@ -25,6 +25,11 @@ type Config struct {
 	// SRS (colocated child process, managed by this binary)
 	SRSAddr        string // RTMP relay target (host:port)
 	SRSApiBase     string // HTTP API for stream info / killClient / health
+	SRSHTTPPort    int    // SRS http_server port (FLV remux) — rendered into the
+	                      // config AND used for the advertised FLV base default
+	SRSFlvBase     string // HTTP-FLV base ADVERTISED to the control plane (how the
+	                      // app backend pulls playback). Docker deployments point
+	                      // this at the service name; browsers never see it.
 	SRSBin         string // path to the SRS binary (empty = don't start SRS)
 	SRSConfigPath  string // path to the rendered SRS config
 	SRSConfigTpl   string // path to the config template (embedded in image)
@@ -47,7 +52,9 @@ func LoadConfig() (*Config, error) {
 		SRTPort:        envOrInt("SRT_PORT", 9000),
 		SRSAddr:        envOr("SRS_ADDR", "localhost:1935"),
 		SRSApiBase:     envOr("SRS_API_BASE", "http://localhost:1985/api/v1"),
-		SRSBin:         envOr("SRS_BIN", ""), // empty = SRS runs elsewhere
+		SRSHTTPPort:    envOrInt("SRS_HTTP_PORT", 38080),
+		SRSFlvBase:     envOr("SRS_FLV_BASE", ""), // empty = derived from SELF_ORIGIN below
+		SRSBin:         envOr("SRS_BIN", ""),      // empty = SRS runs elsewhere
 		SRSConfigTpl:   envOr("SRS_CONFIG_TEMPLATE", "/etc/media-node/srs.conf.template"),
 		SRSConfigPath:  envOr("SRS_CONFIG_PATH", "/tmp/srs.conf"),
 		SRSRTCCandidate: envOr("SRS_RTC_CANDIDATE", "127.0.0.1"),
@@ -63,6 +70,18 @@ func LoadConfig() (*Config, error) {
 
 	c.NodeOrigin = strings.TrimRight(c.NodeOrigin, "/")
 	c.SRSApiBase = strings.TrimRight(c.SRSApiBase, "/")
+
+	// Advertised FLV base defaults to the public origin's host + the SRS
+	// http_server port. Override with SRS_FLV_BASE when the control plane
+	// reaches this node differently than the public internet does (e.g. a
+	// shared Docker network: http://media-node:38080).
+	if c.SRSFlvBase == "" {
+		host := strings.TrimPrefix(strings.TrimPrefix(c.SelfOrigin, "https://"), "http://")
+		host = strings.Split(host, "/")[0]
+		host = strings.Split(host, ":")[0]
+		c.SRSFlvBase = fmt.Sprintf("http://%s:%d", host, c.SRSHTTPPort)
+	}
+	c.SRSFlvBase = strings.TrimRight(c.SRSFlvBase, "/")
 
 	// Empty token = no auth (Node accepts unauthenticated media nodes)
 	if c.AuthToken == "" {
