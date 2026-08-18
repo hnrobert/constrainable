@@ -1,0 +1,37 @@
+# Standalone media-node deployment: connects to a remote constrainable-app backend.
+# Self-contained — SRS config is embedded, rendered at startup, SRS runs as a child.
+#
+# Usage:
+#   NODE_ORIGIN=https://api.example.com docker compose up -d
+#
+# To point at a locally running app (dev):
+#   NODE_ORIGIN=http://host.docker.internal:31954 docker compose up
+services:
+  media-node:
+    build: .
+    image: constrainable-media-node:latest
+    container_name: media-node
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      # The constrainable-app backend URL (Socket.IO + auth)
+      NODE_ORIGIN: ${NODE_ORIGIN:-http://localhost:31954}
+      # This node's public identifier
+      SELF_ORIGIN: ${SELF_ORIGIN:-$(hostname)}
+      # Shared auth token (must match the backend; empty = no auth)
+      MEDIA_NODE_AUTH_TOKEN: ${MEDIA_NODE_AUTH_TOKEN:-}
+      # RTMP ingest
+      RTMP_PORT: "1935"
+      # Colocated SRS (child process, config rendered at startup)
+      SRS_ADDR: localhost:1935
+      SRS_API_BASE: http://localhost:1985/api/v1
+      SRS_BIN: /usr/local/srs/objs/srs
+      SRS_RTC_CANDIDATE: ${SRS_RTC_CANDIDATE:-127.0.0.1}
+      # Recording storage
+      RECORD_DIR: /records
+      ALLOW_DIRECT_SRS: "false"
+    volumes:
+      - ./records:/records
+    ports:
+      - "1935:1935"   # RTMP ingest (OBS pushes here)
+      - "8080:8080"   # HTTP-FLV playback (optional, for direct browser access)
+    restart: unless-stopped

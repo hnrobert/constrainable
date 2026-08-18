@@ -1,0 +1,60 @@
+# SRS config template — rendered by media-node at startup.
+# Placeholders: ${SRS_RTC_CANDIDATE} (WebRTC ICE candidate, from env).
+# DVR records FLV natively. No http_hooks — the Go binary detects publish
+# from the RTMP relay itself.
+listen              1935;
+max_connections     1000;
+daemon              off;
+srs_log_tank        console;
+
+http_api {
+    enabled         on;
+    listen          1985;
+    crossdomain     on;
+}
+http_server {
+    enabled         on;
+    listen          8080;
+    crossdomain     on;
+}
+
+rtc_server {
+    enabled         on;
+    listen          8000;
+    candidate       ${SRS_RTC_CANDIDATE};
+}
+
+vhost __defaultVhost__ {
+    # Generous publisher timeouts: low-fps encoders must survive.
+    publish {
+        firstpkt_timeout    120000;
+        normal_timeout      60000;
+    }
+
+    # Native DVR recording: FLV written directly from the RTMP stream.
+    # Files land in /records/{stream}/YYYY-MM-DD_HH:MM:SS.mmm.flv
+    # SRS closes files cleanly on stream end (no corruption).
+    dvr {
+        enabled         on;
+        dvr_path        /records/[stream]/[2006]-[01]-[02]_[15]:[04]:[05].[999].flv;
+        dvr_plan        session;
+        dvr_duration    0;
+        time_jitter     full;
+    }
+
+    http_remux {
+        enabled         on;
+        mount           [vhost]/[app]/[stream].flv;
+    }
+
+    rtc {
+        enabled         on;
+        rtmp_to_rtc     on;
+        rtc_to_rtmp     on;
+    }
+
+    play {
+        gop_cache       on;
+        queue_length    10;
+    }
+}
