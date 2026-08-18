@@ -6,10 +6,7 @@
   "packageManager": "bun@1.3.14",
   "scripts": {
     "dev": "bun ./node_modules/@nuxt/cli/bin/nuxi.mjs dev --port 31954 --host",
-    "build": "nuxt build && cd media-node && go build -trimpath -ldflags=\"-s -w\" -o media-node .",
-    "build:web": "nuxt build",
-    "build:server": "nuxt build",
-    "build:go": "cd media-node && go build -trimpath -ldflags=\"-s -w\" -o media-node .",
+    "build": "nuxt build",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
