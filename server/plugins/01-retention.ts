@@ -6,6 +6,9 @@
 import { runRetention } from '../services/retention'
 
 export default defineNitroPlugin(() => {
+  // no background loops during prerender (see 02-reconcile for the why)
+  if (import.meta.prerender) return
+
   const tick = (): void => {
     try {
       const r = runRetention()
