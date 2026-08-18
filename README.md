@@ -31,7 +31,7 @@ graph TB
 
 | var | default | meaning |
 | ----- | --------- | --------- |
-| `NODE_ORIGIN` | `http://localhost:31954` | Node control plane URL (socket.io + auth HTTP) |
+| `API_ORIGIN` | `http://localhost:31954` | Control-plane (constrainable-app) URL — Socket.IO + auth |
 | `SELF_ORIGIN` | `localhost` | This node's public identifier (reported to Node) |
 | `RTMP_PORT` | `1935` | RTMP ingest port (OBS pushes here) |
 | `SRT_PORT` | `9000` | SRT ingest port (scaffold; not yet implemented) |
@@ -73,7 +73,7 @@ Connects to Node's `/media-nodes` namespace with `{token: MEDIA_NODE_AUTH_TOKEN}
 
 ```bash
 MEDIA_NODE_AUTH_TOKEN=dev-token \
-NODE_ORIGIN=http://localhost:31954 \
+API_ORIGIN=http://localhost:31954 \
 SELF_ORIGIN=localhost \
 go run .
 ```

@@ -19,7 +19,7 @@ import (
 
 // Client manages the persistent Socket.IO connection to the Node control plane.
 type Client struct {
-	nodeOrigin string // e.g. http://node:31954
+	apiOrigin string // e.g. http://constrainable-app:31954
 	token      string
 	register   RegisterPayload
 
@@ -40,10 +40,11 @@ type Client struct {
 	done        chan struct{}
 }
 
-// NewClient creates a Socket.IO client for the Node control plane.
-func NewClient(nodeOrigin, token string, reg RegisterPayload) *Client {
+// NewClient creates a Socket.IO client for the Node control plane
+// (apiOrigin = the constrainable-app URL, env API_ORIGIN).
+func NewClient(apiOrigin, token string, reg RegisterPayload) *Client {
 	return &Client{
-		nodeOrigin:  strings.TrimRight(nodeOrigin, "/"),
+		apiOrigin:    strings.TrimRight(apiOrigin, "/"),
 		token:       token,
 		register:    reg,
 		reconnectCh: make(chan struct{}, 1),
@@ -105,7 +106,7 @@ func (c *Client) connectOnce() error {
 		return fmt.Errorf("build ws url: %w", err)
 	}
 
-	ws, err := websocket.Dial(wsURL, "", c.nodeOrigin)
+	ws, err := websocket.Dial(wsURL, "", c.apiOrigin)
 	if err != nil {
 		return fmt.Errorf("ws dial: %w", err)
 	}
@@ -143,7 +144,7 @@ func (c *Client) connectOnce() error {
 	c.mu.Lock()
 	c.connected = true
 	c.mu.Unlock()
-	log.Printf("[node] connected to %s/media-node", c.nodeOrigin)
+	log.Printf("[node] connected to %s/media-node", c.apiOrigin)
 
 	// Register
 	regData, _ := json.Marshal(c.register)
@@ -364,7 +365,7 @@ func (c *Client) EmitWithAck(event string, payload any, result any, timeout time
 
 // wsURL converts the node origin to a WebSocket URL with the socket.io path.
 func (c *Client) wsURL() (string, error) {
-	u, err := url.Parse(c.nodeOrigin)
+	u, err := url.Parse(c.apiOrigin)
 	if err != nil {
 		return "", err
 	}

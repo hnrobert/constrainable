@@ -12,8 +12,8 @@ import (
 
 // Config holds every tunable for one media-node instance.
 type Config struct {
-	// Node control plane
-	NodeOrigin string // e.g. http://node:31954 — for socket.io
+	// Control plane (constrainable-app)
+	APIOrigin string // e.g. http://constrainable-app:31954 — for socket.io
 	AuthToken  string // shared secret with Node (socket auth)
 	SelfOrigin string // e.g. ingest-1 — this node's public identifier
 	Hostname   string // human-readable name
@@ -45,7 +45,7 @@ type Config struct {
 // LoadConfig reads environment variables.
 func LoadConfig() (*Config, error) {
 	c := &Config{
-		NodeOrigin:     envOr("NODE_ORIGIN", "http://localhost:31954"),
+		APIOrigin:      envOr("API_ORIGIN", "http://localhost:31954"),
 		AuthToken:      os.Getenv("MEDIA_NODE_AUTH_TOKEN"),
 		SelfOrigin:     envOr("SELF_ORIGIN", "localhost"),
 		RTMPPort:       envOrInt("RTMP_PORT", 1935),
@@ -68,7 +68,7 @@ func LoadConfig() (*Config, error) {
 		c.Hostname = envOr("HOSTNAME_OVERRIDE", "media-node")
 	}
 
-	c.NodeOrigin = strings.TrimRight(c.NodeOrigin, "/")
+	c.APIOrigin = strings.TrimRight(c.APIOrigin, "/")
 	c.SRSApiBase = strings.TrimRight(c.SRSApiBase, "/")
 
 	// Advertised FLV base defaults to the public origin's host + the SRS

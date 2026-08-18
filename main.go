@@ -127,8 +127,8 @@ func main() {
 		log.Fatalf("config: %v", err)
 	}
 
-	log.Printf("media-node v%s | node=%s | self=%s | hostname=%s",
-		version, cfg.NodeOrigin, cfg.SelfOrigin, cfg.Hostname)
+	log.Printf("media-node v%s | api=%s | self=%s | hostname=%s",
+		version, cfg.APIOrigin, cfg.SelfOrigin, cfg.Hostname)
 	log.Printf("rtmp :%d | srs=%s | srs-api=%s | flv-base=%s",
 		cfg.RTMPPort, cfg.SRSAddr, cfg.SRSApiBase, cfg.SRSFlvBase)
 
@@ -139,7 +139,7 @@ func main() {
 	srsClient := media.NewSRSClient(cfg.SRSApiBase)
 
 	// Socket.IO client — ALL communication with the Node control plane
-	socketClient := node.NewClient(cfg.NodeOrigin, cfg.AuthToken, node.RegisterPayload{
+	socketClient := node.NewClient(cfg.APIOrigin, cfg.AuthToken, node.RegisterPayload{
 		Origin:     cfg.SelfOrigin,
 		RTMPPort:   cfg.RTMPPort,
 		SRTPort:    cfg.SRTPort,

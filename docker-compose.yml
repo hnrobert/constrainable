@@ -4,10 +4,10 @@
 # container waits for it, then starts — the node stays the config owner.
 #
 # Usage:
-#   NODE_ORIGIN=https://api.example.com docker compose up -d
+#   API_ORIGIN=https://api.example.com docker compose up -d
 #
 # To point at a locally running app (dev):
-#   NODE_ORIGIN=http://host.docker.internal:31954 docker compose up
+#   API_ORIGIN=http://host.docker.internal:31954 docker compose up
 services:
   media-node:
     build: .
@@ -16,7 +16,7 @@ services:
     environment:
       TZ: ${TZ:-Asia/Shanghai}
       # The constrainable-app backend URL (Socket.IO + auth)
-      NODE_ORIGIN: ${NODE_ORIGIN:-http://localhost:31954}
+      API_ORIGIN: ${API_ORIGIN:-http://localhost:31954}
       # This node's public identifier
       SELF_ORIGIN: ${SELF_ORIGIN:-$(hostname)}
       # Shared auth token (must match the backend; empty = no auth)
