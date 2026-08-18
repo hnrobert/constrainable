@@ -24,22 +24,34 @@ export const env = {
    */
   mediaNodeAuthToken: process.env.MEDIA_NODE_AUTH_TOKEN || '',
 
-  /** SRS HTTP API base (server-to-server) */
+  /** SRS HTTP API base (LOCAL sessions only — media-node sessions kick via socket) */
   srsApiBase: process.env.SRS_API_BASE || 'http://127.0.0.1:1985/api/v1',
-  /** SRS HTTP-FLV base (server-to-server, for the same-origin playback proxy) */
-  srsFlvBase: process.env.SRS_FLV_BASE || 'http://127.0.0.1:8080',
+  /**
+   * LOCAL SRS HTTP-FLV fallback for the playback proxy. Sessions on a media
+   * node route to that node's advertised base instead (see
+   * media-node-registry.resolveFlvBase) — this only serves streams this
+   * backend hosts itself (dev / app-managed SRS).
+   */
+  srsFlvBase: process.env.SRS_FLV_BASE || 'http://127.0.0.1:38080',
   /** SRS RTMP host (server-to-server, for ffprobe/ffmpeg pull) */
   srsRtmpHost: process.env.SRS_RTMP_HOST || '127.0.0.1',
-  /** Browser-facing SRS ports (for viewer playback URLs) */
-  srsFlvPort: Number(process.env.SRS_FLV_PORT || '8080'),
+  /** Browser-facing SRS API port (WHEP playback URLs) */
   srsApiPort: Number(process.env.SRS_API_PORT || '1985'),
 
   /** ffmpeg / ffprobe binaries */
   ffmpegPath: process.env.FFMPEG_PATH || 'ffmpeg',
   ffprobePath: process.env.FFPROBE_PATH || 'ffprobe',
 
-  /** Browser-visible SRS host for playback URLs (LAN/public IP) */
-  publicHost: process.env.PUBLIC_HOST || '127.0.0.1',
+  /**
+   * Frontend origins allowed to make credentialed cross-origin API calls
+   * (split deployment: static frontend on a CDN + API on its own origin —
+   * pairs with the frontend's API_ORIGIN). Empty = same-origin only.
+   * Also switches the session cookie to SameSite=None; Secure.
+   */
+  corsOrigins: (process.env.CORS_ORIGINS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean),
 } as const
 
 export type Env = typeof env

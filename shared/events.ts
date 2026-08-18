@@ -17,7 +17,10 @@ export interface SessionSnapshot {
   eventId: number | null
   streamName: string
   status: SessionStatus
+  /** null for media-node sessions (kick routes by nodeId instead) */
   srsClientId: string | null
+  /** hosting media node (null = local session on this backend) */
+  nodeId: string | null
   width: number | null
   height: number | null
   fps: number | null

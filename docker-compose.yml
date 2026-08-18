@@ -1,0 +1,30 @@
+# constrainable-app standalone: Nuxt server only (no media-node, no SRS).
+# For local development of the backend without any streaming infrastructure.
+# Pair with constrainable-media-node for full ingest.
+services:
+  constrainable-app:
+    build: .
+    image: constrainable-app:latest
+    container_name: app-server
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      HOST: 0.0.0.0
+      PORT: "31954"
+      NODE_ENV: production
+      DB_PATH: /app/data/app.db
+      RECORD_DIR: /app/records
+      PUBLIC_HOST: ${PUBLIC_HOST:-127.0.0.1}
+      SESSION_SECRET: ${SESSION_SECRET:-changeme-change-me}
+      AUTHMOD_VERIFIER_SECRET: ${AUTHMOD_VERIFIER_SECRET:-change-me-to-a-long-random-string}
+    volumes:
+      - ./data:/app/data
+      - ./records:/app/records
+    ports:
+      - "31954:31954"
+    networks:
+      - app
+    restart: unless-stopped
+
+networks:
+  app:
+    driver: bridge

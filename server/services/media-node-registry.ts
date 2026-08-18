@@ -6,6 +6,8 @@
  * record of which node handled which stream.
  */
 import type { Server as SocketIOServer, Socket } from 'socket.io'
+import { env } from '../utils/env'
+import { PublishSessionsRepository } from '../repositories/publish-sessions.repository'
 
 export interface MediaNodeInfo {
   nodeId: string
@@ -17,10 +19,13 @@ export interface MediaNodeInfo {
   version: string
   connectedAt: number
   activeStreams: number
-  /** this node's SRS HTTP-FLV base (for the backend's playback proxy) */
+  /**
+   * This node's SRS HTTP-FLV base AS REACHABLE FROM THIS BACKEND — the address
+   * the playback proxy pulls from. Reported by the node at registration
+   * (SRS_FLV_BASE), so a shared Docker network advertises its service name
+   * (http://media-node:38080) while a remote node advertises its public origin.
+   */
   srsFlvBase: string
-  /** this node's SRS HTTP API base (for killClient etc.) */
-  srsApiBase: string
 }
 
 /** nodeId → info */
@@ -38,7 +43,13 @@ export function deriveNodeId(origin: string): string {
 }
 
 /** Register (or re-register) a node connection. Returns the nodeId. */
-export function register(socket: Socket, info: Omit<MediaNodeInfo, 'nodeId' | 'socketId' | 'connectedAt' | 'activeStreams' | 'srsFlvBase' | 'srsApiBase'> & Partial<Pick<MediaNodeInfo, 'srsFlvBase' | 'srsApiBase'>>): string {
+export function register(
+  socket: Socket,
+  info: Omit<
+    MediaNodeInfo,
+    'nodeId' | 'socketId' | 'connectedAt' | 'activeStreams' | 'srsFlvBase'
+  > & { srsFlvBase?: string },
+): string {
   const nodeId = deriveNodeId(info.origin)
   const existing = nodes.get(nodeId)
   const entry: MediaNodeInfo = {
@@ -47,13 +58,14 @@ export function register(socket: Socket, info: Omit<MediaNodeInfo, 'nodeId' | 's
     socketId: socket.id,
     connectedAt: Date.now(),
     activeStreams: existing?.activeStreams ?? 0,
-    // derive SRS endpoints from the media-node's Go API if not explicitly set
-    srsFlvBase: info.srsFlvBase || `http://${info.origin.replace(/^https?:\/\//, '').split(':')[0]}:8080`,
-    srsApiBase: info.srsApiBase || `http://${info.origin.replace(/^https?:\/\//, '').split(':')[0]}:1985/api/v1`,
+    // fall back to the origin host for nodes that don't advertise an FLV base
+    srsFlvBase: info.srsFlvBase || `http://${info.origin.replace(/^https?:\/\//, '').split(':')[0]}:38080`,
   }
   nodes.set(nodeId, entry)
   socketToNode.set(socket.id, nodeId)
-  console.log(`[media-nodes] registered: ${nodeId} (${info.hostname}) origin=${info.origin}`)
+  console.log(
+    `[media-nodes] registered: ${nodeId} (${info.hostname}) origin=${info.origin} flv=${entry.srsFlvBase}`,
+  )
   return nodeId
 }
 
@@ -99,9 +111,23 @@ export function adjustStreamCount(nodeId: string, delta: number): void {
 export function getSocket(io: SocketIOServer, nodeId: string): Socket | null {
   const node = nodes.get(nodeId)
   if (!node) return null
-  const ns = io.of('/media-nodes')
+  const ns = io.of('/media-node')
   const socket = ns.sockets.get(node.socketId)
   return socket ?? null
+}
+
+/**
+ * Resolve which HTTP-FLV base THIS BACKEND should pull a live stream from:
+ * the hosting media node's advertised address when the session is remote,
+ * else the local SRS fallback (dev / app-managed SRS).
+ */
+export function resolveFlvBase(streamName: string): string {
+  const session = PublishSessionsRepository.findActiveByStream(streamName)
+  if (session?.nodeId) {
+    const node = nodes.get(session.nodeId)
+    if (node) return node.srsFlvBase
+  }
+  return env.srsFlvBase
 }
 
 /** Emit an event to a specific node. Returns false if node not connected. */

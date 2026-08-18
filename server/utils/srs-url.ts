@@ -7,9 +7,13 @@ import { env } from './env'
  * content), while the HTTP-FLV path serves the same stream fine — verified
  * against live 1fps pushes on both paths. `@` etc. are already sanitized out of
  * stream names by the gateway, and encodeURI keeps the path literal for ffmpeg.
+ *
+ * `base` overrides the local SRS default (env.srsFlvBase) — pass the hosting
+ * media node's advertised FLV base for remote sessions (see
+ * media-node-registry.resolveFlvBase).
  */
-export function buildFlvPullUrl(stream: string): string {
-  return `${env.srsFlvBase}/live/${encodeURI(stream)}.flv`
+export function buildFlvPullUrl(stream: string, base: string = env.srsFlvBase): string {
+  return `${base}/live/${encodeURI(stream)}.flv`
 }
 
 /** Legacy RTMP pull address (kept for tooling that must speak RTMP). */
@@ -21,30 +25,28 @@ export function buildRtmpUrl(app: string, stream: string, vhost?: string): strin
   return url
 }
 
-/** SRS app name used for all live streams (matches the OBS /live mount). */
-const LIVE_APP = 'live'
-
 export interface PlaybackUrls {
   flv: string
   whep: string
 }
 
 /**
- * Playback URLs for a live stream.
+ * Playback URLs for a live stream — BOTH same-origin relative paths, so no
+ * SRS host/port is ever browser-visible and no PUBLIC_HOST-style env is
+ * needed.
  *
- * FLV: a RELATIVE same-origin URL — the app proxies SRS's HTTP-FLV remux at
- * /api/streams/live/<stream> (see server/api/streams/live/[stream].get.ts), so
- * playback needs no CORS and works from any machine that can reach the app,
- * regardless of SRS's host/ports.
+ * FLV: the app proxies SRS's HTTP-FLV remux at /api/streams/live/<stream> (see
+ * server/api/streams/live/[stream].get.ts) — works from any machine that can
+ * reach the app.
  *
- * WHEP (WebRTC): the browser must talk to SRS directly (media is peer-to-peer;
- * only the SDP signaling could be proxied), so this stays an absolute URL on
- * the browser-visible host.
+ * WHEP (WebRTC): only the SDP signaling is proxied (/api/streams/whep/<stream>
+ * → the hosting SRS's API over the internal network); the media itself still
+ * flows browser↔SRS peer-to-peer via ICE/UDP.
  */
 export function buildPlaybackUrls(streamName: string): PlaybackUrls {
   return {
     flv: `/api/streams/live/${encodeURIComponent(streamName)}`,
-    whep: `http://${env.publicHost}:${env.srsApiPort}/rtc/v1/whep/?app=${LIVE_APP}&stream=${encodeURIComponent(streamName)}`,
+    whep: `/api/streams/whep/${encodeURIComponent(streamName)}`,
   }
 }
 

@@ -1,7 +1,9 @@
 /**
- * Singleton Socket.IO client. The server attaches socket.io to the SAME origin
- * as the app (lazy on first request, same port), so we connect same-origin with
- * no explicit host/port.
+ * Singleton Socket.IO client. Same-origin by default: the server attaches
+ * socket.io to the SAME origin as the app (lazy on first request, same port),
+ * so we connect with no explicit host/port. Split deployments (API_ORIGIN
+ * set — static frontend elsewhere) connect to the API origin with
+ * withCredentials so the session cookie rides the handshake.
  *
  * Transports are dev/prod split:
  *  - Dev: polling ONLY. The Nitro dev server runs behind Vite, which proxies
@@ -20,8 +22,11 @@ let _socket: Socket | null = null
 
 export function useSocket(): Socket {
   if (_socket) return _socket
-  _socket = io({
+  // split deployment: talk to the API origin instead of the serving origin
+  const apiOrigin = String(useRuntimeConfig().public.apiOrigin || '')
+  _socket = io(apiOrigin || undefined, {
     path: '/socket',
+    withCredentials: !!apiOrigin,
     transports: import.meta.dev ? ['polling'] : ['polling', 'websocket'],
     autoConnect: true,
     reconnection: true,

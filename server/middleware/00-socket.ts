@@ -15,6 +15,8 @@
 import type http from 'node:http'
 import { Server as SocketIOServer } from 'socket.io'
 import { onBus } from '../utils/bus'
+import { env } from '../utils/env'
+import { setSocketIO } from '../utils/socket-io'
 import { wireMediaNodeNamespace } from '../services/media-node-events'
 import type { BusEventMap, BusEventName } from '#shared/events'
 
@@ -53,6 +55,12 @@ function wire(theIo: SocketIOServer): void {
   })
 }
 
+function remember(instance: SocketIOServer | null): void {
+  io = instance
+  // publish for handlers (node:kick etc.) — see utils/socket-io.ts
+  setSocketIO(instance)
+}
+
 export default defineEventHandler((event) => {
   if (io) return
   const sock = event.node?.req?.socket as NetSocketWithServer | undefined
@@ -62,17 +70,25 @@ export default defineEventHandler((event) => {
   // server object — shared across ALL connections — is the source of truth, not
   // the module-level `io` variable. (The socket itself is per-connection.)
   if (server.__socketIoAttached) {
-    io = server.__io ?? null
+    remember(server.__io ?? null)
     return
   }
   io = new SocketIOServer(server, {
     path: SOCKET_PATH,
     transports: ['websocket', 'polling'],
-    cors: { origin: '*' },
+    // Split deployment (CORS_ORIGINS set): echo only the allowed frontend
+    // origins WITH credentials — the admin socket rides the session cookie.
+    // Same-origin default: permissive (browser same-origin policy already
+    // gates the handshake).
+    cors:
+      env.corsOrigins.length > 0
+        ? { origin: env.corsOrigins, credentials: true }
+        : { origin: '*' },
     serveClient: false,
   })
   server.__socketIoAttached = true
   server.__io = io
+  remember(io)
   wire(io)
   // /media-nodes namespace: Go media-node backends connect here to register,
   // request publish authorization, and report session events.

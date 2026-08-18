@@ -114,11 +114,15 @@ export default defineNuxtConfig({
     ffmpegPath: process.env.FFMPEG_PATH || 'ffmpeg',
     ffprobePath: process.env.FFPROBE_PATH || 'ffprobe',
     public: {
-      // browser-visible SRS host for playback URLs (your LAN/public IP)
-      srsPublicHost: process.env.PUBLIC_HOST || '127.0.0.1',
-      srsFlvPort: process.env.SRS_FLV_PORT || '8080',
+      // OPTIONAL ingest-host override (NAT / unusual setups). Default: derived
+      // at runtime from API_ORIGIN or the origin the user browses from — see
+      // app/composables/useObsConfig.ts.
+      srsPublicHost: process.env.PUBLIC_HOST || '',
       srsApiPort: process.env.SRS_API_PORT || '1985',
       srsRtmpPort: process.env.SRS_RTMP_PORT || '1935',
+      // Absolute API origin for split deployments (static frontend on a CDN,
+      // API elsewhere). Empty = same-origin. Baked at `bun run generate` time.
+      apiOrigin: process.env.API_ORIGIN || '',
     },
   },
 

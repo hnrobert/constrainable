@@ -7,20 +7,25 @@
  */
 import type { Server as SocketIOServer, Socket } from 'socket.io'
 import { env } from '../utils/env'
-import { register, disconnect, adjustStreamCount, getNode } from './media-node-registry'
+import { register, disconnect, adjustStreamCount } from './media-node-registry'
 import { authorizePublish } from './access-control'
 import { PublishSessionsRepository } from '../repositories/publish-sessions.repository'
 import { RecordingsRepository } from '../repositories/recordings.repository'
 import { getConfig, getLimitsFor } from '../utils/config-store'
 import { EventsRepository } from '../repositories/events.repository'
+import { UsersRepository } from '../repositories/users.repository'
+import { isSiteWideBanned, isBlocked } from './stream-bans'
+import { verifierFromCipher, verifyResponse } from '../utils/authmod'
 import { audit } from './audit'
 import { emit } from '../utils/bus'
+import type { PublishSession } from '../database/schema'
 import type { SessionSnapshot, SessionStatus, RecordingSnapshot } from '#shared/events'
 
 interface RegisterPayload {
   origin: string
   rtmpPort: number
   srtPort: number
+  srsFlvBase?: string
   hostname: string
   version: string
 }
@@ -98,6 +103,7 @@ export function wireMediaNodeNamespace(io: SocketIOServer): void {
         origin: payload.origin,
         rtmpPort: payload.rtmpPort,
         srtPort: payload.srtPort,
+        srsFlvBase: payload.srsFlvBase,
         hostname: payload.hostname,
         version: payload.version,
       })
@@ -134,6 +140,70 @@ export function wireMediaNodeNamespace(io: SocketIOServer): void {
     socket.on('disconnect', () => {
       disconnect(socket.id)
     })
+
+    // --- RTMP auth (Adobe authmod) — the media-node's ONLY auth surface. The
+    // same logic as the HTTP /api/srs/rtmp-auth endpoints (which remain for
+    // tooling), but carried over the socket with acks. The namespace itself is
+    // token-gated, so no per-call secret is needed. ---
+
+    socket.on('auth:salt', (p: { email?: string }, ack?: (r: { salt: string; banned: boolean }) => void) => {
+      const email = String(p?.email ?? '').trim().toLowerCase()
+      const user = email ? UsersRepository.findByEmail(email) : undefined
+      // Unknown users get a random salt — byte-identical challenge, no enumeration
+      ack?.({
+        salt: user?.authmodSalt || crypto.randomUUID().replace(/-/g, '').slice(0, 16),
+        banned: !!email && isSiteWideBanned(email),
+      })
+    })
+
+    socket.on(
+      'auth:verify',
+      (
+        p: { email?: string; opaque?: string; challenge?: string; response?: string },
+        ack?: (r: { allow: boolean; known: boolean }) => void,
+      ) => {
+        const email = String(p?.email ?? '').trim().toLowerCase()
+        const user = email ? UsersRepository.findByEmail(email) : undefined
+        if (!user?.authmodVerifier) {
+          // Unknown username: placeholder credentials, not a hard auth failure
+          ack?.({ allow: false, known: false })
+          return
+        }
+        const ok = verifyResponse({
+          storedVerifier: verifierFromCipher(user.authmodVerifier),
+          opaque: String(p?.opaque ?? ''),
+          challenge: String(p?.challenge ?? ''),
+          response: String(p?.response ?? ''),
+        })
+        // known + !allow = a real account with the wrong password → the node
+        // refuses the connection outright (librtmp-fatal `authfailed`)
+        ack?.({ allow: ok, known: true })
+      },
+    )
+
+    socket.on(
+      'auth:policy',
+      (
+        p: { token?: string; stream?: string },
+        ack?: (r: { publishKey: boolean; requireAccountAuth: boolean; windowOpen: boolean; banned: boolean }) => void,
+      ) => {
+        const token = String(p?.token ?? '')
+        const stream = String(p?.stream ?? '').trim()
+        const row = token ? EventsRepository.findByPublishKey(token) : undefined
+        const now = Date.now()
+        const windowOpen =
+          !row || row.status === 'archived'
+            ? true
+            : (!row.startsAt || now >= row.startsAt.getTime()) &&
+              (!row.endsAt || now <= row.endsAt.getTime())
+        ack?.({
+          publishKey: !!row,
+          requireAccountAuth: true,
+          windowOpen: row?.status === 'archived' ? false : windowOpen,
+          banned: !!stream && isBlocked(stream, row?.id ?? null),
+        })
+      },
+    )
   })
 }
 
@@ -164,24 +234,22 @@ async function handlePublishStart(
     const cfg = getConfig()
     const record = cfg.record.enabled && (event?.recordEnabled ?? true)
 
-    // Insert the session row (nodeId marks it as a remote media-node session)
+    // Insert the session row (nodeId marks it as a remote media-node session —
+    // the playback proxy and kick routing key off it)
     const row = PublishSessionsRepository.insert({
       eventId: auth.eventId ?? null,
       streamKeyId: auth.streamKeyId > 0 ? auth.streamKeyId : null,
       streamName: payload.streamName,
+      nodeId: payload.nodeId,
       srsClientId: payload.srsClientId || null,
       status: 'allowed',
       startedAt: new Date(),
     })
 
-    // Update the session row's nodeId (via a direct update since the repo
-    // insert doesn't have a nodeId param yet — Phase 2 schema migration)
-    // TODO: add nodeId to the insert when the schema column lands
-
     adjustStreamCount(payload.nodeId, 1)
 
     // Emit session:start to the dashboard via the bus
-    emit('session:start', buildSnapshot(row.id, auth.eventId ?? null, payload.streamName, 'allowed', false, row.startedAt.getTime()))
+    emit('session:start', snapshotFromRow(row))
 
     audit('info', 'publish', `media-node publish started: ${payload.streamName}`, {
       eventId: auth.eventId ?? null,
@@ -216,12 +284,12 @@ function handleMetrics(payload: MetricsPayload): void {
     fps: payload.fps ?? row.fps,
     bitrateKbps: payload.bitrateKbps ?? row.bitrateKbps,
   })
-  emit('session:metric', buildSnapshot(
-    payload.sessionId, row.eventId ?? null, row.streamName,
-    row.status as SessionStatus, row.compliant, row.startedAt.getTime(),
-    payload.width ?? row.width, payload.height ?? row.height,
-    payload.fps ?? row.fps, payload.bitrateKbps ?? row.bitrateKbps,
-  ))
+  emit('session:metric', snapshotFromRow(row, {
+    width: payload.width ?? row.width,
+    height: payload.height ?? row.height,
+    fps: payload.fps ?? row.fps,
+    bitrateKbps: payload.bitrateKbps ?? row.bitrateKbps,
+  }))
 }
 
 function handleEnd(payload: EndPayload): void {
@@ -229,11 +297,7 @@ function handleEnd(payload: EndPayload): void {
   if (!row) return
   const finalStatus: SessionStatus = row.compliant ? 'compliant' : 'ended'
   PublishSessionsRepository.markEnded(payload.sessionId, finalStatus, new Date(payload.endedAt))
-  emit('session:stop', buildSnapshot(
-    payload.sessionId, row.eventId ?? null, row.streamName,
-    finalStatus, row.compliant, row.startedAt.getTime(),
-    row.width, row.height, row.fps, row.bitrateKbps, payload.endedAt,
-  ))
+  emit('session:stop', snapshotFromRow(row, { status: finalStatus, endedAt: payload.endedAt }))
   audit('info', 'publish', `media-node publish ended: ${row.streamName}`, {
     streamName: row.streamName,
     detail: { sessionId: payload.sessionId, durationSec: payload.durationSec },
@@ -293,45 +357,46 @@ function handleViolation(payload: ViolationPayload): void {
     detail: { reasons: payload.reasons, nodeId: 'remote' },
   })
   emit('session:violation', {
-    ...buildSnapshot(
-      payload.sessionId, row.eventId ?? null, row.streamName,
-      'violating', row.compliant, row.startedAt.getTime(),
-      payload.metrics?.width, payload.metrics?.height,
-      payload.metrics?.fps, payload.metrics?.bitrateKbps,
-    ),
+    ...snapshotFromRow(row, {
+      status: 'violating',
+      width: payload.metrics?.width ?? row.width,
+      height: payload.metrics?.height ?? row.height,
+      fps: payload.metrics?.fps ?? row.fps,
+      bitrateKbps: payload.metrics?.bitrateKbps ?? row.bitrateKbps,
+    }),
     reasons: payload.reasons,
   })
 }
 
 // --- snapshot helpers ---
 
-function buildSnapshot(
-  sessionId: number,
-  eventId: number | null,
-  streamName: string,
-  status: SessionStatus,
-  compliant: boolean,
-  startedAt: number,
-  width?: number | null,
-  height?: number | null,
-  fps?: number | null,
-  bitrateKbps?: number | null,
-  endedAt?: number | null,
+/** Build a dashboard snapshot from a session row, with live-metric overrides. */
+function snapshotFromRow(
+  row: PublishSession,
+  over: {
+    status?: SessionStatus
+    width?: number | null
+    height?: number | null
+    fps?: number | null
+    bitrateKbps?: number | null
+    endedAt?: number | null
+  } = {},
 ): SessionSnapshot {
   return {
-    sessionId,
-    eventId,
-    streamName,
-    status,
-    srsClientId: null,
-    width: width ?? null,
-    height: height ?? null,
-    fps: fps ?? null,
-    bitrateKbps: bitrateKbps ?? null,
-    compliant,
-    rejectReason: null,
-    startedAt,
-    endedAt: endedAt ?? null,
+    sessionId: row.id,
+    eventId: row.eventId ?? null,
+    streamName: row.streamName,
+    status: over.status ?? (row.status as SessionStatus),
+    srsClientId: row.srsClientId ?? null,
+    nodeId: row.nodeId ?? null,
+    width: over.width ?? row.width ?? null,
+    height: over.height ?? row.height ?? null,
+    fps: over.fps ?? row.fps ?? null,
+    bitrateKbps: over.bitrateKbps ?? row.bitrateKbps ?? null,
+    compliant: !!row.compliant,
+    rejectReason: row.rejectReason ?? null,
+    startedAt: row.startedAt.getTime(),
+    endedAt: over.endedAt ?? null,
   }
 }
 

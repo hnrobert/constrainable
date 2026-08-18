@@ -298,6 +298,7 @@ function snapshot(s: ActiveSession, m: Metrics, endedAt: number | null = null): 
     streamName: s.streamName,
     status: m.status,
     srsClientId: s.clientId || null,
+    nodeId: null, // local session — this backend owns the stream
     width: m.width,
     height: m.height,
     fps: m.fps,

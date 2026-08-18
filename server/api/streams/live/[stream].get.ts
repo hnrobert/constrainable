@@ -1,18 +1,20 @@
 /**
- * Same-origin FLV playback proxy. Admin browsers pull live streams through the
+ * Same-origin FLV playback proxy. Browsers pull live streams through the
  * backend at /api/streams/live/<streamName> — same origin as the dashboard, so
  * JWT auth works, no CORS, and no dependency on media-node SRS ports being
  * reachable from the viewer's machine.
  *
- * Routing: currently proxies from the local SRS (env.srsFlvBase). Multi-node
- * routing (proxy from the hosting media-node's SRS) will use the stream →
- * nodeId mapping tracked by media-node events — the interface is ready below.
+ * Routing: the session's hosting media node decides the upstream — remote
+ * sessions proxy from that node's advertised FLV base (Docker DNS name inside
+ * a compose network, public origin for remote nodes); sessions without a node
+ * fall back to the local SRS (env.srsFlvBase). SRS's FLV port never needs to
+ * be published for viewers.
  *
  * Admin-only. WebRTC (WHEP) is NOT proxied — its media flows peer-to-peer.
  */
 import { createError, getRouterParam, sendStream } from 'h3'
 import { Readable } from 'node:stream'
-import { env } from '../../../utils/env'
+import { resolveFlvBase } from '../../../services/media-node-registry'
 
 export default defineEventHandler(async (event) => {
   requireAdmin(event)
@@ -24,7 +26,7 @@ export default defineEventHandler(async (event) => {
   // `@` (account emails) is a legal path character and this SRS version hangs
   // on the %40 form — encodeURI keeps it verbatim while covering truly unsafe
   // characters.
-  const upstreamUrl = `${env.srsFlvBase}/live/${encodeURI(stream)}.flv`
+  const upstreamUrl = `${resolveFlvBase(stream)}/live/${encodeURI(stream)}.flv`
   const ac = new AbortController()
   event.node.req.on('close', () => ac.abort()) // viewer left → stop pulling from SRS
 

@@ -13,6 +13,7 @@ export function listActiveSessions(eventId?: number | null): SessionSnapshot[] {
     streamName: r.streamName,
     status: r.status as SessionStatus,
     srsClientId: r.srsClientId ?? null,
+    nodeId: r.nodeId ?? null,
     width: r.width ?? null,
     height: r.height ?? null,
     fps: r.fps ?? null,

@@ -14,7 +14,8 @@ const confirm = useConfirm()
 
 /** Sessions with a live publisher that can be banned+disconnected. */
 function bannable(s: SessionSnapshot): boolean {
-  return ['pending', 'allowed', 'compliant', 'violating'].includes(s.status) && !!s.srsClientId
+  // local sessions route by SRS client id, media-node sessions by node
+  return ['pending', 'allowed', 'compliant', 'violating'].includes(s.status) && (!!s.srsClientId || !!s.nodeId)
 }
 
 function ban(s: SessionSnapshot): void {
@@ -24,7 +25,7 @@ function ban(s: SessionSnapshot): void {
     async () => {
       try {
         await $fetch(
-          `/api/streams/clients/${encodeURIComponent(s.srsClientId!)}?email=${encodeURIComponent(s.streamName)}`,
+          `/api/streams/clients/${encodeURIComponent(s.srsClientId ?? '-')}?email=${encodeURIComponent(s.streamName)}`,
           { method: 'DELETE' },
         )
         toast.success(`Banned ${s.streamName} (site-wide)`)

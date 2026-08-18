@@ -10,6 +10,7 @@ import { createError, getRouterParam, sendStream } from 'h3'
 import { Readable } from 'node:stream'
 import { env } from '../../../../utils/env'
 import { buildFlvPullUrl } from '../../../../utils/srs-url'
+import { resolveFlvBase } from '../../../../services/media-node-registry'
 
 const cache = new Map<string, { ts: number; bytes: Uint8Array }>()
 const TTL_MS = 3_000
@@ -39,7 +40,7 @@ export default defineEventHandler(async (event) => {
     '-analyzeduration',
     '2000000',
     '-i',
-    buildFlvPullUrl(stream),
+    buildFlvPullUrl(stream, resolveFlvBase(stream)),
     '-frames:v',
     '1',
     '-q:v',

@@ -1,8 +1,14 @@
 /**
  * Stateless JWT sessions. The cookie carries a signed JWT (HS256, `jose`) with
- * { uid, role, exp }. Pure-HTTP intranet → HttpOnly + SameSite=Lax, no Secure
- * (documented threat model: trusted internal network). Stateless: no sessions
- * table; logout is just clearing the cookie.
+ * { uid, role, exp }. Stateless: no sessions table; logout is just clearing
+ * the cookie.
+ *
+ * Cookie flags: HttpOnly always. Same-origin deployments (default) use
+ * SameSite=Lax without Secure (documented threat model: trusted internal
+ * network over plain HTTP). Split deployments (frontend served from another
+ * origin, CORS_ORIGINS set) must send the cookie on cross-site API calls —
+ * that requires SameSite=None, which browsers only honor together with
+ * Secure, i.e. the API must be reached over HTTPS (the CDN scenario is).
  */
 import { SignJWT, jwtVerify } from 'jose'
 import { env } from './env'
@@ -18,12 +24,21 @@ export interface SessionPayload {
 const COOKIE_NAME = 'sid'
 const MAX_AGE_SEC = 7 * 24 * 60 * 60 // 7 days
 
+/** cross-origin split deployment (CORS_ORIGINS set) → SameSite=None; Secure */
+const CROSS_ORIGIN = env.corsOrigins.length > 0
+
 const secretKey = (): Uint8Array => new TextEncoder().encode(env.jwtSecret)
 
 export interface CookieSpec {
   name: string
   value: string
-  options: { httpOnly: true; sameSite: 'lax'; path: '/'; maxAge: number }
+  options: {
+    httpOnly: true
+    sameSite: 'lax' | 'none'
+    secure?: boolean
+    path: '/'
+    maxAge: number
+  }
 }
 
 export async function createSessionCookie(uid: number, role: Role): Promise<CookieSpec> {
@@ -36,7 +51,13 @@ export async function createSessionCookie(uid: number, role: Role): Promise<Cook
   return {
     name: COOKIE_NAME,
     value: token,
-    options: { httpOnly: true, sameSite: 'lax', path: '/', maxAge: MAX_AGE_SEC },
+    options: {
+      httpOnly: true,
+      sameSite: CROSS_ORIGIN ? 'none' : 'lax',
+      secure: CROSS_ORIGIN || undefined,
+      path: '/',
+      maxAge: MAX_AGE_SEC,
+    },
   }
 }
 
@@ -56,5 +77,11 @@ export async function readSessionCookie(value: string | undefined): Promise<Sess
 
 export const clearSessionCookie = {
   name: COOKIE_NAME,
-  options: { httpOnly: true, sameSite: 'lax' as const, path: '/', maxAge: 0 },
+  options: {
+    httpOnly: true as const,
+    sameSite: CROSS_ORIGIN ? ('none' as const) : ('lax' as const),
+    secure: CROSS_ORIGIN || undefined,
+    path: '/' as const,
+    maxAge: 0,
+  },
 }

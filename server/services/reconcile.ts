@@ -44,6 +44,7 @@ export async function reconcileStaleSessions(): Promise<void> {
       streamName: s.streamName,
       status: finalStatus,
       srsClientId: s.srsClientId,
+      nodeId: null,
       width: s.width,
       height: s.height,
       fps: s.fps,

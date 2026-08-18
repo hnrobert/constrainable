@@ -15,6 +15,26 @@ export const PublishSessionsRepository = {
   findById(id: number): PublishSession | undefined {
     return db.select().from(publishSessions).where(eq(publishSessions.id, id)).get()
   },
+  /** Newest not-yet-ended session for one stream — playback/kick routing. */
+  findActiveByStream(streamName: string): PublishSession | undefined {
+    return db
+      .select()
+      .from(publishSessions)
+      .where(and(eq(publishSessions.streamName, streamName), isNull(publishSessions.endedAt)))
+      .orderBy(desc(publishSessions.startedAt))
+      .limit(1)
+      .get()
+  },
+  /** Newest not-yet-ended session by SRS client id — dashboard kick routing. */
+  findActiveByClientId(clientId: string): PublishSession | undefined {
+    return db
+      .select()
+      .from(publishSessions)
+      .where(and(eq(publishSessions.srsClientId, clientId), isNull(publishSessions.endedAt)))
+      .orderBy(desc(publishSessions.startedAt))
+      .limit(1)
+      .get()
+  },
   /** Realtime panel: sessions not yet ended, newest first; optional event filter. */
   findActive(eventId?: number | null): PublishSession[] {
     const conds = [isNull(publishSessions.endedAt)]

@@ -207,6 +207,8 @@ export const publishSessions = sqliteTable(
       onDelete: 'set null',
     }),
     streamName: text('stream_name').notNull(),
+    /** null = local/dev session (app manages its own SRS); else the media node id */
+    nodeId: text('node_id'),
     srsClientId: text('srs_client_id'),
     status: text('status', {
       enum: ['pending', 'allowed', 'rejected', 'compliant', 'violating', 'killed', 'ended'],
