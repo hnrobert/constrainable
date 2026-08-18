@@ -1,0 +1,104 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* Class-based dark mode: `.dark` on <html> (toggled by useColorMode +
+   app/head no-FOUC script). Mirrors the shadcn-vue / verifier-gateway setup. */
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* Light palette — shadcn "neutral" defaults, with the project's blue brand
+     as --primary in both modes. */
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.62 0.19 256);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.62 0.19 256);
+  /* Status colors reused by custom Badge variants (success / warning). */
+  --ok: oklch(0.72 0.19 150);
+  --warn: oklch(0.78 0.16 75);
+}
+
+.dark {
+  /* Dark palette derived from the project's previous dark tokens
+     (--bg #0b0f14, --panel #131922, --panel-2 #1a2230, --border #26313f,
+      --text #e6edf3, --muted #8b98a5, --primary #3b82f6, --danger #ef4444). */
+  --background: oklch(0.165 0.018 257);
+  --foreground: oklch(0.94 0.005 240);
+  --card: oklch(0.21 0.025 255);
+  --card-foreground: oklch(0.94 0.005 240);
+  --popover: oklch(0.21 0.025 255);
+  --popover-foreground: oklch(0.94 0.005 240);
+  --primary: oklch(0.62 0.19 256);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.265 0.03 255);
+  --secondary-foreground: oklch(0.94 0.005 240);
+  --muted: oklch(0.265 0.03 255);
+  --muted-foreground: oklch(0.63 0.022 250);
+  --accent: oklch(0.295 0.032 255);
+  --accent-foreground: oklch(0.94 0.005 240);
+  --destructive: oklch(0.637 0.237 25);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.345 0.03 255);
+  --input: oklch(0.345 0.03 255);
+  --ring: oklch(0.62 0.19 256);
+  --ok: oklch(0.72 0.19 150);
+  --warn: oklch(0.78 0.16 75);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    /* Keep the CJK-capable font stack from the previous theme. */
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+      "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+}

@@ -1,0 +1,85 @@
+/**
+ * Audit log writer. Persists via AuditLogRepository and emits an `audit:created`
+ * event for the realtime panel. Business logic over the repository layer.
+ */
+import { AuditLogRepository } from '../repositories/audit-log.repository'
+import { emit } from '../utils/bus'
+import type { AuditCategory, AuditLevel } from '#shared/events'
+import type { AuditFilters, AuditView } from '#shared/audit'
+import type { AuditEntry } from '../database/schema'
+
+export interface AuditInput {
+  eventId?: number | null
+  streamName?: string | null
+  detail?: unknown
+}
+
+export function audit(
+  level: AuditLevel,
+  category: AuditCategory,
+  message: string,
+  opts: AuditInput = {},
+): void {
+  const row = AuditLogRepository.insert({
+    level,
+    category,
+    message,
+    eventId: opts.eventId ?? null,
+    streamName: opts.streamName ?? null,
+    detail: opts.detail != null ? JSON.stringify(opts.detail) : null,
+  })
+
+  emit('audit:created', {
+    id: row.id,
+    ts: row.ts.getTime(),
+    level,
+    category,
+    eventId: row.eventId ?? null,
+    streamName: row.streamName ?? null,
+    message,
+    detail: opts.detail,
+  })
+}
+
+const AUDIT_MAX_LIMIT = 1000
+const AUDIT_DEFAULT_LIMIT = 200
+
+/** Map a DB row to the client view: epoch-ms timestamp + parsed JSON detail. */
+function toAuditView(row: AuditEntry): AuditView {
+  let detail: unknown = null
+  if (row.detail) {
+    try {
+      detail = JSON.parse(row.detail)
+    } catch {
+      detail = row.detail
+    }
+  }
+  return {
+    id: row.id,
+    ts: row.ts.getTime(),
+    level: row.level,
+    category: row.category,
+    eventId: row.eventId ?? null,
+    streamName: row.streamName ?? null,
+    message: row.message,
+    detail,
+  }
+}
+
+/**
+ * Newest-first filtered read of the audit log. Server-side filtering + a clamped
+ * LIMIT keep large logs cheap (the table is append-only and unbounded). The
+ * endpoint validates level/category against the known enum sets before calling,
+ * so they are already well-typed here.
+ */
+export function listAudit(filters: AuditFilters = {}): AuditView[] {
+  const limit = Math.min(Math.max(filters.limit ?? AUDIT_DEFAULT_LIMIT, 1), AUDIT_MAX_LIMIT)
+  const rows = AuditLogRepository.findMany({
+    level: filters.level ?? null,
+    category: filters.category ?? null,
+    eventId: filters.eventId ?? null,
+    q: filters.q ?? null,
+    limit,
+  })
+  return rows.map(toAuditView)
+}

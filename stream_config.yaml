@@ -1,0 +1,23 @@
+# Legacy reference config (from server_for_icpc).
+# The runtime source of truth is now the `app_config` row in SQLite, seeded from
+# shared/config.ts defaults and editable via the admin UI (hot-reload). This file
+# is kept for continuity / migration reference only and is NOT parsed at runtime.
+
+srs:
+  api_base: http://127.0.0.1:1985/api/v1
+  rtmp_ip: 127.0.0.1
+
+probe:
+  wait_seconds: 3
+  retries: 3
+  timeout_seconds: 10
+
+limits:
+  max_width: 1920
+  max_height: 1080
+  max_fps: 30
+  max_bitrate_kbps: 4000
+
+record:
+  enabled: true
+  dir: ./records
