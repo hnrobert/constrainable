@@ -127,8 +127,8 @@ func main() {
 		log.Fatalf("config: %v", err)
 	}
 
-	log.Printf("media-node v%s | api=%s | self=%s | public=%s | hostname=%s",
-		version, cfg.APIOrigin, cfg.SelfOrigin, cfg.PublicOrigin, cfg.Hostname)
+	log.Printf("media-node v%s | api=%s | id=%s | public=%s | hostname=%s",
+		version, cfg.APIOrigin, cfg.NodeIdentifier, cfg.PublicOrigin, cfg.Hostname)
 	srsHost := cfg.SRSAddr
 	if i := strings.LastIndex(srsHost, ":"); i >= 0 {
 		srsHost = srsHost[:i]
@@ -145,13 +145,14 @@ func main() {
 
 	// Socket.IO client — ALL communication with the Node control plane
 	socketClient := node.NewClient(cfg.APIOrigin, cfg.AuthToken, node.RegisterPayload{
-		Origin:       cfg.SelfOrigin,
-		PublicOrigin: cfg.PublicOrigin,
-		RTMPPort:     cfg.RTMPPort,
-		SRTPort:      cfg.SRTPort,
-		SRSFlvBase:   cfg.SRSFlvBase,
-		Hostname:     cfg.Hostname,
-		Version:      version,
+		Origin:         cfg.NodeIdentifier,
+		PublicOrigin:   cfg.PublicOrigin,
+		PublicRtmpPort: cfg.PublicRtmpPort,
+		RTMPPort:       cfg.RTMPPort,
+		SRTPort:        cfg.SRTPort,
+		SRSFlvBase:     cfg.SRSFlvBase,
+		Hostname:       cfg.Hostname,
+		Version:        version,
 	})
 
 	// Direct playback entry (browsers -> this node -> SRS sidecar); every

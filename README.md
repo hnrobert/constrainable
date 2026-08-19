@@ -32,13 +32,16 @@ graph TB
 | var | default | meaning |
 | ----- | --------- | --------- |
 | `API_ORIGIN` | `http://localhost:31954` | Control-plane (constrainable-app) URL — Socket.IO + auth |
-| `PUBLIC_ORIGIN` | _(empty)_ | Browser-reachable base URL (e.g. `http://node1.example.com:38080`) — REQUIRED for multi-node deployments: drives per-user latency probing, the OBS ingest host of assigned users, and direct browser playback (signed URLs point at PUBLIC_ORIGIN). Empty in single-server deployments (users reach the node via the app's host). |
-| `SELF_ORIGIN` | `localhost` | This node's public identifier (reported to Node) |
+| `NODE_IDENTIFIER` | `media-node` | Stable unique identity (drives nodeId: user assignments, session ownership, quotas). NOT an address. |
+| `PUBLIC_DOMAIN` | _(empty)_ | Browser-reachable DOMAIN — REQUIRED for multi-node deployments: drives per-user latency probing, the OBS ingest host of assigned users, and direct browser playback. Empty in single-server deployments (users reach the node via the app's host). |
+| `PUBLIC_PLAY_PORT` | `38080` | Public port of the play entry (only meaningful with `PUBLIC_DOMAIN`). |
+| `PUBLIC_RTMP_PORT` | `1935` | PUBLIC RTMP port for OBS URLs on this node (change only when the tunnel remaps it). |
+| `NODE_IDENTIFIER` | `localhost` | This node's public identifier (reported to Node) |
 | `RTMP_PORT` | `1935` | RTMP ingest port (OBS pushes here) |
 | `PLAY_PORT` | `38080` | Direct playback entry — browsers pull signed FLV URLs here; every pull is authorized by the control plane over Socket.IO (`play:auth`), then proxied from the SRS sidecar |
 | `SRT_PORT` | `9000` | SRT ingest port (scaffold; not yet implemented) |
 | `SRS_ADDR` | `srs:1935` | RTMP relay target (docker sidecar service name; `localhost:1935` for child-process SRS) |
-| `SRS_FLV_BASE` | derived from `SELF_ORIGIN` + `SRS_HTTP_PORT` | FLV base ADVERTISED to the control plane (how the app backend pulls playback) — set to the SRS sidecar's service name on a shared network, e.g. `http://srs:38081` |
+| `SRS_FLV_BASE` | derived from `NODE_IDENTIFIER` + `SRS_HTTP_PORT` | FLV base ADVERTISED to the control plane (how the app backend pulls playback) — set to the SRS sidecar's service name on a shared network, e.g. `http://srs:38081` |
 | `SRS_API_BASE` | `http://srs:1985/api/v1` | SRS HTTP API base (docker sidecar service name; use `http://localhost:1985/api/v1` when SRS runs as a child process via `SRS_BIN`) |
 | `SRS_HTTP_PORT` | `38081` | SRS sidecar http_server port — INTERNAL only, never published (the node's play port proxies it); rendered into the config and used for the `SRS_FLV_BASE` default |
 | `RECORD_DIR` | `./records` | Local MKV segment storage |
@@ -76,7 +79,7 @@ Connects to Node's `/media-nodes` namespace with `{token: MEDIA_NODE_AUTH_TOKEN}
 ```bash
 MEDIA_NODE_AUTH_TOKEN=dev-token \
 API_ORIGIN=http://localhost:31954 \
-SELF_ORIGIN=localhost \
+NODE_IDENTIFIER=localhost \
 go run .
 ```
 

@@ -5,13 +5,14 @@ package node
 
 // RegisterPayload is what a media node sends on (re)connect to identify itself.
 type RegisterPayload struct {
-	Origin       string `json:"origin"`       // this node's identifier (SELF_ORIGIN)
-	PublicOrigin string `json:"publicOrigin"` // browser-reachable base (PUBLIC_ORIGIN; "" = via app host)
-	RTMPPort     int    `json:"rtmpPort"`     // RTMP ingest port
-	SRTPort    int    `json:"srtPort"`    // SRT ingest port (scaffold)
-	SRSFlvBase string `json:"srsFlvBase"` // how the control plane pulls FLV from this node's SRS
-	Hostname   string `json:"hostname"`   // human-readable name
-	Version    string `json:"version"`    // media-node binary version
+	Origin         string `json:"origin"`         // this node's identifier (SELF_ORIGIN)
+	PublicOrigin   string `json:"publicOrigin"`   // browser-reachable base (PUBLIC_ORIGIN; "" = via app host)
+	RTMPPort       int    `json:"rtmpPort"`       // RTMP ingest port
+	PublicRtmpPort int    `json:"publicRtmpPort"` // PUBLIC RTMP port (OBS-facing; 1935 unless tunnelled differently)
+	SRTPort        int    `json:"srtPort"`        // SRT ingest port (scaffold)
+	SRSFlvBase     string `json:"srsFlvBase"`     // how the control plane pulls FLV from this node's SRS
+	Hostname       string `json:"hostname"`       // human-readable name
+	Version        string `json:"version"`        // media-node binary version
 }
 
 // RegisteredAck is Node's response to a successful registration.
@@ -33,12 +34,12 @@ type PublishStart struct {
 // PublishAuthorized is Node's ack to publish:start — the authorization decision
 // plus everything the node needs to run the session.
 type PublishAuthorized struct {
-	Allow     bool   `json:"allow"`
-	Reason    string `json:"reason,omitempty"`
-	SessionID int64  `json:"sessionId,omitempty"`
-	EventID   *int64 `json:"eventId,omitempty"`
+	Allow     bool    `json:"allow"`
+	Reason    string  `json:"reason,omitempty"`
+	SessionID int64   `json:"sessionId,omitempty"`
+	EventID   *int64  `json:"eventId,omitempty"`
 	Limits    *Limits `json:"limits,omitempty"`
-	Record    bool   `json:"record"`
+	Record    bool    `json:"record"`
 }
 
 // Limits mirrors the Node config's per-event / global stream caps.
@@ -67,9 +68,9 @@ type EndReport struct {
 
 // RecordingSegment describes one on-disk MKV file within a recording.
 type RecordingSegment struct {
-	RelPath string  `json:"relPath"`
-	SizeBytes int64 `json:"sizeBytes"`
-	DurationSec int `json:"durationSec"`
+	RelPath     string `json:"relPath"`
+	SizeBytes   int64  `json:"sizeBytes"`
+	DurationSec int    `json:"durationSec"`
 }
 
 // RecordingReady reports that a recording segment was finalized on disk.
@@ -124,8 +125,8 @@ type RecordingDelete struct {
 
 // ConfigLimits pushes hot-reloaded limits (global + per-event overrides).
 type ConfigLimits struct {
-	Global Limits                 `json:"global"`
-	Events []EventLimits          `json:"events"`
+	Global Limits        `json:"global"`
+	Events []EventLimits `json:"events"`
 }
 
 // EventLimits is a per-event override entry.
