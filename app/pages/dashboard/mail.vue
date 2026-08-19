@@ -28,6 +28,21 @@ const form = reactive({
 })
 const senderPassword = ref('')
 const postAuthToken = ref('')
+
+/** Webhook payload shape — visual selector backed by postFieldMap (authoritative). */
+const PA_FIELD_MAP = '{"to":"email","subject":"subject","body":"content"}'
+const SMTOGO_FIELD_MAP = '{"from":"from","to":"to","subject":"subject","bodyHtml":"html"}'
+const postShape = ref<'powerautomate' | 'smtogo'>('smtogo')
+function shapeOf(fieldMap: string, schema: string): 'powerautomate' | 'smtogo' {
+  if (fieldMap.includes('"email"')) return 'powerautomate'
+  if (fieldMap.trim()) return 'smtogo'
+  return schema === 'powerautomate' ? 'powerautomate' : 'smtogo'
+}
+function applyPostShape(v: unknown): void {
+  const pa = v === 'powerautomate'
+  form.postFieldMap = pa ? PA_FIELD_MAP : SMTOGO_FIELD_MAP
+  form.postSchema = pa ? 'powerautomate' : 'smtogo' // keep the legacy field in sync
+}
 const hasPassword = ref(false)
 const hasPostAuthToken = ref(false)
 
@@ -50,6 +65,7 @@ function syncFromConfig(c: MailConfigClient): void {
   form.postUrl = c.postUrl ?? ''
   form.postSchema = c.postSchema ?? 'smtogo'
   form.postFieldMap = c.postFieldMap ?? ''
+  postShape.value = shapeOf(form.postFieldMap, form.postSchema)
   hasPassword.value = c.hasPassword ?? false
   hasPostAuthToken.value = c.hasPostAuthToken ?? false
 }
@@ -207,6 +223,18 @@ function discardAndLeave(): void {
         <CardContent class="space-y-3">
           <FieldRow label="Webhook URL">
             <Input v-model="form.postUrl" placeholder="https://..." />
+          </FieldRow>
+          <FieldRow
+            label="Payload format"
+            hint="must match the fields your downstream flow reads — a mismatch sends to an empty address and the flow still reports success"
+          >
+            <Select v-model="postShape" @update:model-value="applyPostShape">
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="powerautomate">Power Automate (email / subject / content)</SelectItem>
+                <SelectItem value="smtogo">SMToGo-style (from / to / subject / html)</SelectItem>
+              </SelectContent>
+            </Select>
           </FieldRow>
           <FieldRow label="Bearer Token (auth, optional)">
             <Input v-model="postAuthToken" type="password" autocomplete="new-password" placeholder="Leave blank to keep unchanged" />

@@ -11,8 +11,8 @@ export function ingestMailTheme(): EmailTheme {
   return {
     brandTitle: 'Constrainable Ingest',
     primaryColor: '#3B82F6',
-    footerHtml: 'This email was sent automatically; please do not reply.',
+    footerHtml: 'This email was sent automatically, please do not reply.',
   }
 }
 
-export const VERIFICATION_CODE_SUBJECT = '[Constrainable Ingest]Registration verification code'
+export const VERIFICATION_CODE_SUBJECT = '[Constrainable Ingest] Registration verification code'

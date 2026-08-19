@@ -42,7 +42,7 @@
     "clsx": "^2.1.1",
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
-    "email-poster": "^0.3.7",
+    "email-poster": "^0.3.9",
     "jose": "^6.2.8",
     "lucide-vue-next": "^1.0.0",
     "mpegts.js": "^1.8.1",

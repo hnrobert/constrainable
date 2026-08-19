@@ -33,7 +33,7 @@ export default defineEventHandler(async (event) => {
   try {
     await sendMailWithConfig(getMailConfig(), {
       to,
-      subject: '[Constrainable Ingest]Test email',
+      subject: '[Constrainable Ingest] Test email',
       body: renderCardEmail(
         {
           title: 'Test email',
