@@ -7,6 +7,8 @@ package node
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
+	"log"
 	"time"
 )
 
@@ -16,7 +18,7 @@ func (c *Client) Salt(email string) SaltResult {
 		Salt   string `json:"salt"`
 		Banned bool   `json:"banned"`
 	}
-	err := c.EmitWithAck("auth:salt", map[string]string{"email": email}, &ack, 5*time.Second)
+	err := c.ackWithRetry("auth:salt", map[string]string{"email": email}, &ack, 2, 3*time.Second)
 	if err != nil || ack.Salt == "" {
 		return SaltResult{Salt: randomHex(8)}
 	}
@@ -29,16 +31,36 @@ func (c *Client) Verify(email, opaque, challenge, response string) VerifyResult 
 		Allow bool `json:"allow"`
 		Known bool `json:"known"`
 	}
-	err := c.EmitWithAck("auth:verify", map[string]string{
+	err := c.ackWithRetry("auth:verify", map[string]string{
 		"email": email, "opaque": opaque, "challenge": challenge, "response": response,
-	}, &ack, 5*time.Second)
+	}, &ack, 2, 3*time.Second)
 	if err != nil {
+		log.Printf("[node] auth:verify unreachable after retries: %v", err)
 		return VerifyResult{}
 	}
 	return VerifyResult{Allow: ack.Allow, Known: ack.Known}
 }
 
+// ackWithRetry runs EmitWithAck with retries — the control-plane socket
+// reconnects with a short gap after drops, and a TRANSIENT link failure must
+// never read as a negative answer (e.g. policy zero-values = "unknown key").
+// Returns the last error when every attempt fails.
+func (c *Client) ackWithRetry(event string, payload any, result any, attempts int, timeout time.Duration) error {
+	var err error = fmt.Errorf("no attempts")
+	for i := 0; i < attempts; i++ {
+		if i > 0 {
+			time.Sleep(500 * time.Millisecond)
+		}
+		if err = c.EmitWithAck(event, payload, result, timeout); err == nil {
+			return nil
+		}
+	}
+	return err
+}
+
 // PolicyViaSocket asks Node how to treat a publish token + stream name.
+// Retried: an unreachable control plane yields Unreachable=true (the caller
+// must close WITHOUT a terminal OBS error), never "unknown key".
 func (c *Client) Policy(token, stream string) PolicyResult {
 	var ack struct {
 		PublishKey         bool `json:"publishKey"`
@@ -46,9 +68,9 @@ func (c *Client) Policy(token, stream string) PolicyResult {
 		WindowOpen         bool `json:"windowOpen"`
 		Banned             bool `json:"banned"`
 	}
-	err := c.EmitWithAck("auth:policy", map[string]string{"token": token, "stream": stream}, &ack, 5*time.Second)
-	if err != nil {
-		return PolicyResult{} // fail open (SRS on_publish still validates)
+	if err := c.ackWithRetry("auth:policy", map[string]string{"token": token, "stream": stream}, &ack, 3, 3*time.Second); err != nil {
+		log.Printf("[node] auth:policy unreachable after retries: %v", err)
+		return PolicyResult{Unreachable: true}
 	}
 	return PolicyResult{
 		PublishKey:         ack.PublishKey,
@@ -81,6 +103,7 @@ type VerifyResult struct {
 }
 
 type PolicyResult struct {
+	Unreachable        bool // control plane not answering — link error, NOT a verdict
 	PublishKey         bool
 	RequireAccountAuth bool
 	WindowOpen         bool

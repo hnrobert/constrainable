@@ -289,6 +289,13 @@ func HandleOBS(conn net.Conn, app AppClient) {
 				}
 				candidate = SafeStreamName(candidate)
 				pol := app.Policy(token, candidate)
+				if pol.Unreachable {
+					// link error, not a verdict — close WITHOUT NetStream.Publish.BadName
+					// (that error is TERMINAL in OBS); a plain close makes OBS retry,
+					// which succeeds once the control-plane socket reconnects
+					log.Printf("%s publish '%s': control plane unreachable — closing for retry", remote, name)
+					return
+				}
 				if !pol.PublishKey {
 					// Unknown token = wrong event key. The per-student/per-token
 					// verbatim-relay paths are gone from the product, so refuse
