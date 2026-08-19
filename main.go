@@ -127,8 +127,8 @@ func main() {
 		log.Fatalf("config: %v", err)
 	}
 
-	log.Printf("media-node v%s | api=%s | self=%s | hostname=%s",
-		version, cfg.APIOrigin, cfg.SelfOrigin, cfg.Hostname)
+	log.Printf("media-node v%s | api=%s | self=%s | public=%s | hostname=%s",
+		version, cfg.APIOrigin, cfg.SelfOrigin, cfg.PublicOrigin, cfg.Hostname)
 	log.Printf("rtmp :%d | srs=%s | srs-api=%s | flv-base=%s",
 		cfg.RTMPPort, cfg.SRSAddr, cfg.SRSApiBase, cfg.SRSFlvBase)
 
@@ -140,12 +140,13 @@ func main() {
 
 	// Socket.IO client — ALL communication with the Node control plane
 	socketClient := node.NewClient(cfg.APIOrigin, cfg.AuthToken, node.RegisterPayload{
-		Origin:     cfg.SelfOrigin,
-		RTMPPort:   cfg.RTMPPort,
-		SRTPort:    cfg.SRTPort,
-		SRSFlvBase: cfg.SRSFlvBase,
-		Hostname:   cfg.Hostname,
-		Version:    version,
+		Origin:       cfg.SelfOrigin,
+		PublicOrigin: cfg.PublicOrigin,
+		RTMPPort:     cfg.RTMPPort,
+		SRTPort:      cfg.SRTPort,
+		SRSFlvBase:   cfg.SRSFlvBase,
+		Hostname:     cfg.Hostname,
+		Version:      version,
 	})
 
 	// Session manager
