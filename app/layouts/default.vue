@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Component } from 'vue'
 import {
+  Network,
   LayoutDashboard,
   CalendarDays,
   Radio,
@@ -48,6 +49,7 @@ const generalNav: NavItem[] = [
 
 const adminNav: NavItem[] = [
   { label: 'Live', to: '/dashboard/streams', icon: Radio },
+  { label: 'Nodes', to: '/dashboard/nodes', icon: Network },
   { label: 'Users', to: '/dashboard/users', icon: Users },
   { label: 'Groups', to: '/dashboard/groups', icon: UsersRound },
   { label: 'Config', to: '/dashboard/config', icon: Settings },

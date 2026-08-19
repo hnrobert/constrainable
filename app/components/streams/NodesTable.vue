@@ -1,28 +1,27 @@
 <script lang="ts">
-/** One registered media node (mirrors server MediaNodeInfo + quota state). */
+/** One registered media node (admin /api/media-nodes row). */
 export interface NodeRow {
   nodeId: string
-  origin: string
   publicOrigin: string
-  rtmpPort: number
-  hostname: string
+  /** OBS ingest URL (null = single-server: users push via the app's host) */
+  rtmpUrl: string | null
   version: string
-  connectedAt: number
   activeStreams: number
-  srsFlvBase: string
+  connectedAt: number
   /** auto-assignment quota (node_settings; manual assignment ignores it) */
   maxUsers: number
-  /** users currently pinned to this node */
+  /** users currently assigned to this node */
   assignedUsers: number
+  users: { id: number; email: string }[]
 }
 </script>
 
 <script setup lang="ts">
 /**
- * Admin: the list of currently-registered media nodes (Go backends), from
- * GET /api/media-nodes. The AUTO-ASSIGN CAP is editable inline (PATCH
- * /api/media-nodes/:nodeId); rows update when the parent re-polls — a node
- * dropping offline mid-event should be visible within seconds.
+ * Admin: registered media nodes with per-node user assignment. The cap is
+ * editable inline; the detail row lists assigned users with a move control
+ * (another node, or back to auto). Users are NOT permanently bound — a node
+ * offline >5 min loses them to automatic reassignment on their next visit.
  */
 import type { DataTableColumn } from '~/components/DataTable.vue'
 
@@ -32,12 +31,11 @@ const emit = defineEmits<{ edited: [] }>()
 const toast = useToast()
 const columns: DataTableColumn[] = [
   { key: 'nodeId', header: 'Node' },
-  { key: 'hostname', header: 'Host' },
+  { key: 'rtmpUrl', header: 'OBS ingest' },
   { key: 'version', header: 'Version', class: 'text-muted-foreground' },
   { key: 'activeStreams', header: 'Streams' },
   { key: 'quota', header: 'Assigned / auto cap' },
   { key: 'connectedAt', header: 'Uptime' },
-  { key: 'srsFlvBase', header: 'FLV base (internal)', class: 'text-muted-foreground' },
 ]
 
 /** per-row working copies of the cap, populated on first edit */
@@ -70,6 +68,30 @@ async function saveCap(n: NodeRow): Promise<void> {
   }
 }
 
+/** move a user to another node (or back to auto) */
+const AUTO = 'auto'
+const movingId = ref<number | null>(null)
+async function moveUser(u: { id: number; email: string }, nodeId: string | null): Promise<void> {
+  movingId.value = u.id
+  try {
+    await $fetch(`/api/users/${u.id}`, { method: 'PATCH', body: { nodeId } })
+    toast.success(`${u.email} → ${nodeId ?? 'auto'}`)
+    emit('edited')
+  } catch (e: any) {
+    toast.error('Move failed: ' + (e?.data?.statusMessage || e?.message || ''))
+  } finally {
+    movingId.value = null
+  }
+}
+
+const expanded = ref<Set<string>>(new Set())
+function toggle(n: NodeRow): void {
+  const next = new Set(expanded.value)
+  if (next.has(n.nodeId)) next.delete(n.nodeId)
+  else next.add(n.nodeId)
+  expanded.value = next
+}
+
 function fmtDuration(ms: number): string {
   const s = Math.max(0, Math.floor((Date.now() - ms) / 1000))
   const h = Math.floor(s / 3600)
@@ -85,13 +107,20 @@ function fmtDuration(ms: number): string {
     :columns="columns"
     :rows="props.nodes"
     :row-key="(n: NodeRow) => n.nodeId"
+    :detail-when="(n: NodeRow) => expanded.has(n.nodeId)"
     empty="No media nodes connected — check that the media-node container is up and can reach this backend (API_ORIGIN)."
   >
     <template #cell-nodeId="{ row }">
-      <div class="flex flex-col">
-        <span class="font-medium">{{ row.nodeId }}</span>
-        <span v-if="row.publicOrigin" class="font-mono text-[10px] text-muted-foreground">{{ row.publicOrigin }}</span>
-      </div>
+      <button class="flex flex-col text-left" @click="toggle(row)">
+        <span class="font-medium underline decoration-dotted underline-offset-4">{{ row.nodeId }}</span>
+        <span class="font-mono text-[10px] text-muted-foreground">
+          {{ expanded.has(row.nodeId) ? '▾' : '▸' }} {{ row.assignedUsers }} user{{ row.assignedUsers === 1 ? '' : 's' }}
+        </span>
+      </button>
+    </template>
+    <template #cell-rtmpUrl="{ row }">
+      <span v-if="row.rtmpUrl" class="font-mono text-xs">{{ row.rtmpUrl }}</span>
+      <span v-else class="text-xs text-muted-foreground">via app host (single-server)</span>
     </template>
     <template #cell-activeStreams="{ row }">
       <Badge :variant="row.activeStreams > 0 ? 'success' : 'secondary'">{{ row.activeStreams }}</Badge>
@@ -121,5 +150,32 @@ function fmtDuration(ms: number): string {
       </div>
     </template>
     <template #cell-connectedAt="{ row }">{{ fmtDuration(row.connectedAt) }}</template>
+
+    <template #detail="{ row }">
+      <div class="space-y-1.5 px-4 py-2">
+        <p v-if="!row.users.length" class="text-xs text-muted-foreground">No users assigned to this node.</p>
+        <div
+          v-for="u in row.users"
+          :key="u.id"
+          class="flex items-center justify-between gap-3 rounded-md border/50 px-2 py-1"
+        >
+          <span class="text-sm">{{ u.email }}</span>
+          <div class="flex items-center gap-1.5">
+            <Select
+              :disabled="movingId === u.id"
+              @update:model-value="(v: any) => v !== undefined && v !== row.nodeId && moveUser(u, v === AUTO ? null : String(v))"
+            >
+              <SelectTrigger class="h-8 w-44"><SelectValue placeholder="Move to…" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem :value="AUTO">auto (lowest latency)</SelectItem>
+                <SelectItem v-for="n in props.nodes.filter((x) => x.nodeId !== row.nodeId)" :key="n.nodeId" :value="n.nodeId">
+                  {{ n.nodeId }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </div>
+    </template>
   </DataTable>
 </template>

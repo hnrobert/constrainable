@@ -1,3 +1,7 @@
+/** A node offline longer than this loses its users to reassignment.
+ *  (NODE_REASSIGN_GRACE_MS overrides — for tests.) */
+const OFFLINE_GRACE_MS = Number(process.env.NODE_REASSIGN_GRACE_MS || 5 * 60 * 1000)
+
 /**
  * User → media-node assignment. Two paths:
  *
@@ -9,10 +13,11 @@
  *   soft allocation guide, never a user-facing failure.
  * - MANUAL (admin): PATCH /api/users/:id { nodeId } — ignores the quota.
  *
- * Assignments are sticky: once set they survive visits and node restarts
- * (reassignment is an admin action, or clearing to null re-enables auto).
+ * Assignments are NOT permanent bindings: a node offline beyond
+ * OFFLINE_GRACE_MS loses its users — they are reallocated on their next
+ * visit (and admins can move anyone anytime).
  */
-import { listNodes, getNode } from './media-node-registry'
+import { listNodes, getNode, nodeOfflineForMs } from './media-node-registry'
 import { NodeSettingsRepository } from '../repositories/node-settings.repository'
 import { NodeLatenciesRepository } from '../repositories/node-latencies.repository'
 import { UsersRepository } from '../repositories/users.repository'
@@ -60,7 +65,23 @@ export function recordVisit(
 
   const user = UsersRepository.findById(userId)
   if (!user) return null
-  if (user.nodeId) return user.nodeId
+
+  // Assigned but the node has been gone too long → reassign (users are NOT
+  // permanently bound; the grace period avoids churn on brief reconnects).
+  if (user.nodeId) {
+    const offlineFor = nodeOfflineForMs(user.nodeId)
+    if (offlineFor != null && offlineFor > OFFLINE_GRACE_MS) {
+      const next = allocate(userId)
+      if (next && next !== user.nodeId) {
+        UsersRepository.updateNode(userId, next)
+        console.log(
+          `[assign] ${user.email}: ${user.nodeId} offline ${Math.round(offlineFor / 1000)}s → reassigned to ${next}`,
+        )
+        return next
+      }
+    }
+    return user.nodeId
+  }
 
   const pick = allocate(userId)
   if (pick) UsersRepository.updateNode(userId, pick)

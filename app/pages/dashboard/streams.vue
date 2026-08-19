@@ -1,17 +1,11 @@
 <script setup lang="ts">
 import type { SessionSnapshot, ViolationSnapshot, RecordingSnapshot } from '#shared/events'
 import type { EventView } from '#shared/event-view'
-import type { NodeRow } from '~/components/streams/NodesTable.vue'
-
 const toast = useToast()
 
 // seed from the API (SSR), then live-update over the socket
 const { data } = useFetch<SessionSnapshot[]>('/api/streams')
 const { data: events } = useFetch<EventView[]>('/api/events')
-
-// registered media nodes — poll: a node dropping offline mid-event matters
-const { data: nodes, refresh: refreshNodes } = useFetch<NodeRow[]>('/api/media-nodes')
-let nodesTimer: ReturnType<typeof setInterval> | undefined
 
 const sessions = ref<Map<number, SessionSnapshot>>(new Map())
 const connected = ref(false)
@@ -36,9 +30,6 @@ function upsert(s: SessionSnapshot): void {
 
 onMounted(() => {
   if (data.value) for (const s of data.value) sessions.value.set(s.sessionId, s)
-  nodesTimer = setInterval(() => {
-    refreshNodes()
-  }, 10_000)
 
   const socket = useSocket()
   socket.on('connect', () => (connected.value = true))
@@ -59,10 +50,7 @@ onMounted(() => {
   socket.on('config:changed', () => toast.info('Runtime config hot-reloaded'))
 })
 
-onBeforeUnmount(() => {
-  if (nodesTimer) clearInterval(nodesTimer)
-  disposeSocket()
-})
+onBeforeUnmount(() => disposeSocket())
 
 // ---- view + grid controls ----
 type ViewMode = 'list' | 'grid'
@@ -154,23 +142,6 @@ watch([pageSize, sortBy], () => (pageNo.value = 1))
     <Card v-else>
       <CardContent>
         <StreamsGrid :page="gridPage" @watch="watchStream" />
-      </CardContent>
-    </Card>
-
-    <Card>
-      <CardHeader>
-        <CardTitle class="flex items-center justify-between">
-          Media Nodes
-          <Badge :variant="(nodes?.length ?? 0) > 0 ? 'success' : 'secondary'">
-            {{ nodes?.length ?? 0 }} connected
-          </Badge>
-        </CardTitle>
-        <CardDescription>
-          Go media-nodes registered with this backend over Socket.IO. The auto-assign cap limits first-visit allocation (lowest latency first; overflow spreads to the least-loaded node). Re-polled every 10 s.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <StreamsNodesTable :nodes="nodes ?? []" @edited="refreshNodes()" />
       </CardContent>
     </Card>
 

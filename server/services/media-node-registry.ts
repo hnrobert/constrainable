@@ -36,6 +36,12 @@ export interface MediaNodeInfo {
 const nodes = new Map<string, MediaNodeInfo>()
 /** socketId → nodeId (reverse lookup for disconnect cleanup) */
 const socketToNode = new Map<string, string>()
+/** nodeIds observed live since process start (boot-grace bookkeeping) */
+const everSeen = new Set<string>()
+/** nodeId → epoch ms when the node went offline (drives user reassignment) */
+const offlineSince = new Map<string, number>()
+/** process start — grace anchor for nodes never seen since boot */
+const bootedAt = Date.now()
 
 /** Derive a stable nodeId from the node's NODE_IDENTIFIER. */
 export function deriveNodeId(origin: string): string {
@@ -68,6 +74,8 @@ export function register(
     publicRtmpPort: info.publicRtmpPort ?? 1935,
   }
   nodes.set(nodeId, entry)
+  offlineSince.delete(nodeId)
+  everSeen.add(nodeId)
   socketToNode.set(socket.id, nodeId)
   console.log(
     `[media-nodes] registered: ${nodeId} (${info.hostname}) origin=${info.origin} flv=${entry.srsFlvBase}`,
@@ -83,9 +91,21 @@ export function disconnect(socketId: string): string | null {
   const node = nodes.get(nodeId)
   if (node && node.socketId === socketId) {
     nodes.delete(nodeId)
+    offlineSince.set(nodeId, Date.now())
     console.log(`[media-nodes] disconnected: ${nodeId} (${node.hostname})`)
   }
   return nodeId
+}
+
+/**
+ * How long a node has been offline (ms); null when it is live. Nodes unseen
+ * since process start count from boot, so an app restart doesn't instantly
+ * orphan users whose nodes simply haven't reconnected yet.
+ */
+export function nodeOfflineForMs(nodeId: string): number | null {
+  if (nodes.has(nodeId)) return null
+  const since = offlineSince.get(nodeId) ?? (everSeen.has(nodeId) ? null : bootedAt)
+  return since == null ? null : Date.now() - since
 }
 
 /** Get a node's info by nodeId. */
