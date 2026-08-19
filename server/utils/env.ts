@@ -32,7 +32,7 @@ export const env = {
    * media-node-registry.resolveFlvBase) — this only serves streams this
    * backend hosts itself (dev / app-managed SRS).
    */
-  srsFlvBase: process.env.SRS_FLV_BASE || 'http://127.0.0.1:38080',
+  srsFlvBase: process.env.SRS_FLV_BASE || 'http://127.0.0.1:38081', // SRS http_server (38081; the node play entry is 38080)
   /** SRS RTMP host (server-to-server, for ffprobe/ffmpeg pull) */
   srsRtmpHost: process.env.SRS_RTMP_HOST || '127.0.0.1',
   /** Browser-facing SRS API port (WHEP playback URLs) */

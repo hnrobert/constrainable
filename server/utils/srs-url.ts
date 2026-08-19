@@ -1,4 +1,6 @@
 import { env } from './env'
+import { getHostingNode } from '../services/media-node-registry'
+import { signMediaUrl } from './signed-url'
 
 /**
  * The server-to-SRS pull address for the recorder and the monitor probe, as an
@@ -31,21 +33,26 @@ export interface PlaybackUrls {
 }
 
 /**
- * Playback URLs for a live stream — BOTH same-origin relative paths, so no
- * SRS host/port is ever browser-visible and no PUBLIC_HOST-style env is
- * needed.
+ * Playback URLs for a live stream.
  *
- * FLV: the app proxies SRS's HTTP-FLV remux at /api/streams/live/<stream> (see
- * server/api/streams/live/[stream].get.ts) — works from any machine that can
- * reach the app.
+ * FLV — two paths depending on the hosting node:
+ *  - Multi-node (node advertises PUBLIC_ORIGIN): a SIGNED ABSOLUTE URL on the
+ *    node's own play endpoint (`${PUBLIC_ORIGIN}/live/<s>.flv?exp&sig`). The
+ *    browser pulls video DIRECTLY from the node — playback bandwidth never
+ *    transits the control plane. Each pull is authorized by the node via the
+ *    `play:auth` Socket.IO ack (the app verifies the signature it minted).
+ *  - Single-server default (no PUBLIC_ORIGIN): the same-origin proxy at
+ *    /api/streams/live/<stream> — the app pulls from the internal SRS.
  *
- * WHEP (WebRTC): only the SDP signaling is proxied (/api/streams/whep/<stream>
- * → the hosting SRS's API over the internal network); the media itself still
- * flows browser↔SRS peer-to-peer via ICE/UDP.
+ * WHEP (WebRTC): only the SDP signaling is proxied same-origin
+ * (/api/streams/whep/<stream>); the media flows browser↔SRS peer-to-peer.
  */
 export function buildPlaybackUrls(streamName: string): PlaybackUrls {
+  const path = `/live/${encodeURIComponent(streamName)}.flv`
+  const node = getHostingNode(streamName)
+  const flv = node?.publicOrigin ? signMediaUrl(node.publicOrigin, path) : `/api/streams/live/${encodeURIComponent(streamName)}`
   return {
-    flv: `/api/streams/live/${encodeURIComponent(streamName)}`,
+    flv,
     whep: `/api/streams/whep/${encodeURIComponent(streamName)}`,
   }
 }

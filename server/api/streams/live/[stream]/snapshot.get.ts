@@ -10,7 +10,8 @@ import { createError, getRouterParam, sendStream } from 'h3'
 import { Readable } from 'node:stream'
 import { env } from '../../../../utils/env'
 import { buildFlvPullUrl } from '../../../../utils/srs-url'
-import { resolveFlvBase } from '../../../../services/media-node-registry'
+import { signMediaUrl } from '../../../../utils/signed-url'
+import { resolveFlvBase, getHostingNode } from '../../../../services/media-node-registry'
 
 const cache = new Map<string, { ts: number; bytes: Uint8Array }>()
 const TTL_MS = 3_000
@@ -21,6 +22,15 @@ export default defineEventHandler(async (event) => {
   if (!stream || stream.includes('/')) {
     throw createError({ statusCode: 400, statusMessage: 'stream is required' })
   }
+
+  // Remote nodes: pull through the node's auth-gated play entry with a
+  // self-signed URL (this app verifies its own signature on play:auth) — the
+  // SRS sidecar never has to be exposed for snapshots. Local/single-server:
+  // the internal FLV base as before.
+  const hosted = getHostingNode(stream)
+  const pullUrl = hosted?.publicOrigin
+    ? signMediaUrl(hosted.publicOrigin, `/live/${encodeURIComponent(stream)}.flv`)
+    : buildFlvPullUrl(stream, resolveFlvBase(stream))
 
   const hit = cache.get(stream)
   if (hit && Date.now() - hit.ts < TTL_MS) {
@@ -40,7 +50,7 @@ export default defineEventHandler(async (event) => {
     '-analyzeduration',
     '2000000',
     '-i',
-    buildFlvPullUrl(stream, resolveFlvBase(stream)),
+    pullUrl,
     '-frames:v',
     '1',
     '-q:v',
