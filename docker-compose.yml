@@ -6,8 +6,16 @@
 # Usage:
 #   API_ORIGIN=https://api.example.com docker compose up -d
 #
-# To point at a locally running app (dev):
-#   API_ORIGIN=http://host.docker.internal:31954 docker compose up
+# API_ORIGIN by deployment:
+#   same compose as the app (orchestrator)  → http://app:31954 (service name)
+#   same host, SEPARATE compose projects    → create a shared network once
+#     (`docker network create ingest-shared`), uncomment the ingest-shared
+#     blocks below + the matching block in the app's compose, then
+#     API_ORIGIN=http://app:31954 still works (service names resolve across
+#     projects on a shared network)
+#   remote host                             → https://<api-domain> (needs HTTPS)
+#   quick local dev against a host app      → http://host.docker.internal:31954
+#     (+ extra_hosts host-gateway on Linux, see below)
 # Runs the prebuilt GHCR image — no local build. To build from source
 # instead, replace the image line with `build: .`.
 services:
@@ -55,6 +63,10 @@ services:
       - "38080:38080"
     networks:
       - constrainable-ingest
+      # - ingest-shared   # external shared network (see header)
+    # Linux only — uncomment when using host.docker.internal:
+    # extra_hosts:
+    #   - "host.docker.internal:host-gateway"
     restart: unless-stopped
 
   # SRS sidecar: waits for the config the node renders onto the shared volume,
@@ -85,3 +97,5 @@ volumes:
 networks:
   constrainable-ingest:
     driver: bridge
+  # ingest-shared:
+  #   external: true     # created once via `docker network create ingest-shared`

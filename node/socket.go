@@ -17,6 +17,12 @@ import (
 	"golang.org/x/net/websocket"
 )
 
+// The socket.io namespace ALL control-plane traffic rides on. Outgoing event
+// frames MUST carry it (`42/media-node,["event",…]`) — without it packets land
+// on the root namespace, which we never CONNECT to, and the server treats that
+// as a protocol violation and force-closes the socket.
+const nsp = "/media-node"
+
 // Client manages the persistent Socket.IO connection to the Node control plane.
 type Client struct {
 	apiOrigin string // e.g. http://constrainable-app:31954
@@ -148,7 +154,7 @@ func (c *Client) connectOnce() error {
 
 	// Register
 	regData, _ := json.Marshal(c.register)
-	regMsg := fmt.Sprintf(`42["node:register",%s]`, regData)
+	regMsg := fmt.Sprintf("42%s,[\"node:register\",%s]", nsp, regData)
 	if err := websocket.Message.Send(ws, regMsg); err != nil {
 		return fmt.Errorf("send register: %w", err)
 	}
@@ -188,27 +194,33 @@ func (c *Client) readLoop(ws *websocket.Conn) error {
 	}
 }
 
-// handleSocketIO parses socket.io event/ack packets and dispatches.
+// handleSocketIO parses socket.io packets (engine '4' already stripped) and
+// dispatches. Wire format per the socket.io parser: type + ["/nsp,"] + [id] +
+// JSON — the namespace may precede the id on events AND acks, so strip it
+// uniformly before looking at the rest.
 func (c *Client) handleSocketIO(payload string) error {
 	if len(payload) == 0 {
 		return nil
 	}
-
-	if strings.HasPrefix(payload, "0") || strings.HasPrefix(payload, "44") {
-		return nil // connect ack or connect_error — already handled
+	rest := payload[1:]
+	if strings.HasPrefix(rest, "/") {
+		if i := strings.Index(rest, ","); i >= 0 {
+			rest = rest[i+1:]
+		}
 	}
 
-	if strings.HasPrefix(payload, "42") {
-		// event: 42["eventname",args]
-		return c.handleEvent(payload[2:])
-	}
-	if strings.HasPrefix(payload, "43") {
-		// ack: 43<id>[args]
-		return c.handleAck(payload[2:])
-	}
-	if strings.HasPrefix(payload, "41") {
-		// disconnect
+	switch payload[0] {
+	case '0': // connect ack — handled in connectOnce
+		return nil
+	case '1': // disconnect packet
 		return fmt.Errorf("socket.io disconnect from server")
+	case '2': // event: ["eventname",args]
+		return c.handleEvent(rest)
+	case '3': // ack: <id>[args]
+		return c.handleAck(rest)
+	case '4': // error packets (44 connect_error is handled at connect time)
+		log.Printf("[node] socket.io error packet: %s", payload)
+		return nil
 	}
 	return nil
 }
@@ -301,7 +313,7 @@ func (c *Client) handleAck(raw string) error {
 	return nil
 }
 
-// Emit sends a fire-and-forget event.
+// Emit sends a fire-and-forget event (namespaced: 42<nsp>,["event",payload]).
 func (c *Client) Emit(event string, payload any) error {
 	c.mu.Lock()
 	ws := c.ws
@@ -313,7 +325,7 @@ func (c *Client) Emit(event string, payload any) error {
 	if err != nil {
 		return err
 	}
-	msg := fmt.Sprintf(`42["%s",%s]`, event, data)
+	msg := fmt.Sprintf("42%s,[\"%s\",%s]", nsp, event, data)
 	return websocket.Message.Send(ws, msg)
 }
 
@@ -336,12 +348,13 @@ func (c *Client) EmitWithAck(event string, payload any, result any, timeout time
 	c.pending.Store(reqID, ch)
 	defer c.pending.Delete(reqID)
 
-	// Send: 42<reqID>["event",{...}]
+	// Send: 42<nsp>,<reqID>["event",{...}] (namespace BEFORE the id — the
+	// parser's encode order is type, namespace, id, payload)
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
-	msg := fmt.Sprintf(`42%s["%s",%s]`, reqID, event, data)
+	msg := fmt.Sprintf("42%s,%s[\"%s\",%s]", nsp, reqID, event, data)
 	if err := websocket.Message.Send(ws, msg); err != nil {
 		return err
 	}
@@ -377,7 +390,11 @@ func (c *Client) wsURL() (string, error) {
 	default:
 		return "", fmt.Errorf("unsupported scheme: %s", u.Scheme)
 	}
-	u.Path = "/socket"
+	// Trailing slash matters behind reverse proxies: engine.io's canonical
+	// path is /socket/ and proxies commonly route ONLY the slashed form —
+	// /socket (no slash) gets redirected/502'd, which kills the WS dial
+	// (browsers' engine.io clients always use the slashed form).
+	u.Path = "/socket/"
 	// Add engine.io v4 query params
 	q := u.Query()
 	q.Set("EIO", "4")
