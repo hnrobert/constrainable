@@ -90,9 +90,7 @@ onMounted(async () => {
           <CardDescription>Same instructions as the participant guide (/e/{{ slug }}).</CardDescription>
           <CardAction>
             <Button as-child variant="outline" size="sm">
-              <NuxtLink :to="slug ? `/e/${slug}/manual` : undefined" target="_blank">
-                Full manual (with screenshots)
-              </NuxtLink>
+              <NuxtLink :to="`/dashboard/events/${id}/manual`">Full manual (with screenshots)</NuxtLink>
             </Button>
           </CardAction>
         </CardHeader>

@@ -1,14 +1,14 @@
 <script setup lang="ts">
 /**
  * Participant push-streaming guide for one event, keyed by slug — the quick
- * reference. The full illustrated walkthrough lives one level down at
- * /e/<slug>/manual. Identical for every viewer of the same event. The
- * organizer's shared publish key IS the OBS stream key — no username prefix.
- * The RTMP gateway derives each publisher's stream name (their account email
- * when authenticated, else the connection IP), so the whole class streams
- * concurrently with one shared key. The server address shown comes from
- * useObsConfig() — it follows the viewer's assigned ingest node and its public
- * RTMP port (1935 omitted), so it can differ between participants.
+ * reference. The full illustrated walkthrough lives in the event's Manual tab
+ * (dashboard/events/:id/manual). Identical for every viewer of the same event.
+ * The organizer's shared publish key IS the OBS stream key — no username
+ * prefix. The RTMP gateway derives each publisher's stream name (their account
+ * email when authenticated, else the connection IP), so the whole class
+ * streams concurrently with one shared key. The server address shown comes
+ * from useObsConfig() — it follows the viewer's assigned ingest node and its
+ * public RTMP port (1935 omitted), so it can differ between participants.
  */
 import type { EventGuide } from '#shared/event-view'
 
@@ -90,15 +90,6 @@ function fmt(ts: number | null): string {
           Push-streaming guide
         </p>
         <h1 class="text-2xl font-semibold tracking-tight">{{ guide.name }}</h1>
-        <p class="text-sm text-muted-foreground">
-          Quick reference for connecting your streaming software.
-          <NuxtLink
-            :to="`/e/${slug}/manual`"
-            class="font-medium underline underline-offset-2 hover:text-foreground"
-          >
-            New to this? Read the full step-by-step manual with screenshots →
-          </NuxtLink>
-        </p>
       </div>
 
       <!-- organizer hasn't published a key yet -->
@@ -225,10 +216,14 @@ function fmt(ts: number | null): string {
               <li>Click <strong>Start Streaming</strong>. Your stream appears once it connects.</li>
             </ol>
             <p class="mt-3 text-xs text-muted-foreground">
-              Never installed OBS or prefer screenshots for every click? Open the
-              <NuxtLink :to="`/e/${slug}/manual`" class="underline underline-offset-2">full streaming manual</NuxtLink>.
-              Events with sign-in need a client that supports RTMP authentication — plain
-              command-line tools (e.g. stock ffmpeg) don't.
+              <template v-if="requireAuth">
+                OBS Studio is required — the server authenticates every publisher during
+                connection, which plain command-line tools (e.g. stock ffmpeg) don't support.
+              </template>
+              <template v-else>
+                Any tool that can push to a custom RTMP server works — keep the output within
+                the recommended values above.
+              </template>
             </p>
           </CardContent>
         </Card>

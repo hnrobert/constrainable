@@ -5,6 +5,8 @@
  *   Overview  (/dashboard/events/:id)        connection tutorial + announcement
  *   Insights  (…/insights)                   statistics
  *   Records   (…/recordings)                 playback of archived recordings
+ *   Bans      (…/bans)                       streaming bans
+ *   Manual    (…/manual)                     full step-by-step streaming tutorial
  *   Settings  (…/settings)                   admin-only configuration
  * The wrapper only renders chrome + <NuxtPage/>; each tab owns its data.
  */
@@ -29,6 +31,7 @@ const tabs = computed(() => {
     { to: `/dashboard/events/${id}/insights`, label: 'Insights', exact: false },
     { to: `/dashboard/events/${id}/recordings`, label: 'Records', exact: false },
     { to: `/dashboard/events/${id}/bans`, label: 'Bans', exact: false },
+    { to: `/dashboard/events/${id}/manual`, label: 'Manual', exact: false },
   ]
   if (isAdmin.value) {
     base.push({ to: `/dashboard/events/${id}/settings`, label: 'Settings', exact: false })
