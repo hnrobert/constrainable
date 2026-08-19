@@ -6,8 +6,7 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* Light palette — shadcn "neutral" defaults, with the project's blue brand
-     as --primary in both modes. */
+  /* Light palette — shadcn "neutral" defaults, with the project's blue brand as --primary in both modes. */
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
