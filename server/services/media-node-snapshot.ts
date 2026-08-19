@@ -9,10 +9,12 @@ import { NodeSettingsRepository } from '../repositories/node-settings.repository
 import { UsersRepository } from '../repositories/users.repository'
 import { emit } from '../utils/bus'
 import type { MediaNodeSnapshot } from '#shared/events'
+import { obsServerUrl } from '#shared/rtmp'
 
-/** the node's OBS ingest URL from its reported authority host[:port] */
+/** the node's OBS ingest URL from its reported authority host[:port]
+ *  (a redundant :1935 is omitted — shared/rtmp.ts) */
 function rtmpUrl(n: { publicRtmpAuthority: string }): string | null {
-  return n.publicRtmpAuthority ? `rtmp://${n.publicRtmpAuthority}/live` : null
+  return n.publicRtmpAuthority ? obsServerUrl(n.publicRtmpAuthority) : null
 }
 
 export function nodesSnapshot(): MediaNodeSnapshot[] {

@@ -1,3 +1,5 @@
+import { obsServerUrl } from '#shared/rtmp'
+
 /**
  * Builds OBS connection strings for a publisher. The ingest host is derived
  * at runtime, in priority order:
@@ -25,9 +27,10 @@ export function useObsConfig() {
   })
 
   // the assigned node's OBS authority (host[:port]) → rtmp://<authority>/live
+  // (a redundant :1935 is omitted — shared/rtmp.ts)
   const assignedServer = computed(() => {
     const a = assignment.value.assignedRtmpAuthority
-    return a ? `rtmp://${a}/live` : ''
+    return a ? obsServerUrl(a) : ''
   })
 
   const ingestHost = computed(() => {
