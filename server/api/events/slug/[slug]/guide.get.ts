@@ -50,9 +50,15 @@ export default defineEventHandler((event) => {
   // port. One URL for ALL events: the gateway challenges every publisher, and
   // clients without credentials (requireAccountAuth off) pass through openly —
   // auth-required events are enforced at publish via the per-event policy.
+  // Host priority: the PUBLIC_HOST override, else the host this request came in
+  // on (mirrors useObsConfig's browse-origin fallback — without it the default
+  // deployment would render `rtmp:///live`). Per-viewer node refinement stays
+  // client-side (useObsConfig), keeping this payload identical for every viewer.
   const rtmpPort = Number(cfg.public.srsRtmpPort) || 1935
-  const hostPort = rtmpPort === 1935 ? cfg.public.srsPublicHost : `${cfg.public.srsPublicHost}:${rtmpPort}`
-  const server = `rtmp://${hostPort}/live`
+  const host =
+    String(cfg.public.srsPublicHost || '').trim() ||
+    (getRequestHost(event, { xForwardedHost: true }) || '').split(':')[0]
+  const server = `rtmp://${host}${rtmpPort === 1935 ? '' : `:${rtmpPort}`}/live`
 
   return {
     redirectTo,

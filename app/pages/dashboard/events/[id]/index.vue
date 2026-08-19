@@ -66,7 +66,7 @@ onMounted(async () => {
       <Card>
         <CardContent class="p-4">
           <p class="text-xs text-muted-foreground">Auth required</p>
-          <p class="text-2xl font-semibold">Yes</p>
+          <p class="text-2xl font-semibold">{{ event?.requireAccountAuth ? 'Yes' : 'No' }}</p>
         </CardContent>
       </Card>
     </div>
@@ -88,6 +88,13 @@ onMounted(async () => {
         <CardHeader>
           <CardTitle>OBS connection</CardTitle>
           <CardDescription>Same instructions as the participant guide (/e/{{ slug }}).</CardDescription>
+          <CardAction>
+            <Button as-child variant="outline" size="sm">
+              <NuxtLink :to="slug ? `/e/${slug}/manual` : undefined" target="_blank">
+                Full manual (with screenshots)
+              </NuxtLink>
+            </Button>
+          </CardAction>
         </CardHeader>
         <CardContent class="space-y-4">
           <div class="space-y-1.5">

@@ -1,10 +1,14 @@
 <script setup lang="ts">
 /**
- * Participant push-streaming guide for one event, keyed by slug. Identical for
- * every viewer of the same event. The organizer's shared publish key IS the OBS
- * stream key — no username prefix. The RTMP gateway derives each publisher's
- * stream name (their account email when authenticated, else the connection IP),
- * so the whole class streams concurrently with one shared key.
+ * Participant push-streaming guide for one event, keyed by slug — the quick
+ * reference. The full illustrated walkthrough lives one level down at
+ * /e/<slug>/manual. Identical for every viewer of the same event. The
+ * organizer's shared publish key IS the OBS stream key — no username prefix.
+ * The RTMP gateway derives each publisher's stream name (their account email
+ * when authenticated, else the connection IP), so the whole class streams
+ * concurrently with one shared key. The server address shown comes from
+ * useObsConfig() — it follows the viewer's assigned ingest node and its public
+ * RTMP port (1935 omitted), so it can differ between participants.
  */
 import type { EventGuide } from '#shared/event-view'
 
@@ -15,8 +19,11 @@ const slug = computed(() => String(route.params.slug ?? ''))
 const { user } = useAuth()
 const toast = useToast()
 
+// Node/port-aware RTMP address (assigned node → its public port; 1935 omitted).
+const { server } = useObsConfig()
+
 // No top-level await: keeps this a sync component (avoids the Suspense/hydration
-// pitfall documented on index.vue / dashboard/events/[id].vue).
+// pitfall documented on pages/index.vue / dashboard/events/[id].vue).
 const { data: guide, error: fetchError } = useFetch<EventGuide>(
   () => `/api/events/slug/${slug.value}/guide`,
 )
@@ -39,6 +46,7 @@ watch(
 
 const publishKey = computed(() => guide.value?.publishKey ?? null)
 const email = computed(() => user.value?.email ?? null)
+const requireAuth = computed(() => guide.value?.requireAccountAuth ?? true)
 
 async function copy(text: string, label = 'Copied'): Promise<void> {
   try {
@@ -82,6 +90,15 @@ function fmt(ts: number | null): string {
           Push-streaming guide
         </p>
         <h1 class="text-2xl font-semibold tracking-tight">{{ guide.name }}</h1>
+        <p class="text-sm text-muted-foreground">
+          Quick reference for connecting your streaming software.
+          <NuxtLink
+            :to="`/e/${slug}/manual`"
+            class="font-medium underline underline-offset-2 hover:text-foreground"
+          >
+            New to this? Read the full step-by-step manual with screenshots →
+          </NuxtLink>
+        </p>
       </div>
 
       <!-- organizer hasn't published a key yet -->
@@ -99,9 +116,13 @@ function fmt(ts: number | null): string {
             <div class="space-y-1.5">
               <Label>Server</Label>
               <div class="flex items-center gap-2">
-                <code class="font-mono text-sm">{{ guide.server }}</code>
-                <Button variant="link" class="h-auto p-0 text-xs" @click="copy(guide.server, 'Copied server address')">Copy</Button>
+                <code class="font-mono text-sm">{{ server }}</code>
+                <Button variant="link" class="h-auto p-0 text-xs" @click="copy(server, 'Copied server address')">Copy</Button>
               </div>
+              <p class="text-xs text-muted-foreground">
+                Derived from the ingest server assigned to you — it can differ from other
+                participants, so copy it from here rather than a screenshot.
+              </p>
             </div>
 
             <div class="space-y-1.5">
@@ -118,10 +139,9 @@ function fmt(ts: number | null): string {
           </CardContent>
         </Card>
 
-        <!-- OBS authentication — required for EVERYONE (the server challenges
-             all publishers); what differs is whether real account credentials
-             are needed for this event -->
-        <Card>
+        <!-- OBS authentication — only events with requireAccountAuth need real
+             account credentials; others pass the challenge without them -->
+        <Card v-if="requireAuth">
           <CardHeader><CardTitle>OBS authentication</CardTitle></CardHeader>
           <CardContent class="space-y-3">
             <p class="text-sm text-muted-foreground">
@@ -143,6 +163,15 @@ function fmt(ts: number | null): string {
                 to the server through a challenge-response.
               </p>
             </div>
+          </CardContent>
+        </Card>
+        <Card v-else>
+          <CardHeader><CardTitle>OBS authentication</CardTitle></CardHeader>
+          <CardContent>
+            <p class="text-sm text-muted-foreground">
+              Not required for this event — leave <strong>Use authentication</strong> off and use
+              just the server address and stream key above.
+            </p>
           </CardContent>
         </Card>
 
@@ -188,7 +217,7 @@ function fmt(ts: number | null): string {
               <li>Open OBS Studio → <strong>Settings → Stream</strong>.</li>
               <li>Set <strong>Service</strong> to <em>Custom…</em> and paste the <strong>Server</strong> above.</li>
               <li>Paste the <strong>Stream key</strong> above.</li>
-              <li>
+              <li v-if="requireAuth">
                 Turn on <strong>Use authentication</strong> and enter your <strong>account email</strong>
                 and <strong>website password</strong> — see the OBS authentication card.
               </li>
@@ -196,8 +225,10 @@ function fmt(ts: number | null): string {
               <li>Click <strong>Start Streaming</strong>. Your stream appears once it connects.</li>
             </ol>
             <p class="mt-3 text-xs text-muted-foreground">
-              OBS Studio is required — the server authenticates every publisher during connection, which
-              plain command-line tools (e.g. stock ffmpeg) don't support.
+              Never installed OBS or prefer screenshots for every click? Open the
+              <NuxtLink :to="`/e/${slug}/manual`" class="underline underline-offset-2">full streaming manual</NuxtLink>.
+              Events with sign-in need a client that supports RTMP authentication — plain
+              command-line tools (e.g. stock ffmpeg) don't.
             </p>
           </CardContent>
         </Card>
