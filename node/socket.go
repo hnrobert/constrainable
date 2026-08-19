@@ -4,14 +4,14 @@
 package node
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/websocket"
@@ -34,8 +34,11 @@ type Client struct {
 	nodeID   string
 	connected bool
 
-	// pending acks: requestID → channel
+	// pending acks: requestID → channel. IDs MUST be NUMERIC strings —
+	// socket.io's parser reads packet ids as an integer run; a hex id with
+	// letters is an invalid packet and the server force-closes the socket.
 	pending sync.Map
+	nextID  atomic.Uint64
 
 	// event handlers (set by the owner before Connect)
 	OnKick     func(NodeKick)
@@ -338,10 +341,8 @@ func (c *Client) EmitWithAck(event string, payload any, result any, timeout time
 		return fmt.Errorf("not connected")
 	}
 
-	// Generate a unique request ID
-	b := make([]byte, 8)
-	_, _ = rand.Read(b)
-	reqID := hex.EncodeToString(b)
+	// Numeric request id (protocol requirement — see nextID comment)
+	reqID := strconv.FormatUint(c.nextID.Add(1), 10)
 
 	// Register the pending ack channel
 	ch := make(chan json.RawMessage, 1)
