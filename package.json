@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "bun ./node_modules/@nuxt/cli/bin/nuxi.mjs dev --port 31954 --host",
     "build": "nuxt build",
-    "generate": "env -u NITRO_PRESET -u NUXT_NITRO_PRESET -u NITRO_OUTPUT -u NUXT_NITRO_OUTPUT bun ./node_modules/@nuxt/cli/bin/nuxi.mjs generate && (cp -f .output/public/200.html .output/public/index.html 2>/dev/null || true)",
+    "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "typecheck": "nuxt typecheck",

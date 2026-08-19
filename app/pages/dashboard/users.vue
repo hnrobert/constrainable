@@ -175,7 +175,7 @@ const columns: DataTableColumn[] = [
             </div>
           </template>
           <template #cell-node="{ row }">
-            <div class="flex max-w-[260px] flex-col gap-1.5">
+            <div class="flex max-w-65 flex-col gap-1.5">
               <Select
                 :model-value="nodeOf(row)"
                 :disabled="saving"
