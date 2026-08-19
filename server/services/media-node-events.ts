@@ -19,6 +19,7 @@ import { verifierFromCipher, verifyResponse } from '../utils/authmod'
 import { verifyMediaSignature } from '../utils/signed-url'
 import { audit } from './audit'
 import { emit } from '../utils/bus'
+import { emitNodesChanged } from './media-node-snapshot'
 import type { PublishSession } from '../database/schema'
 import type { SessionSnapshot, SessionStatus, RecordingSnapshot } from '#shared/events'
 
@@ -119,6 +120,7 @@ export function wireMediaNodeNamespace(io: SocketIOServer): void {
         events: [],
       })
       ack?.({ nodeId })
+      emitNodesChanged()
     })
 
     socket.on('publish:start', async (payload: PublishStartPayload, ack?: (r: PublishAuthorizedAck) => void) => {
@@ -144,6 +146,7 @@ export function wireMediaNodeNamespace(io: SocketIOServer): void {
 
     socket.on('disconnect', () => {
       disconnect(socket.id)
+      emitNodesChanged()
     })
 
     // --- direct playback authorization. Nodes with a PUBLIC_ORIGIN serve FLV
@@ -280,6 +283,7 @@ async function handlePublishStart(
     })
 
     adjustStreamCount(payload.nodeId, 1)
+    emitNodesChanged()
 
     // Emit session:start to the dashboard via the bus
     emit('session:start', snapshotFromRow(row))
@@ -330,6 +334,7 @@ function handleEnd(payload: EndPayload): void {
   if (!row) return
   const finalStatus: SessionStatus = row.compliant ? 'compliant' : 'ended'
   PublishSessionsRepository.markEnded(payload.sessionId, finalStatus, new Date(payload.endedAt))
+  emitNodesChanged()
   emit('session:stop', snapshotFromRow(row, { status: finalStatus, endedAt: payload.endedAt }))
   audit('info', 'publish', `media-node publish ended: ${row.streamName}`, {
     streamName: row.streamName,

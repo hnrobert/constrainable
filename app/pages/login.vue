@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Info } from 'lucide-vue-next'
 import { setPendingInvite } from '~/composables/useAuth'
 
 definePageMeta({ layout: false })
@@ -17,9 +18,13 @@ const error = ref('')
 
 // bootstrap = no users yet → first registrant is super admin, no code needed.
 const bootstrap = ref(false)
+// admin-authored notice (config registration.notice) shown on the register form.
+const registerNotice = ref('')
 const inviteCode = ref('')
 onMounted(async () => {
-  bootstrap.value = await fetchBootstrap()
+  const status = await fetchBootstrap()
+  bootstrap.value = status.bootstrap
+  registerNotice.value = status.registerNotice
   // Stash an invite code from ?invite= so register() auto-joins its group.
   const inv = typeof route.query.invite === 'string' ? route.query.invite.trim() : ''
   if (inv) {
@@ -125,6 +130,17 @@ onUnmounted(() => {
           <img src="/favicon.svg" alt="" class="mx-auto h-10 w-10 rounded-lg bg-muted p-1" />
           <h1 class="text-xl font-semibold">Constrainable Ingest</h1>
           <p class="text-sm text-muted-foreground">{{ mode === 'login' ? 'Sign in' : 'Register account' }}</p>
+        </div>
+
+        <!-- admin-authored notice (Config → Registration Notice); register mode only -->
+        <div
+          v-if="mode === 'register' && registerNotice"
+          class="space-y-1.5 rounded-md border bg-muted/50 p-3"
+        >
+          <p class="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            <Info :size="14" /> Notice
+          </p>
+          <RichText :source="registerNotice" />
         </div>
 
         <div

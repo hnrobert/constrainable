@@ -18,6 +18,8 @@ export interface SessionUser {
 export interface BootstrapStatus {
   /** true when no users exist yet → next registrant becomes super admin, no code needed. */
   bootstrap: boolean
+  /** admin-authored notice for the registration form ('' = hidden). */
+  registerNotice: string
 }
 
 const INVITE_KEY = 'ci:invite'
@@ -103,15 +105,14 @@ export function useAuth() {
     return u
   }
 
-  /** Whether the system is still in bootstrap (first registrant = super admin). */
-  async function fetchBootstrap(): Promise<boolean> {
+  /** Pre-login state: bootstrap mode (first registrant = super admin) + registration notice. */
+  async function fetchBootstrap(): Promise<BootstrapStatus> {
     try {
       // URL widened to `string` to bypass Nuxt's typed-route union (the literal
       // form trips TS's recursion limit once the route registry grows).
-      const r = await $fetch<BootstrapStatus>('/api/auth/bootstrap' as string)
-      return r.bootstrap
+      return await $fetch<BootstrapStatus>('/api/auth/bootstrap' as string)
     } catch {
-      return false
+      return { bootstrap: false, registerNotice: '' }
     }
   }
 

@@ -6,6 +6,7 @@
  */
 import { createError, getRouterParam } from 'h3'
 import { NodeSettingsRepository } from '../../repositories/node-settings.repository'
+import { emitNodesChanged } from '../../services/media-node-snapshot'
 
 export default defineEventHandler(async (event) => {
   requireAdmin(event)
@@ -19,5 +20,6 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'maxUsers must be an integer in 1..100000' })
   }
   const row = NodeSettingsRepository.upsert(nodeId, maxUsers)
+  emitNodesChanged()
   return { ok: true, nodeId: row.nodeId, maxUsers: row.maxUsers }
 })

@@ -67,6 +67,12 @@ const emailWhitelistSchema = z.object({
 const registrationSchema = z.object({
   emailWhitelist: emailWhitelistSchema.default(emailWhitelistSchema.parse({})),
   disallowedPatterns: z.array(z.string()).default(['student', 'staff']),
+  /**
+   * Admin-authored notice rendered as a panel atop the registration form
+   * (plain text, whitespace preserved; '' = panel hidden). Served publicly
+   * via /api/auth/bootstrap so the pre-login page can show it.
+   */
+  notice: z.string().default(''),
 })
 
 export const appConfigSchema = z.object({

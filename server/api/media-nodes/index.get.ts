@@ -1,33 +1,11 @@
 /**
- * Admin: list currently-registered media nodes (Go backends) with their
- * assignment quota state — public origins, OBS ingest URL, version, active
- * streams, connection time, auto-assign cap, and the users currently
- * assigned to each node (for per-node reassignment on the nodes page).
+ * Admin: list currently-registered media nodes with quota + assignment state.
+ * The nodes page consumes this for its initial render; live updates arrive as
+ * `nodes:changed` over Socket.IO (see services/media-node-snapshot.ts).
  */
-import { listNodes } from '../../services/media-node-registry'
-import { NodeSettingsRepository } from '../../repositories/node-settings.repository'
-import { UsersRepository } from '../../repositories/users.repository'
-
-function rtmpUrl(n: { publicOrigin: string; publicRtmpPort: number }): string | null {
-  if (!n.publicOrigin) return null
-  const host = new URL(n.publicOrigin).hostname
-  return `rtmp://${host}${n.publicRtmpPort === 1935 ? '' : `:${n.publicRtmpPort}`}/live`
-}
+import { nodesSnapshot } from '../../services/media-node-snapshot'
 
 export default defineEventHandler((event) => {
   requireAdmin(event)
-  return listNodes().map((n) => ({
-    nodeId: n.nodeId,
-    publicOrigin: n.publicOrigin,
-    rtmpUrl: rtmpUrl(n),
-    version: n.version,
-    activeStreams: n.activeStreams,
-    connectedAt: n.connectedAt,
-    maxUsers: NodeSettingsRepository.getMaxUsers(n.nodeId),
-    assignedUsers: NodeSettingsRepository.assignedCount(n.nodeId),
-    users: UsersRepository.findAll()
-      .filter((u) => u.nodeId === n.nodeId)
-      .slice(0, 200)
-      .map((u) => ({ id: u.id, email: u.email })),
-  }))
+  return nodesSnapshot()
 })

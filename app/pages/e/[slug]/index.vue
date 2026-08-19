@@ -196,7 +196,7 @@ function fmt(ts: number | null): string {
         <Card v-if="guide.streamGuide">
           <CardHeader><CardTitle>Notes from the organizer</CardTitle></CardHeader>
           <CardContent>
-            <p class="whitespace-pre-wrap text-sm">{{ guide.streamGuide }}</p>
+            <RichText :source="guide.streamGuide" />
           </CardContent>
         </Card>
 

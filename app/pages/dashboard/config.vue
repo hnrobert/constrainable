@@ -214,6 +214,25 @@ function discardAndLeave(): void {
       </Card>
 
       <Card>
+        <CardHeader><CardTitle>Registration Notice</CardTitle></CardHeader>
+        <CardContent class="space-y-3">
+          <FieldRow label="Notice shown on the registration form">
+            <Textarea
+              v-model="form.registration.notice"
+              rows="5"
+              class="w-full"
+              placeholder="e.g. Registration is limited to contestants of Demo Showdown —&#10;sign up with your university email before Friday 18:00."
+            />
+            <template #hint>
+              Markdown supported — line breaks, lists, LaTeX formulas (<code>$x^2$</code>) and
+              <code>mermaid</code> diagrams. Rendered as a panel atop the register form; leave
+              empty to hide it. Hot-reloads on save.
+            </template>
+          </FieldRow>
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardHeader><CardTitle>Registration Email Restrictions</CardTitle></CardHeader>
         <CardContent class="space-y-3">
           <FieldRow label="Enable email whitelist" inline hint="When enabled, only emails matching the wildcards below may register; leave empty to allow all">

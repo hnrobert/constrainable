@@ -1,17 +1,20 @@
 <script setup lang="ts">
-import type { NodeRow } from '~/components/streams/NodesTable.vue'
+import type { MediaNodeSnapshot } from '#shared/events'
 
-// registered media nodes — poll: a node dropping offline mid-event matters
-const { data: nodes, refresh: refreshNodes } = useFetch<NodeRow[]>('/api/media-nodes')
-let nodesTimer: ReturnType<typeof setInterval> | undefined
+// initial render from the API, then LIVE updates: every registry/quota/
+// assignment change pushes a fresh full list over the socket (nodes:changed)
+const { data: nodes, refresh: refreshNodes } = useFetch<MediaNodeSnapshot[]>('/api/media-nodes')
 onMounted(() => {
-  nodesTimer = setInterval(() => {
+  const socket = useSocket()
+  socket.on('nodes:changed', (list: MediaNodeSnapshot[]) => {
+    nodes.value = list
+  })
+  // after a socket reconnect the list may be stale — refetch once
+  socket.on('connect', () => {
     refreshNodes()
-  }, 10_000)
+  })
 })
-onBeforeUnmount(() => {
-  if (nodesTimer) clearInterval(nodesTimer)
-})
+onBeforeUnmount(() => disposeSocket())
 </script>
 
 <template>
@@ -35,7 +38,7 @@ onBeforeUnmount(() => {
         </CardTitle>
         <CardDescription>
           The auto-assign cap limits first-visit allocation (lowest latency first; overflow spreads
-          to the least-loaded node). Click a node to manage its assigned users. Re-polled every 10 s.
+          to the least-loaded node). Click a node to manage its assigned users. Live-updated over the socket.
         </CardDescription>
       </CardHeader>
       <CardContent>

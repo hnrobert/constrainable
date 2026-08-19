@@ -41,6 +41,7 @@ const FORWARD: BusEventName[] = [
   'recording:ready',
   'audit:created',
   'config:changed',
+  'nodes:changed',
 ]
 
 let io: SocketIOServer | null = null

@@ -78,7 +78,7 @@ onMounted(async () => {
         <CardDescription>Posted by the organizer</CardDescription>
       </CardHeader>
       <CardContent>
-        <p class="whitespace-pre-wrap text-sm">{{ event.streamGuide }}</p>
+        <RichText :source="event.streamGuide" />
       </CardContent>
     </Card>
 

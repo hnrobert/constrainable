@@ -325,9 +325,13 @@ const rosterColumns: DataTableColumn[] = [
             <Textarea
               :model-value="settings.streamGuide ?? ''"
               @update:model-value="settings.streamGuide = String($event) || null"
-              rows="3"
+              rows="6"
               placeholder="Optional notes shown on the participant guide (e.g. join 5 min early, use wired ethernet…)"
             />
+            <p class="text-xs text-muted-foreground">
+              Markdown supported — headings, lists, tables, LaTeX formulas (<code>$x^2$</code>,
+              <code>$$…$$</code>) and fenced <code>mermaid</code> diagrams.
+            </p>
           </div>
         </div>
       </CardContent>

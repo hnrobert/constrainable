@@ -1,5 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+/* prose classes for RichText (admin-authored Markdown) */
+@plugin "@tailwindcss/typography";
 
 /* Class-based dark mode: `.dark` on <html> (toggled by useColorMode +
    app/head no-FOUC script). Mirrors the shadcn-vue / verifier-gateway setup. */

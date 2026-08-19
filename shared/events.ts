@@ -72,6 +72,20 @@ export interface AuditSnapshot {
 }
 
 /** Server bus event map. */
+/** One media node row for the admin nodes page (GET /api/media-nodes shape). */
+export interface MediaNodeSnapshot {
+  nodeId: string
+  publicOrigin: string
+  /** OBS ingest URL (null = single-server: users push via the app's host) */
+  rtmpUrl: string | null
+  version: string
+  activeStreams: number
+  connectedAt: number
+  maxUsers: number
+  assignedUsers: number
+  users: { id: number; email: string }[]
+}
+
 export interface BusEventMap {
   'session:start': SessionSnapshot
   'session:metric': SessionSnapshot
@@ -80,6 +94,8 @@ export interface BusEventMap {
   'recording:ready': RecordingSnapshot
   'audit:created': AuditSnapshot
   'config:changed': unknown
+  /** full node list — sent on every registry/quota/assignment change */
+  'nodes:changed': MediaNodeSnapshot[]
 }
 
 export type BusEventName = keyof BusEventMap

@@ -167,7 +167,7 @@ function fmt(ts: number | null): string {
           <CardDescription>Read this first — specifics for {{ event.name }}.</CardDescription>
         </CardHeader>
         <CardContent>
-          <p class="whitespace-pre-wrap text-sm">{{ event.streamGuide }}</p>
+          <RichText :source="event.streamGuide" />
         </CardContent>
       </Card>
 

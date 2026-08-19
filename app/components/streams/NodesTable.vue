@@ -1,22 +1,6 @@
-<script lang="ts">
-/** One registered media node (admin /api/media-nodes row). */
-export interface NodeRow {
-  nodeId: string
-  publicOrigin: string
-  /** OBS ingest URL (null = single-server: users push via the app's host) */
-  rtmpUrl: string | null
-  version: string
-  activeStreams: number
-  connectedAt: number
-  /** auto-assignment quota (node_settings; manual assignment ignores it) */
-  maxUsers: number
-  /** users currently assigned to this node */
-  assignedUsers: number
-  users: { id: number; email: string }[]
-}
-</script>
-
 <script setup lang="ts">
+import type { MediaNodeSnapshot as NodeRow } from '#shared/events'
+
 /**
  * Admin: registered media nodes with per-node user assignment. The cap is
  * editable inline; the detail row lists assigned users with a move control
@@ -84,6 +68,19 @@ async function moveUser(u: { id: number; email: string }, nodeId: string | null)
   }
 }
 
+/** uptime ticks every second — computed client-side from connectedAt, so the
+ *  column is live even between socket pushes */
+const now = ref(Date.now())
+let tick: ReturnType<typeof setInterval> | undefined
+onMounted(() => {
+  tick = setInterval(() => {
+    now.value = Date.now()
+  }, 1_000)
+})
+onBeforeUnmount(() => {
+  if (tick) clearInterval(tick)
+})
+
 const expanded = ref<Set<string>>(new Set())
 function toggle(n: NodeRow): void {
   const next = new Set(expanded.value)
@@ -93,7 +90,7 @@ function toggle(n: NodeRow): void {
 }
 
 function fmtDuration(ms: number): string {
-  const s = Math.max(0, Math.floor((Date.now() - ms) / 1000))
+  const s = Math.max(0, Math.floor((now.value - ms) / 1000))
   const h = Math.floor(s / 3600)
   const m = Math.floor((s % 3600) / 60)
   if (h > 0) return `${h}h ${m}m`

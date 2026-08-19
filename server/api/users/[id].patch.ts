@@ -12,6 +12,7 @@ import { setUserGroups, setUserRole } from '../../services/groups'
 import { getNode } from '../../services/media-node-registry'
 import { UsersRepository } from '../../repositories/users.repository'
 import { audit } from '../../services/audit'
+import { emitNodesChanged } from '../../services/media-node-snapshot'
 
 export default defineEventHandler(async (event) => {
   requireAdmin(event)
@@ -45,6 +46,7 @@ export default defineEventHandler(async (event) => {
     audit('info', 'admin', `node assignment for ${user.email}: ${nodeId ?? '(cleared)'}`, {
       detail: { userId: id, nodeId },
     })
+    emitNodesChanged()
   }
   return { ok: true }
 })
