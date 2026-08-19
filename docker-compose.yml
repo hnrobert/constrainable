@@ -8,10 +8,12 @@
 #
 # To point at a locally running app (dev):
 #   API_ORIGIN=http://host.docker.internal:31954 docker compose up
+# Runs the prebuilt GHCR image — no local build. To build from source
+# instead, replace the image line with `build: .`.
 services:
   media-node:
-    build: .
-    image: constrainable-media-node:latest
+    # build: .
+    image: ghcr.io/hnrobert/constrainable-media-node:latest
     container_name: constrainable-media-node
     environment:
       TZ: ${TZ:-Asia/Shanghai}
