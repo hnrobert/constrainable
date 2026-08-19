@@ -23,7 +23,9 @@ type Config struct {
 	Hostname   string // human-readable name
 
 	// Listeners
-	RTMPPort int // RTMP ingest (OBS pushes here) — the ONLY listener
+	RTMPPort int // RTMP ingest (OBS pushes here)
+	PlayPort int // HTTP-FLV playback entry (browsers pull directly; each pull
+	              // is authorized by the control plane over the socket)
 	SRTPort  int // SRT ingest (scaffold; not yet implemented)
 
 	// SRS (sidecar container named `srs` on the deployment network; or a
@@ -55,10 +57,11 @@ func LoadConfig() (*Config, error) {
 		SelfOrigin:     envOr("SELF_ORIGIN", "localhost"),
 		PublicOrigin:   strings.TrimRight(envOr("PUBLIC_ORIGIN", ""), "/"),
 		RTMPPort:       envOrInt("RTMP_PORT", 1935),
+		PlayPort:       envOrInt("PLAY_PORT", 38080),
 		SRTPort:        envOrInt("SRT_PORT", 9000),
 		SRSAddr:        envOr("SRS_ADDR", "srs:1935"), // docker sidecar service name
 		SRSApiBase:     envOr("SRS_API_BASE", "http://srs:1985/api/v1"), // docker sidecar service name
-		SRSHTTPPort:    envOrInt("SRS_HTTP_PORT", 38080),
+		SRSHTTPPort:    envOrInt("SRS_HTTP_PORT", 38081), // internal-only (never published); 38080 is the node's own play port
 		SRSFlvBase:     envOr("SRS_FLV_BASE", ""), // empty = derived from SELF_ORIGIN below
 		SRSBin:         envOr("SRS_BIN", ""),      // empty = SRS runs elsewhere
 		SRSConfigTpl:   envOr("SRS_CONFIG_TEMPLATE", "/etc/media-node/srs.conf.template"),
@@ -80,7 +83,7 @@ func LoadConfig() (*Config, error) {
 	// Advertised FLV base defaults to the public origin's host + the SRS
 	// http_server port. Override with SRS_FLV_BASE when the control plane
 	// reaches this node differently than the public internet does (e.g. a
-	// shared Docker network: http://srs:38080).
+	// shared Docker network: http://srs:38081).
 	if c.SRSFlvBase == "" {
 		host := strings.TrimPrefix(strings.TrimPrefix(c.SelfOrigin, "https://"), "http://")
 		host = strings.Split(host, "/")[0]

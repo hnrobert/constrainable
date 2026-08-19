@@ -23,6 +23,8 @@ services:
       MEDIA_NODE_AUTH_TOKEN: ${MEDIA_NODE_AUTH_TOKEN:-}
       # RTMP ingest
       RTMP_PORT: "1935"
+      # Direct playback entry (browsers pull FLV here; auth via control plane)
+      PLAY_PORT: "38080"
       # SRS sidecar (separate container; this node renders its config)
       SRS_BIN: "" # empty = SRS runs as the sidecar container below
       SRS_ADDR: srs:1935
@@ -31,9 +33,11 @@ services:
       # from SELF_ORIGIN + SRS_HTTP_PORT). On a shared Docker network with the
       # app, point it at the service name instead.
       SRS_FLV_BASE: ${SRS_FLV_BASE:-}
-      # SRS http_server (FLV) port — rendered into the config and used for the
-      # SRS_FLV_BASE default. 38080 by default to avoid common-port clashes.
-      SRS_HTTP_PORT: ${SRS_HTTP_PORT:-38080}
+      # SRS sidecar http_server port — INTERNAL only (never published; the
+      # node's play entry on 38080 proxies it for browsers). 38081 ≠ PLAY_PORT
+      # 38080 on purpose: distinct roles, and they'd collide in child-process
+      # mode (SRS inside this container).
+      SRS_HTTP_PORT: ${SRS_HTTP_PORT:-38081}
       SRS_RTC_CANDIDATE: ${SRS_RTC_CANDIDATE:-127.0.0.1}
       # Recording storage (shared volume with the SRS sidecar — it writes,
       # this node scans + reports)
@@ -44,6 +48,9 @@ services:
       - srs-conf:/srs-config
     ports:
       - "1935:1935" # RTMP ingest (OBS pushes here)
+      # Direct browser FLV pulls (PUBLIC_ORIGIN → this port). Every pull is
+      # authorized by the control plane over Socket.IO, then proxied from SRS.
+      - "38080:38080"
     networks:
       - constrainable-ingest
     restart: unless-stopped
@@ -65,10 +72,10 @@ services:
     depends_on:
       - media-node
     restart: unless-stopped
-    # Publish ONLY when the control plane runs on another host and pulls FLV
-    # over the network (set SRS_FLV_BASE to match, e.g. http://this-host:38080):
-    ports:
-      - "38080:38080"
+    # Deliberately NOT published: browsers must reach the NODE's play entry
+    # (:38080 on media-node) so every pull passes the auth gate. The control
+    # plane pulls FLV from this sidecar over the deployment network via
+    # SRS_FLV_BASE.
 
 volumes:
   srs-conf:

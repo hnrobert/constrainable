@@ -58,6 +58,16 @@ func (c *Client) Policy(token, stream string) PolicyResult {
 	}
 }
 
+// PlayAuth asks the control plane whether a direct browser FLV pull on this
+// node is authorized (signed playback URL, 5s fail-closed timeout).
+func (c *Client) PlayAuth(p PlayAuth) (PlayAuthAck, error) {
+	var ack PlayAuthAck
+	err := c.EmitWithAck("play:auth", map[string]any{
+		"stream": p.Stream, "exp": p.Exp, "sig": p.Sig,
+	}, &ack, 5*time.Second)
+	return ack, err
+}
+
 // Result types for socket-based auth (mirror the old HTTP contract).
 
 type SaltResult struct {

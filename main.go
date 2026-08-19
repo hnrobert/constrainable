@@ -129,8 +129,13 @@ func main() {
 
 	log.Printf("media-node v%s | api=%s | self=%s | public=%s | hostname=%s",
 		version, cfg.APIOrigin, cfg.SelfOrigin, cfg.PublicOrigin, cfg.Hostname)
-	log.Printf("rtmp :%d | srs=%s | srs-api=%s | flv-base=%s",
-		cfg.RTMPPort, cfg.SRSAddr, cfg.SRSApiBase, cfg.SRSFlvBase)
+	srsHost := cfg.SRSAddr
+	if i := strings.LastIndex(srsHost, ":"); i >= 0 {
+		srsHost = srsHost[:i]
+	}
+	srsHTTPBase := fmt.Sprintf("http://%s:%d", srsHost, cfg.SRSHTTPPort)
+	log.Printf("rtmp :%d | play :%d | srs=%s | srs-http=%s | srs-api=%s | flv-base=%s",
+		cfg.RTMPPort, cfg.PlayPort, cfg.SRSAddr, srsHTTPBase, cfg.SRSApiBase, cfg.SRSFlvBase)
 
 	// Start colocated SRS (renders config template → starts → waits for API)
 	srsCmd := startSRS(cfg)
@@ -148,6 +153,10 @@ func main() {
 		Hostname:     cfg.Hostname,
 		Version:      version,
 	})
+
+	// Direct playback entry (browsers -> this node -> SRS sidecar); every
+	// pull is authorized by the control plane over the socket, fail-closed.
+	_ = startPlayServer(fmt.Sprintf(":%d", cfg.PlayPort), NewPlayServer(socketClient, srsHTTPBase))
 
 	// Session manager
 	manager := media.NewManager(

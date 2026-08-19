@@ -1,6 +1,7 @@
 # SRS config template — rendered by media-node at startup.
 # Placeholders: ${SRS_RTC_CANDIDATE} (WebRTC ICE candidate) and
-# ${SRS_HTTP_PORT} (http_server / FLV port, default 38080) — both from env.
+# ${SRS_HTTP_PORT} (http_server / FLV port, default 38081 — internal-only;
+# 38080 is the node's own play entry) — both from env.
 # DVR records FLV natively. No http_hooks — the Go binary detects publish
 # from the RTMP relay itself.
 listen              1935;

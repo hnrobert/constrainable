@@ -95,6 +95,21 @@ type ViolationReport struct {
 
 // --- Node → Go commands ---
 
+// PlayAuth asks the control plane to authorize a DIRECT browser FLV pull.
+// The signature was minted by the app (admin-gated /api/streams/url); the
+// app verifies it — the node never holds the secret.
+type PlayAuth struct {
+	Stream string `json:"stream"`
+	Exp    int64  `json:"exp"`
+	Sig    string `json:"sig"`
+}
+
+// PlayAuthAck is the control plane's verdict on a direct pull.
+type PlayAuthAck struct {
+	Allow  bool   `json:"allow"`
+	Reason string `json:"reason,omitempty"`
+}
+
 // NodeKick tells this node to disconnect a publisher.
 type NodeKick struct {
 	StreamName string `json:"streamName"`
