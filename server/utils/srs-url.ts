@@ -36,12 +36,12 @@ export interface PlaybackUrls {
  * Playback URLs for a live stream.
  *
  * FLV — two paths depending on the hosting node:
- *  - Multi-node (node advertises PUBLIC_ORIGIN): a SIGNED ABSOLUTE URL on the
- *    node's own play endpoint (`${PUBLIC_ORIGIN}/live/<s>.flv?exp&sig`). The
+ *  - Multi-node (node advertises PUBLIC_DOMAIN): a SIGNED ABSOLUTE URL on the
+ *    node's own play endpoint (`http://<domain>:<port>/live/<s>.flv?exp&sig`). The
  *    browser pulls video DIRECTLY from the node — playback bandwidth never
  *    transits the control plane. Each pull is authorized by the node via the
  *    `play:auth` Socket.IO ack (the app verifies the signature it minted).
- *  - Single-server default (no PUBLIC_ORIGIN): the same-origin proxy at
+ *  - Single-server default (no PUBLIC_DOMAIN): the same-origin proxy at
  *    /api/streams/live/<stream> — the app pulls from the internal SRS.
  *
  * WHEP (WebRTC): only the SDP signaling is proxied same-origin

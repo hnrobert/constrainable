@@ -21,6 +21,8 @@ export interface AssignmentView {
   assigned: string | null
   /** the assigned node's browser-reachable base ("" = via the app's host) */
   assignedPublicOrigin: string
+  /** the assigned node's PUBLIC RTMP port (OBS URLs; 1935 standard) */
+  assignedPublicRtmpPort: number
   /** probe targets for the browser (only nodes with a public origin) */
   probe: { nodeId: string; publicOrigin: string }[]
 }
@@ -29,9 +31,11 @@ export interface AssignmentView {
 export function assignmentView(userId: number): AssignmentView {
   const user = UsersRepository.findById(userId)
   const assigned = user?.nodeId ?? null
+  const node = assigned ? getNode(assigned) : undefined
   return {
     assigned,
-    assignedPublicOrigin: (assigned && getNode(assigned)?.publicOrigin) || '',
+    assignedPublicOrigin: node?.publicOrigin || '',
+    assignedPublicRtmpPort: node?.publicRtmpPort ?? 1935,
     probe: listNodes()
       .filter((n) => n.publicOrigin !== '')
       .map((n) => ({ nodeId: n.nodeId, publicOrigin: n.publicOrigin })),

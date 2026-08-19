@@ -1,6 +1,6 @@
 /**
  * In-memory registry of connected media nodes (Go backends). Keyed by nodeId
- * (derived from SELF_ORIGIN). Tracks socket connections, origins, and active
+ * (derived from NODE_IDENTIFIER). Tracks socket connections, origins, and active
  * stream counts for load-balanced ingest routing. All state is volatile —
  * nodes re-register on reconnect, and session rows in the DB are the durable
  * record of which node handled which stream.
@@ -15,6 +15,8 @@ export interface MediaNodeInfo {
   origin: string
   /** browser-reachable base ("" = via the app's host, single-server default) */
   publicOrigin: string
+  /** PUBLIC RTMP port for OBS URLs on this node (1935 unless tunnelled otherwise) */
+  publicRtmpPort: number
   rtmpPort: number
   srtPort: number
   hostname: string
@@ -35,7 +37,7 @@ const nodes = new Map<string, MediaNodeInfo>()
 /** socketId → nodeId (reverse lookup for disconnect cleanup) */
 const socketToNode = new Map<string, string>()
 
-/** Derive a stable nodeId from the node's SELF_ORIGIN. */
+/** Derive a stable nodeId from the node's NODE_IDENTIFIER. */
 export function deriveNodeId(origin: string): string {
   return origin
     .replace(/^https?:\/\//, '')
@@ -50,7 +52,7 @@ export function register(
   info: Omit<
     MediaNodeInfo,
     'nodeId' | 'socketId' | 'connectedAt' | 'activeStreams' | 'srsFlvBase' | 'publicOrigin'
-  > & { srsFlvBase?: string; publicOrigin?: string },
+  > & { srsFlvBase?: string; publicOrigin?: string; publicRtmpPort?: number },
 ): string {
   const nodeId = deriveNodeId(info.origin)
   const existing = nodes.get(nodeId)
@@ -63,6 +65,7 @@ export function register(
     // fall back to the origin host for nodes that don't advertise an FLV base
     srsFlvBase: info.srsFlvBase || `http://${info.origin.replace(/^https?:\/\//, '').split(':')[0]}:38081`,
     publicOrigin: info.publicOrigin || '',
+    publicRtmpPort: info.publicRtmpPort ?? 1935,
   }
   nodes.set(nodeId, entry)
   socketToNode.set(socket.id, nodeId)
