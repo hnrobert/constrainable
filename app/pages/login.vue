@@ -122,6 +122,7 @@ onUnmounted(() => {
     <Card class="w-full max-w-sm">
       <CardContent class="flex flex-col gap-4 pt-6">
         <div class="space-y-1 text-center">
+          <img src="/favicon.svg" alt="" class="mx-auto h-10 w-10 rounded-lg bg-muted p-1" />
           <h1 class="text-xl font-semibold">Constrainable Ingest</h1>
           <p class="text-sm text-muted-foreground">{{ mode === 'login' ? 'Sign in' : 'Register account' }}</p>
         </div>

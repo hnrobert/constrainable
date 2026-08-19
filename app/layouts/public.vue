@@ -7,7 +7,7 @@ const { user } = useAuth()
 <template>
   <div class="min-h-screen">
     <header class="flex items-center justify-between border-b bg-card px-5 py-3">
-      <NuxtLink to="/" class="text-base font-semibold hover:text-primary">Constrainable Ingest</NuxtLink>
+      <AppLogo class="text-base hover:text-primary" />
       <Button as-child size="sm">
         <NuxtLink v-if="user" to="/dashboard">Dashboard</NuxtLink>
         <NuxtLink v-else to="/login">Sign in</NuxtLink>

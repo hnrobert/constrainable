@@ -87,7 +87,7 @@ watch(
       <Button variant="ghost" size="icon" @click="sidebarOpen = true">
         <Menu :size="18" />
       </Button>
-      <NuxtLink to="/" class="font-semibold">Constrainable Ingest</NuxtLink>
+      <AppLogo />
     </div>
 
     <!-- Mobile overlay -->
@@ -103,7 +103,7 @@ watch(
       :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
     >
       <div class="flex h-14 items-center justify-between border-b px-4">
-        <NuxtLink to="/" class="font-semibold">Constrainable Ingest</NuxtLink>
+        <AppLogo />
         <Button
           variant="ghost"
           size="icon-sm"
