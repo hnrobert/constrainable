@@ -70,9 +70,11 @@ async function moveUser(u: { id: number; email: string }, nodeId: string | null)
 
 /** uptime ticks every second — computed client-side from connectedAt, so the
  *  column is live even between socket pushes */
-const now = ref(Date.now())
+const now = ref(0) // 0 until mounted — SSR/client clocks differ, rendering
+// the duration server-side would hydration-mismatch on the seconds
 let tick: ReturnType<typeof setInterval> | undefined
 onMounted(() => {
+  now.value = Date.now()
   tick = setInterval(() => {
     now.value = Date.now()
   }, 1_000)
@@ -90,6 +92,7 @@ function toggle(n: NodeRow): void {
 }
 
 function fmtDuration(ms: number): string {
+  if (!now.value) return '—'
   const s = Math.max(0, Math.floor((now.value - ms) / 1000))
   const h = Math.floor(s / 3600)
   const m = Math.floor((s % 3600) / 60)

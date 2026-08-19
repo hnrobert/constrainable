@@ -27,10 +27,12 @@ export default defineEventHandler(async (event) => {
   const target = new URL(resolveFlvBase(stream))
   target.port = String(env.srsApiPort)
   target.pathname = '/rtc/v1/whep/'
-  target.search = `?app=live&stream=${encodeURIComponent(stream)}`
+  target.search = `?app=live&stream=${encodeURI(stream)}`
 
   let resp: Response
   try {
+    // @-bearing stream names: keep the resource encoding identical to the
+    // FLV paths (encodeURI, @ verbatim)
     resp = await fetch(target, {
       method: 'POST',
       headers: { 'content-type': 'application/sdp' },

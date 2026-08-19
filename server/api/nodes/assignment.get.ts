@@ -9,6 +9,6 @@ import { assignmentView } from '../../services/node-assignment'
 
 export default defineEventHandler((event) => {
   const auth = getAuth(event)
-  if (!auth) return { assigned: null, assignedPublicOrigin: '', assignedPublicRtmpPort: 1935, probe: [] }
+  if (!auth) return { assigned: null, assignedPublicOrigin: '', assignedRtmpAuthority: '', probe: [] }
   return assignmentView(auth.userId)
 })

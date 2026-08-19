@@ -80,8 +80,10 @@ const page = computed({
   },
 })
 
-function pageQuery(n: number): Record<string, string> {
-  return { ...route.query, ...(n > 1 ? { page: String(n) } : {}) }
+function pageQuery(n: number): Record<string, string | undefined> {
+  // `page: undefined` DROPS the key — a spread alone would keep the old value
+  // and a jump back to page 1 would silently no-op.
+  return { ...route.query, page: n > 1 ? String(n) : undefined }
 }
 
 /** Prev/Next — swap the page and start reading from the top. */
@@ -99,15 +101,17 @@ async function jump(anchor: string): Promise<void> {
   document.getElementById(anchor)?.scrollIntoView({ block: 'start', behavior: 'smooth' })
 }
 
+// The chips are the pages — exactly one per page, in order (they use go(), not
+// jump(): a chip IS a page, so it lands on the page top like Prev/Next).
 const sections = [
-  { id: 'values', page: 1, label: 'Your values' },
-  { id: 'install', page: 2, label: '1 · Install' },
-  { id: 'capture', page: 3, label: '2 · Screen capture' },
-  { id: 'volume', page: 5, label: '3 · Volume' },
-  { id: 'settings', page: 5, label: '4 · Streaming settings' },
-  { id: 'other-software', page: 8, label: 'Other software' },
-  { id: 'go-live', page: 8, label: '5 · Going live' },
-  { id: 'troubleshooting', page: 8, label: 'Troubleshooting' },
+  { page: 1, label: 'Your values' },
+  { page: 2, label: '1 · Install' },
+  { page: 3, label: '2 · Capture (1/2)' },
+  { page: 4, label: '2 · Capture (2/2)' },
+  { page: 5, label: '3 · Volume' },
+  { page: 6, label: '4 · Stream / Output' },
+  { page: 7, label: '4 · Video / Apply' },
+  { page: 8, label: '5 · Going live' },
 ]
 
 async function copy(text: string, label = 'Copied'): Promise<void> {
@@ -126,11 +130,12 @@ function fmt(ts: number | null): string {
 
 <template>
   <div v-if="event" class="space-y-6">
-    <!-- section chips — persistent across pages; jump to a section's page -->
-    <nav class="flex flex-wrap gap-2" aria-label="Manual sections">
+    <!-- page chips — one per page, in reading order; clicking lands on the page
+         top (same behavior as Prev/Next) -->
+    <nav class="flex flex-wrap gap-2" aria-label="Manual pages">
       <button
         v-for="s in sections"
-        :key="s.id"
+        :key="s.page"
         type="button"
         class="rounded-full border px-3 py-1 text-xs transition-colors"
         :class="
@@ -138,7 +143,7 @@ function fmt(ts: number | null): string {
             ? 'border-primary/60 text-foreground'
             : 'text-muted-foreground hover:border-primary/50 hover:text-foreground'
         "
-        @click="jump(s.id)"
+        @click="go(s.page)"
       >
         {{ s.label }}
       </button>
@@ -258,8 +263,8 @@ function fmt(ts: number | null): string {
           </ol>
           <p class="mt-3 text-xs text-muted-foreground">
             The manual is split into {{ PAGE_COUNT }} short pages (at most two screenshots each) —
-            use the section chips at the top or the Next button at the bottom. Match your screen
-            with each picture — if it looks the same, you are on the right track.
+            the chips at the top match the pages one-to-one, or use Next at the bottom. Match your
+            screen with each picture — if it looks the same, you are on the right track.
           </p>
         </CardContent>
       </Card>
@@ -280,7 +285,7 @@ function fmt(ts: number | null): string {
         </CardDescription>
       </CardHeader>
       <CardContent class="space-y-6">
-        <div class="grid gap-6 md:grid-cols-3">
+        <div class="grid gap-6 md:grid-cols-2">
           <div class="space-y-2">
             <h3 class="text-sm font-semibold">Windows</h3>
             <ol class="list-decimal space-y-1.5 pl-5 text-sm text-muted-foreground">
@@ -297,14 +302,17 @@ function fmt(ts: number | null): string {
               <li>If macOS blocks it: <strong>right-click</strong> the OBS icon and choose <strong>Open</strong>.</li>
             </ol>
           </div>
-          <div class="space-y-2">
-            <h3 class="text-sm font-semibold">Linux (Ubuntu / Debian)</h3>
-            <p class="text-sm text-muted-foreground">Run these commands line by line:</p>
-            <pre class="overflow-x-auto rounded-lg bg-muted p-3 font-mono text-xs leading-relaxed">sudo add-apt-repository ppa:obsproject/obs-studio
+        </div>
+
+        <!-- Linux on its own FULL-WIDTH row so the command block never needs a
+             horizontal scrollbar (a squeezed 1/3 column used to clip it) -->
+        <div class="space-y-2">
+          <h3 class="text-sm font-semibold">Linux (Ubuntu / Debian)</h3>
+          <p class="text-sm text-muted-foreground">Run these commands line by line:</p>
+          <pre class="overflow-x-auto rounded-lg bg-muted p-3 font-mono text-xs leading-relaxed">sudo add-apt-repository ppa:obsproject/obs-studio
 sudo apt update
 sudo apt install obs-studio</pre>
-            <p class="text-sm text-muted-foreground">Start OBS any time by running <code>obs-studio</code>.</p>
-          </div>
+          <p class="text-sm text-muted-foreground">Start OBS any time by running <code>obs-studio</code>.</p>
         </div>
         <p class="text-xs text-muted-foreground">
           Using Arch or another distribution? Then you are a true system master — you can surely

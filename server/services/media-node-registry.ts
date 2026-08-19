@@ -15,8 +15,8 @@ export interface MediaNodeInfo {
   origin: string
   /** browser-reachable base ("" = via the app's host, single-server default) */
   publicOrigin: string
-  /** PUBLIC RTMP port for OBS URLs on this node (1935 unless tunnelled otherwise) */
-  publicRtmpPort: number
+  /** OBS ingest AUTHORITY (host[:port]) for this node's users ("" = via app host) */
+  publicRtmpAuthority: string
   rtmpPort: number
   srtPort: number
   hostname: string
@@ -58,7 +58,7 @@ export function register(
   info: Omit<
     MediaNodeInfo,
     'nodeId' | 'socketId' | 'connectedAt' | 'activeStreams' | 'srsFlvBase' | 'publicOrigin'
-  > & { srsFlvBase?: string; publicOrigin?: string; publicRtmpPort?: number },
+  > & { srsFlvBase?: string; publicOrigin?: string; publicRtmpAuthority?: string },
 ): string {
   const nodeId = deriveNodeId(info.origin)
   const existing = nodes.get(nodeId)
@@ -71,7 +71,7 @@ export function register(
     // fall back to the origin host for nodes that don't advertise an FLV base
     srsFlvBase: info.srsFlvBase || `http://${info.origin.replace(/^https?:\/\//, '').split(':')[0]}:38081`,
     publicOrigin: info.publicOrigin || '',
-    publicRtmpPort: info.publicRtmpPort ?? 1935,
+    publicRtmpAuthority: info.publicRtmpAuthority || '',
   }
   nodes.set(nodeId, entry)
   offlineSince.delete(nodeId)

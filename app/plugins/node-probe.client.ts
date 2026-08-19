@@ -32,6 +32,9 @@ export default defineNuxtPlugin(async (nuxtApp) => {
   const latencies: { nodeId: string; latencyMs: number }[] = []
   await Promise.all(
     (view.probe ?? []).map(async (t) => {
+      // https pages cannot fetch http origins (mixed content) — skip instead
+      // of letting the browser log a blocked-request error on every visit
+      if (location.protocol === 'https:' && t.publicOrigin.startsWith('http://')) return
       const ms = await probeOnce(t.publicOrigin)
       if (ms != null) latencies.push({ nodeId: t.nodeId, latencyMs: ms })
     }),

@@ -26,7 +26,7 @@ import type { SessionSnapshot, SessionStatus, RecordingSnapshot } from '#shared/
 interface RegisterPayload {
   origin: string
   publicOrigin?: string
-  publicRtmpPort?: number
+  publicRtmpAuthority?: string
   rtmpPort: number
   srtPort: number
   srsFlvBase?: string
@@ -106,7 +106,7 @@ export function wireMediaNodeNamespace(io: SocketIOServer): void {
       const nodeId = register(socket, {
         origin: payload.origin,
         publicOrigin: payload.publicOrigin,
-        publicRtmpPort: payload.publicRtmpPort ?? 1935,
+        publicRtmpAuthority: payload.publicRtmpAuthority ?? '',
         rtmpPort: payload.rtmpPort,
         srtPort: payload.srtPort,
         srsFlvBase: payload.srsFlvBase,
@@ -160,7 +160,9 @@ export function wireMediaNodeNamespace(io: SocketIOServer): void {
         ack?: (r: { allow: boolean; reason?: string }) => void,
       ) => {
         const stream = String(p?.stream ?? '').trim()
-        const path = `/live/${encodeURIComponent(stream)}.flv`
+        // encodeURI to match the minted URL's path byte-for-byte (@ stays
+        // verbatim — see buildPlaybackUrls)
+        const path = encodeURI(`/live/${stream}.flv`)
         const ok =
           stream !== '' &&
           verifyMediaSignature(path, Number(p?.exp), String(p?.sig ?? '')) &&

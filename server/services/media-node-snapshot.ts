@@ -10,10 +10,9 @@ import { UsersRepository } from '../repositories/users.repository'
 import { emit } from '../utils/bus'
 import type { MediaNodeSnapshot } from '#shared/events'
 
-function rtmpUrl(n: { publicOrigin: string; publicRtmpPort: number }): string | null {
-  if (!n.publicOrigin) return null
-  const host = new URL(n.publicOrigin).hostname
-  return `rtmp://${host}${n.publicRtmpPort === 1935 ? '' : `:${n.publicRtmpPort}`}/live`
+/** the node's OBS ingest URL from its reported authority host[:port] */
+function rtmpUrl(n: { publicRtmpAuthority: string }): string | null {
+  return n.publicRtmpAuthority ? `rtmp://${n.publicRtmpAuthority}/live` : null
 }
 
 export function nodesSnapshot(): MediaNodeSnapshot[] {
