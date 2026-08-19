@@ -20,6 +20,15 @@ export function getAuth(event: H3Event): AuthContext | null {
   return event.context.auth ?? null
 }
 
+/** Per-handler "any logged-in user" gate (403 otherwise). */
+export function requireUser(event: H3Event): AuthContext {
+  const auth = event.context.auth
+  if (!auth) {
+    throw createError({ statusCode: 403, statusMessage: 'login required' })
+  }
+  return auth
+}
+
 /**
  * Per-handler admin gate. Throws 403 for non-admins (including logged-in
  * regular users) and 403 for the unauthenticated (the middleware normally

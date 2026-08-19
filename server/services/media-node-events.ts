@@ -23,6 +23,7 @@ import type { SessionSnapshot, SessionStatus, RecordingSnapshot } from '#shared/
 
 interface RegisterPayload {
   origin: string
+  publicOrigin?: string
   rtmpPort: number
   srtPort: number
   srsFlvBase?: string
@@ -101,6 +102,7 @@ export function wireMediaNodeNamespace(io: SocketIOServer): void {
     socket.on('node:register', (payload: RegisterPayload, ack?: (r: { nodeId: string }) => void) => {
       const nodeId = register(socket, {
         origin: payload.origin,
+        publicOrigin: payload.publicOrigin,
         rtmpPort: payload.rtmpPort,
         srtPort: payload.srtPort,
         srsFlvBase: payload.srsFlvBase,

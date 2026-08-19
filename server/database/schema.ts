@@ -4,7 +4,7 @@
  * One schema file mirroring kaleidodanmu's single-entities-file convention,
  * but expressed with Drizzle. Snake_case DB columns, camelCase TS accessors.
  */
-import { sqliteTable, integer, text, real, index, unique, primaryKey } from 'drizzle-orm/sqlite-core'
+import { sqliteTable, integer, text, real, index, unique, uniqueIndex, primaryKey } from 'drizzle-orm/sqlite-core'
 import { sql } from 'drizzle-orm'
 
 const now = sql`(unixepoch())`
@@ -29,8 +29,44 @@ export const users = sqliteTable('users', {
   authmodVerifier: text('authmod_verifier'),
   /** admin = full management + watching; user = browse authorized events only. */
   role: text('role', { enum: ['admin', 'user'] }).notNull().default('user'),
+  /** media node this user is pinned to for ingest (null = not yet assigned). */
+  nodeId: text('node_id'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(now),
 })
+
+/* ------------------------------ node_settings ----------------------------- */
+/**
+ * Per-node assignment quota. `maxUsers` caps AUTO-assignment (first-visit
+ * lowest-latency allocation); the allocator overfills only when every node is
+ * at capacity, then picks the least-overloaded one. Manual admin assignment
+ * ignores the cap. Rows are created lazily — absent row = default.
+ */
+export const nodeSettings = sqliteTable('node_settings', {
+  nodeId: text('node_id').primaryKey(),
+  maxUsers: integer('max_users').notNull().default(50),
+})
+export type NodeSetting = typeof nodeSettings.$inferSelect
+
+/* ----------------------------- node_latencies ----------------------------- */
+/**
+ * Last-visit latency snapshot per (user, node), measured by the browser on
+ * every visit and upserted — exactly one row per pair ("the latency from the
+ * user's most recent visit"). Feeds the admin matrix + the first-visit
+ * allocator.
+ */
+export const nodeLatencies = sqliteTable(
+  'node_latencies',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    nodeId: text('node_id').notNull(),
+    latencyMs: integer('latency_ms').notNull(),
+    measuredAt: integer('measured_at', { mode: 'timestamp' }).notNull().default(now),
+  },
+  (t) => [uniqueIndex('node_latency_user_node_uq').on(t.userId, t.nodeId)],
+)
 
 /* ------------------------------- app_config ------------------------------- */
 export const appConfig = sqliteTable('app_config', {

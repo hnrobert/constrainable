@@ -1,10 +1,12 @@
 /**
  * Builds OBS connection strings for a publisher. The ingest host is derived
- * at runtime — no env var needed for the standard deployment:
+ * at runtime, in priority order:
  *   1. PUBLIC_HOST override (runtime config) when set explicitly
- *   2. API_ORIGIN's hostname in split deployments (frontend elsewhere; OBS
+ *   2. the user's ASSIGNED media node's public origin (admin-assigned or
+ *      first-visit auto-allocation — see services/node-assignment.ts)
+ *   3. API_ORIGIN's hostname in split deployments (frontend elsewhere; OBS
  *      pushes to the origin server)
- *   3. the origin the user is BROWSING from (wherever the app is reachable,
+ *   4. the origin the user is BROWSING from (wherever the app is reachable,
  *      RTMP :1935 is reachable too)
  * The default port 1935 is omitted — `rtmp://host/live`.
  */
@@ -12,13 +14,25 @@ export function useObsConfig() {
   const cfg = useRuntimeConfig()
   const requestUrl = useRequestURL()
 
-  const ingestHost =
-    hostnameOf(String(cfg.public.srsPublicHost || '')) ||
-    hostnameOf(String(cfg.public.apiOrigin || '')) ||
-    requestUrl.hostname
+  // the caller's node assignment (null when logged out / unassigned / the
+  // node has no public origin — single-server default)
+  const { data: assignment } = useFetch<{ assigned: string | null; assignedPublicOrigin: string }>(
+    '/api/nodes/assignment',
+    { default: () => ({ assigned: null, assignedPublicOrigin: '' }) },
+  )
+
+  const ingestHost = computed(() => {
+    const override = hostnameOf(String(cfg.public.srsPublicHost || ''))
+    if (override) return override
+    const assigned = hostnameOf(assignment.value.assignedPublicOrigin)
+    if (assigned) return assigned
+    const api = hostnameOf(String(cfg.public.apiOrigin || ''))
+    if (api) return api
+    return requestUrl.hostname
+  })
   const port = Number(cfg.public.srsRtmpPort || 1935)
   const server = computed(
-    () => `rtmp://${ingestHost}${port === 1935 ? '' : `:${port}`}/live`,
+    () => `rtmp://${ingestHost.value}${port === 1935 ? '' : `:${port}`}/live`,
   )
   function streamKey(streamName: string, token: string): string {
     return `${streamName}?token=${token}`

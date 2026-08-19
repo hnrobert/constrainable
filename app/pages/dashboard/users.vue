@@ -8,17 +8,34 @@ const toast = useToast()
 const confirm = useConfirm()
 const { data: users, refresh } = useFetch<UserWithGroupsView[]>('/api/users')
 const { data: groups } = useFetch<GroupView[]>('/api/groups')
+/** registered media nodes (for the assignment select) */
+const { data: mediaNodes, refresh: refreshNodes } = useFetch<{ nodeId: string; hostname: string; assignedUsers: number; maxUsers: number }[]>('/api/media-nodes')
 
 // Editable per-user working copies (role + selected group ids), populated
 // lazily on first edit. The template reads the live user values as a fallback
 // when no draft exists yet (roleOf/inGroup), so rendering never depends on a
 // watcher having run first — SSR-safe even though the users list resolves
 // asynchronously after setup.
-const draft = ref<Record<number, { role: 'admin' | 'user'; groupIds: number[] }>>({})
+const draft = ref<Record<number, { role: 'admin' | 'user'; groupIds: number[]; nodeId: string | null }>>({})
 function ensureDraft(u: UserWithGroupsView): void {
   if (!draft.value[u.id]) {
-    draft.value[u.id] = { role: u.role, groupIds: u.groups.map((g) => g.id) }
+    draft.value[u.id] = { role: u.role, groupIds: u.groups.map((g) => g.id), nodeId: u.nodeId }
   }
+}
+/** Select value: sentinel 'auto' for "no manual pin" (reka rejects empty values). */
+const AUTO = 'auto'
+function nodeOf(u: UserWithGroupsView): string {
+  return draft.value[u.id]?.nodeId ?? u.nodeId ?? AUTO
+}
+function setNode(u: UserWithGroupsView, v: unknown): void {
+  ensureDraft(u)
+  draft.value[u.id]!.nodeId = v === AUTO || typeof v !== 'string' ? null : v
+}
+/** Latency chips: sorted ascending, unknown-last. */
+function latencyChips(u: UserWithGroupsView): { nodeId: string; ms: number }[] {
+  return Object.entries(u.latencies ?? {})
+    .map(([nodeId, ms]) => ({ nodeId, ms }))
+    .sort((a, b) => a.ms - b.ms)
 }
 function roleOf(u: UserWithGroupsView): 'admin' | 'user' {
   return draft.value[u.id]?.role ?? u.role
@@ -43,6 +60,7 @@ function dirty(u: UserWithGroupsView): boolean {
   const d = draft.value[u.id]
   if (!d) return false
   if (d.role !== u.role) return true
+  if ((d.nodeId ?? null) !== (u.nodeId ?? null)) return true
   return d.groupIds.slice().sort().join(',') !== u.groups.map((g) => g.id).sort().join(',')
 }
 
@@ -58,11 +76,14 @@ async function saveAll(): Promise<boolean> {
     await Promise.all(
       dirtyUsers.map((u) => {
         const d = draft.value[u.id]!
-        return $fetch(`/api/users/${u.id}`, { method: 'PATCH', body: { role: d.role, groupIds: d.groupIds } })
+        return $fetch(`/api/users/${u.id}`, {
+          method: 'PATCH',
+          body: { role: d.role, groupIds: d.groupIds, nodeId: d.nodeId },
+        })
       }),
     )
     toast.success(`Updated ${dirtyUsers.length} user${dirtyUsers.length > 1 ? 's' : ''}`)
-    await refresh()
+    await Promise.all([refresh(), refreshNodes()])
     draft.value = {}
     saved.value = true
     setTimeout(() => {
@@ -95,6 +116,7 @@ const columns: DataTableColumn[] = [
   { key: 'email', header: 'Email', class: 'font-medium' },
   { key: 'role', header: 'Role' },
   { key: 'groups', header: 'Groups' },
+  { key: 'node', header: 'Node' },
   { key: 'createdAt', header: 'Created' },
 ]
 </script>
@@ -150,6 +172,32 @@ const columns: DataTableColumn[] = [
                 <span>{{ g.name }}</span>
               </label>
               <span v-if="!groups || !groups.length" class="text-xs text-muted-foreground">No groups defined.</span>
+            </div>
+          </template>
+          <template #cell-node="{ row }">
+            <div class="flex max-w-[260px] flex-col gap-1.5">
+              <Select
+                :model-value="nodeOf(row)"
+                :disabled="saving"
+                @update:model-value="setNode(row, $event)"
+              >
+                <SelectTrigger class="h-8"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem :value="AUTO">auto (lowest latency)</SelectItem>
+                  <SelectItem v-for="n in mediaNodes ?? []" :key="n.nodeId" :value="n.nodeId">
+                    {{ n.nodeId }} ({{ n.assignedUsers }}/{{ n.maxUsers }})
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <div v-if="latencyChips(row).length" class="flex flex-wrap gap-1">
+                <span
+                  v-for="l in latencyChips(row)"
+                  :key="l.nodeId"
+                  class="rounded-sm bg-muted px-1 py-0.5 font-mono text-[10px] text-muted-foreground"
+                  :class="{ 'text-foreground font-semibold': l.nodeId === nodeOf(row) }"
+                >{{ l.nodeId }} {{ l.ms }}ms</span>
+              </div>
+              <span v-else class="text-[10px] text-muted-foreground">no latency data yet</span>
             </div>
           </template>
           <template #cell-createdAt="{ row }">

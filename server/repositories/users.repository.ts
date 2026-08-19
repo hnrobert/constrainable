@@ -37,6 +37,10 @@ export const UsersRepository = {
   updateRole(id: number, role: User['role']): void {
     db.update(users).set({ role }).where(eq(users.id, id)).run()
   },
+  /** Pin/unpin a user's ingest media node (null clears the assignment). */
+  updateNode(id: number, nodeId: string | null): void {
+    db.update(users).set({ nodeId }).where(eq(users.id, id)).run()
+  },
   /** Replace the password hash (used by legacy re-hash on login + future resets). */
   updatePassword(id: number, passwordHash: string): void {
     db.update(users).set({ passwordHash }).where(eq(users.id, id)).run()

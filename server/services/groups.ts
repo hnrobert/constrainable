@@ -10,6 +10,7 @@ import { audit } from './audit'
 import type { EventVisibility } from '#shared/event-view'
 import type { GroupView, UserWithGroupsView } from '#shared/groups'
 import type { User } from '../database/schema'
+import { NodeLatenciesRepository } from '../repositories/node-latencies.repository'
 
 function toGroupView(id: number): GroupView {
   const g = GroupsRepository.findById(id)
@@ -79,11 +80,14 @@ export function deleteGroup(id: number): void {
 
 /** Every user with their group memberships (admin user-management page). */
 export function listUsersWithGroups(): UserWithGroupsView[] {
+  const latencies = NodeLatenciesRepository.matrix()
   return UsersRepository.findAll().map((u: User) => ({
     id: u.id,
     email: u.email,
     role: u.role,
     groups: GroupsRepository.findGroupsForUser(u.id).map((g) => ({ id: g.id, name: g.name })),
+    nodeId: u.nodeId ?? null,
+    latencies: Object.fromEntries(latencies.get(u.id) ?? []),
     createdAt: u.createdAt.getTime(),
   }))
 }

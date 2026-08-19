@@ -13,6 +13,8 @@ export interface MediaNodeInfo {
   nodeId: string
   socketId: string
   origin: string
+  /** browser-reachable base ("" = via the app's host, single-server default) */
+  publicOrigin: string
   rtmpPort: number
   srtPort: number
   hostname: string
@@ -23,7 +25,7 @@ export interface MediaNodeInfo {
    * This node's SRS HTTP-FLV base AS REACHABLE FROM THIS BACKEND — the address
    * the playback proxy pulls from. Reported by the node at registration
    * (SRS_FLV_BASE), so a shared Docker network advertises its service name
-   * (http://media-node:38080) while a remote node advertises its public origin.
+   * (http://srs:38080 — the SRS SIDECAR, not the node itself) while a remote node advertises its public origin.
    */
   srsFlvBase: string
 }
@@ -47,8 +49,8 @@ export function register(
   socket: Socket,
   info: Omit<
     MediaNodeInfo,
-    'nodeId' | 'socketId' | 'connectedAt' | 'activeStreams' | 'srsFlvBase'
-  > & { srsFlvBase?: string },
+    'nodeId' | 'socketId' | 'connectedAt' | 'activeStreams' | 'srsFlvBase' | 'publicOrigin'
+  > & { srsFlvBase?: string; publicOrigin?: string },
 ): string {
   const nodeId = deriveNodeId(info.origin)
   const existing = nodes.get(nodeId)
@@ -60,6 +62,7 @@ export function register(
     activeStreams: existing?.activeStreams ?? 0,
     // fall back to the origin host for nodes that don't advertise an FLV base
     srsFlvBase: info.srsFlvBase || `http://${info.origin.replace(/^https?:\/\//, '').split(':')[0]}:38080`,
+    publicOrigin: info.publicOrigin || '',
   }
   nodes.set(nodeId, entry)
   socketToNode.set(socket.id, nodeId)

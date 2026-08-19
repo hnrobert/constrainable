@@ -166,11 +166,11 @@ watch([pageSize, sortBy], () => (pageNo.value = 1))
           </Badge>
         </CardTitle>
         <CardDescription>
-          Go media-nodes registered with this backend over Socket.IO. Re-polled every 10 s.
+          Go media-nodes registered with this backend over Socket.IO. The auto-assign cap limits first-visit allocation (lowest latency first; overflow spreads to the least-loaded node). Re-polled every 10 s.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <StreamsNodesTable :nodes="nodes ?? []" />
+        <StreamsNodesTable :nodes="nodes ?? []" @edited="refreshNodes()" />
       </CardContent>
     </Card>
 

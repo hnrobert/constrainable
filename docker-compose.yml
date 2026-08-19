@@ -2,10 +2,10 @@
 # For local development of the backend without any streaming infrastructure.
 # Pair with constrainable-media-node for full ingest.
 services:
-  constrainable-app:
+  app:
     build: .
     image: constrainable-app:latest
-    container_name: app-server
+    container_name: constrainable-app
     environment:
       TZ: ${TZ:-Asia/Shanghai}
       HOST: 0.0.0.0
@@ -22,9 +22,9 @@ services:
     ports:
       - "31954:31954"
     networks:
-      - app
+      - constrainable-ingest
     restart: unless-stopped
 
 networks:
-  app:
+  constrainable-ingest:
     driver: bridge

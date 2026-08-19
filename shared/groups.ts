@@ -19,6 +19,10 @@ export interface UserWithGroupsView {
   email: string
   role: 'admin' | 'user'
   groups: { id: number; name: string }[]
+  /** pinned ingest node (null = not yet auto-assigned) */
+  nodeId: string | null
+  /** last-visit latency snapshot: nodeId → ms (drives the admin matrix) */
+  latencies: Record<string, number>
   createdAt: number
 }
 
