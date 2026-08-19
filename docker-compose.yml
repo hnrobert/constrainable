@@ -2,6 +2,12 @@
 # Runs the prebuilt GHCR image — no local build. To build from source instead,
 # replace the image line with `build: .`.
 # Pair with constrainable-media-node for full ingest.
+#
+# SAME HOST, SEPARATE COMPOSE PROJECTS: service names do not resolve across
+# compose projects by default. To let the media-node compose reach this app by
+# service name, create a shared network once and uncomment the ingest-shared
+# blocks below (do the same in the media-node compose):
+#   docker network create ingest-shared
 services:
   app:
     # build: .
@@ -24,8 +30,11 @@ services:
       - "31954:31954"
     networks:
       - constrainable-ingest
+      # - ingest-shared   # external shared network (see header)
     restart: unless-stopped
 
 networks:
   constrainable-ingest:
     driver: bridge
+  # ingest-shared:
+  #   external: true     # created once via `docker network create ingest-shared`
