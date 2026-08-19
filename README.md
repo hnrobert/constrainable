@@ -33,9 +33,8 @@ graph TB
 | ----- | --------- | --------- |
 | `API_ORIGIN` | `http://localhost:31954` | Control-plane (constrainable-app) URL — Socket.IO + auth |
 | `NODE_IDENTIFIER` | `media-node` | Stable unique identity (drives nodeId: user assignments, session ownership, quotas). NOT an address. |
-| `PUBLIC_DOMAIN` | _(empty)_ | Browser-reachable DOMAIN — REQUIRED for multi-node deployments: drives per-user latency probing, the OBS ingest host of assigned users, and direct browser playback. Empty in single-server deployments (users reach the node via the app's host). |
-| `PUBLIC_PLAY_PORT` | `38080` | Public port of the play entry (only meaningful with `PUBLIC_DOMAIN`). |
-| `PUBLIC_RTMP_PORT` | `1935` | PUBLIC RTMP port for OBS URLs on this node (change only when the tunnel remaps it). |
+| `PUBLIC_NODE_ORIGIN` | _(empty)_ | THE single public origin of this node (full URL, scheme optional) — REQUIRED for multi-node deployments: browser playback is PATH-BASED on it (`${PUBLIC_NODE_ORIGIN}/live/<s>.flv`; route `/live/` on that domain to the node's published play port), and it drives latency probing + the derived OBS address. Empty in single-server deployments (users reach everything via the app's host). |
+| `PUBLIC_RTMP_AUTHORITY` | _(derived)_ | OBS ingest AUTHORITY (host[:port]) for assigned users, e.g. `ingest.example.com` or `ingest.example.com:21935` when the tunnel remaps RTMP (a full `rtmp://` URL is accepted, reduced to its authority). Empty = derived from `PUBLIC_NODE_ORIGIN`'s host. |
 | `NODE_IDENTIFIER` | `localhost` | This node's public identifier (reported to Node) |
 | `RTMP_PORT` | `1935` | RTMP ingest port (OBS pushes here) |
 | `PLAY_PORT` | `38080` | Direct playback entry — browsers pull signed FLV URLs here; every pull is authorized by the control plane over Socket.IO (`play:auth`), then proxied from the SRS sidecar |

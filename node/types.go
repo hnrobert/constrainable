@@ -5,14 +5,14 @@ package node
 
 // RegisterPayload is what a media node sends on (re)connect to identify itself.
 type RegisterPayload struct {
-	Origin         string `json:"origin"`         // this node's identifier (SELF_ORIGIN)
-	PublicOrigin   string `json:"publicOrigin"`   // browser-reachable base (PUBLIC_ORIGIN; "" = via app host)
-	RTMPPort       int    `json:"rtmpPort"`       // RTMP ingest port
-	PublicRtmpPort int    `json:"publicRtmpPort"` // PUBLIC RTMP port (OBS-facing; 1935 unless tunnelled differently)
-	SRTPort        int    `json:"srtPort"`        // SRT ingest port (scaffold)
-	SRSFlvBase     string `json:"srsFlvBase"`     // how the control plane pulls FLV from this node's SRS
-	Hostname       string `json:"hostname"`       // human-readable name
-	Version        string `json:"version"`        // media-node binary version
+	Origin              string `json:"origin"`              // this node's identifier (SELF_ORIGIN)
+	PublicOrigin        string `json:"publicOrigin"`        // browser-reachable base = PUBLIC_NODE_ORIGIN ("" = via app host)
+	RTMPPort            int    `json:"rtmpPort"`            // RTMP ingest port
+	PublicRtmpAuthority string `json:"publicRtmpAuthority"` // OBS ingest authority host[:port], e.g. host or host:21935 ("": via app host)
+	SRTPort             int    `json:"srtPort"`             // SRT ingest port (scaffold)
+	SRSFlvBase          string `json:"srsFlvBase"`          // how the control plane pulls FLV from this node's SRS
+	Hostname            string `json:"hostname"`            // human-readable name
+	Version             string `json:"version"`             // media-node binary version
 }
 
 // RegisteredAck is Node's response to a successful registration.

@@ -31,14 +31,18 @@ services:
       # Stable unique identity of this node (drives nodeId: user assignments,
       # session ownership, quotas). NOT an address.
       NODE_IDENTIFIER: ${NODE_IDENTIFIER:-$(hostname)}
-      # Browser-reachable DOMAIN + play port (multi-node deployments; empty in
-      # single-server deployments). Drives latency probing, the OBS ingest
-      # host for assigned users, and direct-playback signed URLs.
-      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:-}
-      PUBLIC_PLAY_PORT: ${PUBLIC_PLAY_PORT:-38080}
+      # THE single public origin of this node (multi-node deployments; empty
+      # in single-server deployments). Full URL, scheme optional. Browser
+      # playback is path-based on it (${PUBLIC_NODE_ORIGIN}/live/<s>.flv) —
+      # route /live/ on that domain's proxy to this node's published play
+      # port. Also drives latency probing + the derived OBS address.
+      PUBLIC_NODE_ORIGIN: ${PUBLIC_NODE_ORIGIN:-}
+      # FULL OBS ingest origin for assigned users (e.g. rtmp://host/live,
+      # or :21935 when the tunnel remaps the port). Empty = derived
+      # rtmp://<PUBLIC_NODE_ORIGIN host>/live.
+      PUBLIC_RTMP_AUTHORITY: ${PUBLIC_RTMP_AUTHORITY:-}
       # PUBLIC RTMP port for OBS URLs (1935 standard; change only when the
       # tunnel remaps it, e.g. node exposed as host:21935)
-      PUBLIC_RTMP_PORT: ${PUBLIC_RTMP_PORT:-1935}
       # Shared auth token (must match the backend; empty = no auth)
       MEDIA_NODE_AUTH_TOKEN: ${MEDIA_NODE_AUTH_TOKEN:-}
       # How the control plane pulls FLV from this node's SRS (empty = derived
@@ -50,7 +54,7 @@ services:
       - srs-conf:/srs-config
     ports:
       - "1935:1935" # RTMP ingest (OBS pushes here)
-      # Direct browser FLV pulls (PUBLIC_DOMAIN:PUBLIC_PLAY_PORT → this port). Every pull is
+      # Direct browser FLV pulls (proxy /live/ on PUBLIC_NODE_ORIGIN → this port). Every pull is
       # authorized by the control plane over Socket.IO, then proxied from SRS.
       - "38080:38080"
     networks:

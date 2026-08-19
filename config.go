@@ -17,14 +17,19 @@ type Config struct {
 	AuthToken      string // shared secret with Node (socket auth)
 	NodeIdentifier string // stable unique identity (drives nodeId: user
 	// assignments, session ownership, quotas). NOT an address.
-	PublicDomain string // browser-reachable DOMAIN ("" in single-server
-	// deployments where users reach everything via the app's host;
-	// multi-node deployments MUST set it)
-	PublicPlayPort int // public port of the play entry (0 = same as PlayPort)
-	PublicRtmpPort int // PUBLIC port of the RTMP ingest (OBS-facing; 1935
-	// standard — only differs when the tunnel remaps it)
-	PublicOrigin string // CONSTRUCTED: http://PUBLIC_DOMAIN:PUBLIC_PLAY_PORT
-	Hostname     string // human-readable name
+	PublicNodeOrigin string // PUBLIC_NODE_ORIGIN — THE single public origin
+	// of this node (full URL, scheme optional — http:// assumed for bare
+	// domains). Browser playback rides it PATH-BASED:
+	// ${PUBLIC_NODE_ORIGIN}/live/<s>.flv, with the domain's reverse proxy
+	// routing /live/ to this node's play entry (auth still happens here).
+	// Also drives latency probing and the derived OBS address. Empty =
+	// single-server (playback via the app's proxy).
+	PublicRtmpAuthority string // PUBLIC_RTMP_AUTHORITY — the OBS ingest
+	// AUTHORITY (host[:port], URL terms) for users assigned to this node,
+	// e.g. ingest.example.com or ingest.example.com:21935 when the tunnel
+	// remaps RTMP. A full rtmp:// URL is accepted and reduced to its
+	// authority. Empty = derived from PUBLIC_NODE_ORIGIN's host.
+	Hostname string // human-readable name
 
 	// Listeners
 	RTMPPort int // RTMP ingest (OBS pushes here)
@@ -56,25 +61,24 @@ type Config struct {
 // LoadConfig reads environment variables.
 func LoadConfig() (*Config, error) {
 	c := &Config{
-		APIOrigin:       envOr("API_ORIGIN", "http://localhost:31954"),
-		AuthToken:       os.Getenv("MEDIA_NODE_AUTH_TOKEN"),
-		NodeIdentifier:  envOr("NODE_IDENTIFIER", "media-node"),
-		PublicDomain:    strings.TrimRight(envOr("PUBLIC_DOMAIN", ""), "/"),
-		PublicPlayPort:  envOrInt("PUBLIC_PLAY_PORT", 0),
-		PublicRtmpPort:  envOrInt("PUBLIC_RTMP_PORT", 1935),
-		RTMPPort:        envOrInt("RTMP_PORT", 1935),
-		PlayPort:        envOrInt("PLAY_PORT", 38080),
-		SRTPort:         envOrInt("SRT_PORT", 9000),
-		SRSAddr:         envOr("SRS_ADDR", "srs:1935"),                   // docker sidecar service name
-		SRSApiBase:      envOr("SRS_API_BASE", "http://srs:1985/api/v1"), // docker sidecar service name
-		SRSHTTPPort:     envOrInt("SRS_HTTP_PORT", 38081),                // internal-only (never published); 38080 is the node's own play port
-		SRSFlvBase:      envOr("SRS_FLV_BASE", ""),                       // empty = derived from SELF_ORIGIN below
-		SRSBin:          envOr("SRS_BIN", ""),                            // empty = SRS runs elsewhere
-		SRSConfigTpl:    envOr("SRS_CONFIG_TEMPLATE", "/etc/media-node/srs.conf.template"),
-		SRSConfigPath:   envOr("SRS_CONFIG_PATH", "/tmp/srs.conf"),
-		SRSRTCCandidate: envOr("SRS_RTC_CANDIDATE", "127.0.0.1"),
-		RecordDir:       envOr("RECORD_DIR", "./records"),
-		AllowDirectSRS:  os.Getenv("ALLOW_DIRECT_SRS") == "true",
+		APIOrigin:           envOr("API_ORIGIN", "http://localhost:31954"),
+		AuthToken:           os.Getenv("MEDIA_NODE_AUTH_TOKEN"),
+		NodeIdentifier:      envOr("NODE_IDENTIFIER", "media-node"),
+		PublicNodeOrigin:    strings.TrimRight(envOr("PUBLIC_NODE_ORIGIN", ""), "/"),
+		PublicRtmpAuthority: envOr("PUBLIC_RTMP_AUTHORITY", ""),
+		RTMPPort:            envOrInt("RTMP_PORT", 1935),
+		PlayPort:            envOrInt("PLAY_PORT", 38080),
+		SRTPort:             envOrInt("SRT_PORT", 9000),
+		SRSAddr:             envOr("SRS_ADDR", "srs:1935"),                   // docker sidecar service name
+		SRSApiBase:          envOr("SRS_API_BASE", "http://srs:1985/api/v1"), // docker sidecar service name
+		SRSHTTPPort:         envOrInt("SRS_HTTP_PORT", 38081),                // internal-only (never published); 38080 is the node's own play port
+		SRSFlvBase:          envOr("SRS_FLV_BASE", ""),                       // empty = derived from SELF_ORIGIN below
+		SRSBin:              envOr("SRS_BIN", ""),                            // empty = SRS runs elsewhere
+		SRSConfigTpl:        envOr("SRS_CONFIG_TEMPLATE", "/etc/media-node/srs.conf.template"),
+		SRSConfigPath:       envOr("SRS_CONFIG_PATH", "/tmp/srs.conf"),
+		SRSRTCCandidate:     envOr("SRS_RTC_CANDIDATE", "127.0.0.1"),
+		RecordDir:           envOr("RECORD_DIR", "./records"),
+		AllowDirectSRS:      os.Getenv("ALLOW_DIRECT_SRS") == "true",
 	}
 
 	if h, err := os.Hostname(); err == nil && h != "" {
@@ -86,15 +90,35 @@ func LoadConfig() (*Config, error) {
 	c.APIOrigin = strings.TrimRight(c.APIOrigin, "/")
 	c.SRSApiBase = strings.TrimRight(c.SRSApiBase, "/")
 
-	// Public base = domain + public play port (drives latency probing, the
-	// OBS ingest host for assigned users, and direct-playback signed URLs).
-	// Empty when no PUBLIC_DOMAIN is configured.
-	if c.PublicDomain != "" {
-		port := c.PublicPlayPort
-		if port == 0 {
-			port = c.PlayPort
+	// Normalize the public origin in place (scheme added for bare domains,
+	// trailing slash stripped) — it is advertised VERBATIM on the wire and
+	// drives latency probing + direct-playback signed URLs. Playback is
+	// PATH-BASED on it (/live/*); the domain front routes /live/ here.
+	if c.PublicNodeOrigin != "" {
+		if !strings.Contains(c.PublicNodeOrigin, "://") {
+			c.PublicNodeOrigin = "http://" + c.PublicNodeOrigin
 		}
-		c.PublicOrigin = fmt.Sprintf("http://%s:%d", c.PublicDomain, port)
+		c.PublicNodeOrigin = strings.TrimRight(c.PublicNodeOrigin, "/")
+	}
+
+	// OBS ingest authority for assigned users: PUBLIC_RTMP_AUTHORITY
+	// (reduced to host[:port] when a full URL is given), else derived from
+	// the public origin's host. The app renders rtmp://<authority>/live.
+	if c.PublicRtmpAuthority != "" {
+		a := c.PublicRtmpAuthority
+		if i := strings.Index(a, "://"); i >= 0 {
+			a = a[i+3:]
+		}
+		if i := strings.IndexByte(a, '/'); i >= 0 {
+			a = a[:i]
+		}
+		c.PublicRtmpAuthority = a
+	} else if c.PublicNodeOrigin != "" {
+		host := strings.TrimPrefix(strings.TrimPrefix(c.PublicNodeOrigin, "https://"), "http://")
+		if i := strings.IndexAny(host, "/:"); i >= 0 {
+			host = host[:i]
+		}
+		c.PublicRtmpAuthority = host
 	}
 
 	// Advertised FLV base defaults to the identifier's host + the SRS
