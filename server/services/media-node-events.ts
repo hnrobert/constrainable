@@ -279,6 +279,7 @@ async function handlePublishStart(
 
     if (!auth.allow) {
       audit('warn', 'access', `media-node publish rejected: ${payload.streamName} (${auth.reason})`, {
+        actor: payload.streamName,
         streamName: payload.streamName,
         detail: { reason: auth.reason, nodeId: payload.nodeId },
       })
@@ -295,6 +296,7 @@ async function handlePublishStart(
         ? ` — use ${obsServerUrl(pinned.publicRtmpAuthority)} (or change your selection on the Nodes page)`
         : ' — check the Nodes page on the website for your node address'
       audit('warn', 'access', `publish on wrong node: ${payload.streamName} (${payload.nodeId}, locked to ${lockUser.nodeId})`, {
+        actor: payload.streamName,
         streamName: payload.streamName,
         detail: { nodeId: payload.nodeId, lockedTo: lockUser.nodeId },
       })
@@ -326,6 +328,7 @@ async function handlePublishStart(
     emit('session:start', snapshotFromRow(row))
 
     audit('info', 'publish', `media-node publish started: ${payload.streamName}`, {
+      actor: payload.streamName,
       eventId: auth.eventId ?? null,
       streamName: payload.streamName,
       detail: { nodeId: payload.nodeId, sessionId: row.id },
@@ -380,6 +383,8 @@ function handleEnd(payload: EndPayload): void {
   emitNodesChanged()
   emit('session:stop', snapshotFromRow(row, { status: finalStatus, endedAt: payload.endedAt }))
   audit('info', 'publish', `media-node publish ended: ${row.streamName}`, {
+    actor: row.streamName,
+    eventId: row.eventId ?? null,
     streamName: row.streamName,
     detail: { sessionId: payload.sessionId, durationSec: payload.durationSec },
   })
@@ -485,6 +490,8 @@ function punishViolation(row: { id: number; eventId: number | null; streamName: 
     bannedBy: 'system:strict-limits',
   })
   audit('warn', 'publish', `strict-limits ban: ${row.streamName} (${reasonText})`, {
+    actor: row.streamName,
+    eventId: row.eventId ?? null,
     streamName: row.streamName,
     detail: { sessionId: row.id, eventId: row.eventId, reasons },
   })
@@ -509,6 +516,8 @@ function handleViolation(payload: ViolationPayload): void {
   const event = row.eventId ? EventsRepository.findById(row.eventId) : null
   if (event?.strictLimits) punishViolation(row, payload.reasons)
   audit('warn', 'publish', `media-node violation: ${row.streamName} (${payload.reasons.join('; ')})`, {
+    actor: row.streamName,
+    eventId: row.eventId ?? null,
     streamName: row.streamName,
     detail: { reasons: payload.reasons, nodeId: 'remote' },
   })

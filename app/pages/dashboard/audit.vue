@@ -43,7 +43,16 @@ function resetFilters(): void {
 }
 
 function fmtDate(ms: number): string {
-  return new Date(ms).toLocaleString('en-US', { hour12: false })
+  // compact, column-friendly: 'Aug 20, 2026, 19:49:54'
+  return new Date(ms).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  })
 }
 const levelVariant: Record<string, 'success' | 'warning' | 'destructive'> = {
   info: 'success',
