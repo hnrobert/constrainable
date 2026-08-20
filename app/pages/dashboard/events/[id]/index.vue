@@ -15,9 +15,10 @@ const email = computed(() => user.value?.email ?? null)
 
 const { data: event } = useFetch<EventView>(`/api/events/${id}`)
 const slug = computed(() => event.value?.slug ?? '')
-const { data: guide } = useFetch<EventGuide>(
-  () => `/api/events/slug/${slug.value}/guide`,
-)
+// Id-keyed guide endpoint — stable URL, so SSR resolves it in one shot (the
+// slug-keyed fetch fires once with an empty slug and only recovers on
+// hydration; the SSR HTML used to embed that 400).
+const { data: guide } = useFetch<EventGuide>(`/api/events/${id}/guide`)
 
 async function copy(text: string, label = 'Copied'): Promise<void> {
   try {

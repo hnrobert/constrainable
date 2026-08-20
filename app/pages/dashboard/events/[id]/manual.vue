@@ -27,10 +27,11 @@ const toast = useToast()
 
 const { data: event } = useFetch<EventView>(`/api/events/${id}`)
 const slug = computed(() => event.value?.slug ?? '')
-// 404s for draft/archived events — sections depending on it degrade gracefully.
-const { data: guide } = useFetch<EventGuide>(
-  () => `/api/events/slug/${slug.value}/guide`,
-)
+// Id-keyed guide endpoint: the URL is stable, so SSR resolves it in one shot
+// (a slug-keyed fetch fires once with an empty slug and only recovers after
+// hydration — the SSR HTML would show fallback limits). 404s for draft/archived
+// events — sections depending on it degrade gracefully.
+const { data: guide } = useFetch<EventGuide>(`/api/events/${id}/guide`)
 
 // Node/port-aware RTMP address (assigned node → its public port; 1935 omitted).
 const { server } = useObsConfig()
@@ -40,15 +41,23 @@ const email = computed(() => user.value?.email ?? null)
 const requireAuth = computed(() => event.value?.requireAccountAuth ?? true)
 const limits = computed(
   () =>
+    // Fallback mirrors the app-config defaults (shared/config.ts) — used while
+    // the event is a draft (slug guide endpoint 404s) so the numbers shown
+    // still match what a default deployment enforces.
     guide.value?.limits ?? {
       maxWidth: 1920,
       maxHeight: 1080,
-      maxFps: 60,
-      maxBitrateKbps: 6000,
+      maxFps: 30,
+      maxBitrateKbps: 4000,
     },
 )
 const startsAt = computed(() => event.value?.startsAt ?? null)
 const endsAt = computed(() => event.value?.endsAt ?? null)
+/** One-line caps summary for spots away from their step-by-step home (4.2/4.3). */
+const limitsSummary = computed(
+  () =>
+    `${limits.value.maxWidth}×${limits.value.maxHeight}, ${limits.value.maxFps} fps, ${limits.value.maxBitrateKbps} kbps`,
+)
 
 /* ------------------------------ pagination ------------------------------- */
 // Page map (≤ 2 screenshots each): 1 values/overview · 2 install · 3 capture
@@ -242,6 +251,20 @@ function fmt(ts: number | null): string {
             This event doesn't require signing in inside your streaming software — leave
             <strong>Use authentication</strong> off and just use the server address and stream key.
           </p>
+
+          <!-- this event's output caps — every limit, up front with the values -->
+          <div class="space-y-1.5 border-t pt-4">
+            <Label>Output limits for this event</Label>
+            <ul class="space-y-1.5 text-sm text-muted-foreground">
+              <li>Resolution: up to <code>{{ limits.maxWidth }}×{{ limits.maxHeight }}</code></li>
+              <li>Frame rate: up to <code>{{ limits.maxFps }} fps</code></li>
+              <li>Video bitrate: up to <code>{{ limits.maxBitrateKbps }} kbps</code></li>
+            </ul>
+            <p class="text-xs text-muted-foreground">
+              Streams above these caps are flagged and may be disconnected — step 4 shows where to
+              set each one.
+            </p>
+          </div>
         </CardContent>
       </Card>
 
@@ -417,6 +440,11 @@ sudo apt install obs-studio</pre>
           <p class="text-sm text-muted-foreground">
             After all the steps above, your OBS window should look like this — the preview shows
             your own screen:
+          </p>
+          <p class="text-xs text-muted-foreground">
+            Whatever your monitor's size, the outgoing stream is capped at
+            <code>{{ limits.maxWidth }}×{{ limits.maxHeight }}</code> — the downscaling is
+            configured later, in step 4.3.
           </p>
           <figure class="space-y-1.5">
             <img
@@ -669,8 +697,10 @@ sudo apt install obs-studio</pre>
             Events that require sign-in need a client that can answer the server's RTMP
             authentication challenge (OBS Studio, Streamlabs Desktop, vMix, …). Plain
             command-line tools such as stock <code>ffmpeg</code> cannot — they only work for
-            events where signing in is not required. Whatever you use, keep the output within the
-            limits from step 4 and prefer an H.264 encoder.
+            events where signing in is not required. Whatever you use, keep the output within
+            this event's limits — at most <code>{{ limits.maxWidth }}×{{ limits.maxHeight }}</code>,
+            <code>{{ limits.maxFps }} fps</code>, <code>{{ limits.maxBitrateKbps }} kbps</code> —
+            and prefer an H.264 encoder.
           </p>
         </CardContent>
       </Card>
@@ -719,7 +749,8 @@ sudo apt install obs-studio</pre>
             </li>
             <li>
               <span class="font-medium text-foreground">Stream flagged or disconnected —</span>
-              your resolution, FPS or bitrate is above the event limits; see step 4.2 / 4.3.
+              your resolution, FPS or bitrate is above this event's caps
+              ({{ limitsSummary }}); see step 4.2 / 4.3.
             </li>
             <li>
               <span class="font-medium text-foreground">Preview is black —</span>

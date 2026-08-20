@@ -15,6 +15,7 @@ import { EventSlugAliasesRepository } from '../../../../repositories/event-slug-
 import { GroupsRepository } from '../../../../repositories/groups.repository'
 import { canViewEvent } from '../../../../services/groups'
 import { getLimitsFor } from '../../../../utils/config-store'
+import { guideRtmpServer } from '../../../../utils/rtmp-server'
 import type { EventGuide } from '#shared/event-view'
 
 export default defineEventHandler((event) => {
@@ -44,21 +45,14 @@ export default defineEventHandler((event) => {
     throw createError({ statusCode: 403, statusMessage: 'not authorized for this event' })
   }
 
-  const cfg = useRuntimeConfig(event)
   // RTMP's default port is 1935, so when the ingest front-door (the RTMP gateway)
   // owns 1935 we omit it — contestants paste a clean `rtmp://host/live` with no
   // port. One URL for ALL events: the gateway challenges every publisher, and
   // clients without credentials (requireAccountAuth off) pass through openly —
   // auth-required events are enforced at publish via the per-event policy.
-  // Host priority: the PUBLIC_HOST override, else the host this request came in
-  // on (mirrors useObsConfig's browse-origin fallback — without it the default
-  // deployment would render `rtmp:///live`). Per-viewer node refinement stays
-  // client-side (useObsConfig), keeping this payload identical for every viewer.
-  const rtmpPort = Number(cfg.public.srsRtmpPort) || 1935
-  const host =
-    String(cfg.public.srsPublicHost || '').trim() ||
-    (getRequestHost(event, { xForwardedHost: true }) || '').split(':')[0]
-  const server = `rtmp://${host}${rtmpPort === 1935 ? '' : `:${rtmpPort}`}/live`
+  // Host/port derivation lives in utils/rtmp-server.ts (shared with the
+  // id-keyed variant of this endpoint).
+  const server = guideRtmpServer(event)
 
   return {
     redirectTo,
