@@ -1,4 +1,5 @@
 import { env } from './env'
+import type { IceServer } from '#shared/rtmp'
 import { getHostingNode } from '../services/media-node-registry'
 import { signMediaUrl } from './signed-url'
 
@@ -30,6 +31,9 @@ export function buildRtmpUrl(app: string, stream: string, vhost?: string): strin
 export interface PlaybackUrls {
   flv: string
   whep: string
+  /** ICE servers for the browser's WebRTC (WHEP) connection — env-driven,
+   *  empty when SRS's public candidate is directly reachable (ICE-lite) */
+  iceServers: IceServer[]
 }
 
 /**
@@ -57,6 +61,7 @@ export function buildPlaybackUrls(streamName: string): PlaybackUrls {
   return {
     flv,
     whep: `/api/streams/whep/${encodeURIComponent(streamName)}`,
+    iceServers: env.iceServers,
   }
 }
 

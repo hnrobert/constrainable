@@ -14,3 +14,10 @@ export function normalizeRtmpAuthority(authority: string): string {
 export function obsServerUrl(authority: string): string {
   return `rtmp://${normalizeRtmpAuthority(authority)}/live`
 }
+
+/** ICE server descriptor for browser WebRTC (STUN/TURN; see server env ICE_SERVERS). */
+export interface IceServer {
+  urls: string
+  username?: string
+  credential?: string
+}

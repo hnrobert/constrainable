@@ -29,7 +29,8 @@
     "compose:up:backend": "docker compose -f docker/docker-compose.yml up -d --force-recreate --build server media-node srs-media",
     "compose:up:go": "docker compose -f docker/docker-compose.yml up -d --force-recreate --build media-node srs-media",
     "compose:up:server": "docker compose -f docker/docker-compose.yml up -d --force-recreate --build server",
-    "compose:up:srs": "docker compose -f docker/docker-compose.yml -f docker/docker-compose.dev.yml up -d srs-media"
+    "compose:up:srs": "docker compose -f docker/docker-compose.yml -f docker/docker-compose.dev.yml up -d srs-media",
+    "test": "bun test"
   },
   "trustedDependencies": [],
   "dependencies": {

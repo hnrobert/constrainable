@@ -31,13 +31,29 @@ export const StreamBansRepository = {
       .where(and(eq(streamBans.email, email), isNull(streamBans.eventId)))
       .get()
   },
-  /** Ban covering (email, event) — site-wide OR this specific event. (gateway publish check) */
-  findBlocking(email: string, eventId: number | null | undefined): StreamBan | undefined {
+  /** All bans covering (email, event) — site-wide OR this specific event. */
+  listBlocking(email: string, eventId: number | null | undefined): StreamBan[] {
     const conds = [and(eq(streamBans.email, email), isNull(streamBans.eventId))]
     if (eventId != null) {
       conds.push(and(eq(streamBans.email, email), eq(streamBans.eventId, eventId)))
     }
-    return db.select().from(streamBans).where(or(...conds)).get()
+    return db.select().from(streamBans).where(or(...conds)).all()
+  },
+  /** Ban covering (email, event) — site-wide OR this specific event. (gateway publish check) */
+  findBlocking(email: string, eventId: number | null | undefined): StreamBan | undefined {
+    return this.listBlocking(email, eventId)[0]
+  },
+  /** Delete the event-scoped strict-limits ban for (email, event) if present. */
+  removeStrictLimits(email: string, eventId: number): void {
+    db.delete(streamBans)
+      .where(
+        and(
+          eq(streamBans.email, email),
+          eq(streamBans.eventId, eventId),
+          eq(streamBans.bannedBy, 'system:strict-limits'),
+        ),
+      )
+      .run()
   },
   insert(values: NewStreamBan): StreamBan {
     return db.insert(streamBans).values(values).returning().get()

@@ -14,7 +14,7 @@ import { RecordingsRepository } from '../repositories/recordings.repository'
 import { getConfig, getLimitsFor } from '../utils/config-store'
 import { EventsRepository } from '../repositories/events.repository'
 import { UsersRepository } from '../repositories/users.repository'
-import { isSiteWideBanned, isBlocked, ban } from './stream-bans'
+import { isSiteWideBanned, isBlocked, ban, liftStrictLimitsBan } from './stream-bans'
 import { verifierFromCipher, verifyResponse } from '../utils/authmod'
 import { obsServerUrl } from '#shared/rtmp'
 import { verifyMediaSignature } from '../utils/signed-url'
@@ -470,7 +470,12 @@ function handleSpec(payload: SpecPayload): void {
   if (limits.maxHeight > 0 && payload.height > limits.maxHeight) reasons.push('resolution exceeds limit')
   if (limits.maxFps > 0 && payload.fps > limits.maxFps) reasons.push('fps exceeds limit')
   if (limits.maxBitrateKbps > 0 && bitrateKbps > limits.maxBitrateKbps) reasons.push('bitrate exceeds limit')
-  if (reasons.length === 0) return
+  if (reasons.length === 0) {
+    // compliant after a previous violation — clear the auto ban so the Bans
+    // panel doesn't show a stale entry (and reconnects are obviously clean)
+    if (row.eventId != null) liftStrictLimitsBan(row.streamName, row.eventId)
+    return
+  }
 
   PublishSessionsRepository.updateStatus(row.id, 'violating')
   emit('session:violation', {

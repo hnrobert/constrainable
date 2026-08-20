@@ -47,8 +47,23 @@ export function isSiteWideBanned(email: string): boolean {
   return !!StreamBansRepository.findSiteWide(email.trim().toLowerCase())
 }
 
+/**
+ * Is the publisher blocked by a MANUAL ban? Auto strict-limits bans
+ * (bannedBy 'system:strict-limits') do NOT block re-entry: enforcement is
+ * the declared-spec gate at every connect, so a user who fixes their encoder
+ * settings can stream again immediately — and one who doesn't is kicked
+ * again within a second of publishing. Manual admin bans block forever.
+ */
 export function isBlocked(email: string, eventId: number | null | undefined): boolean {
-  return !!StreamBansRepository.findBlocking(email.trim().toLowerCase(), eventId)
+  return StreamBansRepository.listBlocking(email.trim().toLowerCase(), eventId).some(
+    (b) => b.bannedBy !== 'system:strict-limits',
+  )
+}
+
+/** Lift the auto strict-limits ban once the publisher's spec complies. */
+export function liftStrictLimitsBan(email: string, eventId: number | null): void {
+  if (eventId == null) return
+  StreamBansRepository.removeStrictLimits(email.trim().toLowerCase(), eventId)
 }
 
 export function ban(input: {
