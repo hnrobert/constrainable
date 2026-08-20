@@ -33,7 +33,10 @@ type Config struct {
 	// the host maps, and the container keeps listening on these.
 	RTMPPort     int // RTMP ingest bind (OBS pushes here)
 	ProbeUDPPort int // STUN probe responder bind (UDP)
-	SRSUDPPort   int // SRS rtc_server listen rendered into the config (UDP)
+	SRSUDPPort   int // SRS rtc_server listen, FIXED 38000 (UDP) — the SDP
+	// candidate carries this port in-band, so the published host port must
+	// equal it; not configurable (advertise differences via
+	// PUBLIC_MEDIA_NODE_SRS_UDP_PORT for host-networking deployments)
 
 	// SRS (sidecar container named `srs` on the deployment network; or a
 	// child process when SRS_BIN is set — then use localhost:1935/1985)
@@ -58,6 +61,13 @@ type Config struct {
 	AllowDirectSRS bool
 }
 
+// srsUDPListenPort is the FIXED SRS rtc listen (container-internal). WebRTC
+// SDP candidates carry it in-band, so the published host port MUST equal it —
+// the mapping in docker-compose.yml is hardcoded 38000:38000/udp on purpose.
+// Public/host-networking differences are advertised via
+// PUBLIC_MEDIA_NODE_SRS_UDP_PORT only.
+const srsUDPListenPort = 38000
+
 // LoadConfig reads environment variables.
 func LoadConfig() (*Config, error) {
 	c := &Config{
@@ -67,10 +77,10 @@ func LoadConfig() (*Config, error) {
 		PublicOrigin:       envOr("PUBLIC_MEDIA_NODE_ORIGIN", ""),
 		PublicRTMPPort:     envOrInt("PUBLIC_MEDIA_NODE_RTMP_PORT", envOrInt("RTMP_PORT", 1935)),
 		PublicProbeUDPPort: envOrInt("PUBLIC_MEDIA_NODE_PROBE_UDP_PORT", envOrInt("PROBE_UDP_PORT", 38111)),
-		PublicSrsUDPPort:   envOrInt("PUBLIC_MEDIA_NODE_SRS_UDP_PORT", envOrInt("SRS_UDP_PORT", 38000)),
+		PublicSrsUDPPort:   envOrInt("PUBLIC_MEDIA_NODE_SRS_UDP_PORT", srsUDPListenPort),
 		RTMPPort:           envOrInt("RTMP_PORT", 1935),
 		ProbeUDPPort:       envOrInt("PROBE_UDP_PORT", 38111), // browser ICE latency probe (STUN responder)
-		SRSUDPPort:         envOrInt("SRS_UDP_PORT", 38000),
+		SRSUDPPort:         srsUDPListenPort,
 		SRSAddr:            envOr("SRS_ADDR", "srs:1935"),                   // docker sidecar service name
 		SRSApiBase:         envOr("SRS_API_BASE", "http://srs:1985/api/v1"), // docker sidecar service name
 		SRSHTTPPort:        envOrInt("SRS_HTTP_PORT", 38081),                // internal-only (never published); 38080 is the node's own play port

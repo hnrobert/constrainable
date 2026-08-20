@@ -41,13 +41,16 @@ func TestPublicDefaultsMirrorInternal(t *testing.T) {
 	t.Setenv("NODE_IDENTIFIER", "n")
 	t.Setenv("RTMP_PORT", "1936")
 	t.Setenv("PROBE_UDP_PORT", "38112")
-	t.Setenv("SRS_UDP_PORT", "38001")
 
 	c, err := LoadConfig()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.PublicRTMPPort != 1936 || c.PublicProbeUDPPort != 38112 || c.PublicSrsUDPPort != 38001 {
-		t.Fatalf("defaults must mirror internal when PUBLIC_* unset: %d/%d/%d", c.PublicRTMPPort, c.PublicProbeUDPPort, c.PublicSrsUDPPort)
+	// RTMP + probe: PUBLIC_* defaults mirror the internal listen ports.
+	// SRS media UDP: the listen is a FIXED 38000 (SDP carries it in-band, the
+	// compose mapping is hardcoded 38000:38000) — only PUBLIC_MEDIA_NODE_SRS_UDP_PORT
+	// advertises it, so unset means exactly 38000.
+	if c.PublicRTMPPort != 1936 || c.PublicProbeUDPPort != 38112 || c.PublicSrsUDPPort != 38000 {
+		t.Fatalf("PUBLIC_* defaults wrong: %d/%d/%d", c.PublicRTMPPort, c.PublicProbeUDPPort, c.PublicSrsUDPPort)
 	}
 }

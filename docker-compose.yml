@@ -86,10 +86,11 @@ services:
       - /etc/localtime:/etc/localtime:ro # host tz (linux; symlink resolves inside)
       - /etc/timezone:/etc/timezone:ro   # host tz name (debian-style, optional)
     ports:
-      # WebRTC media (direct ICE, browsers). Host port must equal the
-      # container's rtc listen (SRS_UDP_PORT, default 38000) — the SDP
-      # candidate carries this port number.
-      - "${SRS_UDP_PORT:-38000}:${SRS_UDP_PORT:-38000}/udp"
+      # WebRTC media (direct ICE, browsers). FIXED 38000:38000 — the SDP
+      # candidate carries the listen port in-band, so host port must equal it
+      # (not configurable; host-networking deployments advertise via the
+      # media-node's PUBLIC_MEDIA_NODE_SRS_UDP_PORT instead).
+      - "38000:38000/udp"
     networks:
       - constrainable-ingest
     depends_on:
