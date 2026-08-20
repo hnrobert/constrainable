@@ -1,10 +1,10 @@
 /**
- * User-facing node list for self-selection (/nodes page): each node's OBS
- * address, load (assignment quota), the CALLER's last-measured latency, and
- * which node is currently theirs. requireUser — the admin view with more
- * detail lives at /api/media-nodes.
+ * Ingest node list for the USER-facing /nodes page (any logged-in user — the
+ * admin matrix stays at /api/media-nodes). One row per REGISTERED node: OBS
+ * address, load (assigned / auto-assign cap), whether it's the caller's
+ * current pin, and the STUN probe port for browser-side ICE latency probing
+ * (0 = old firmware without the responder).
  */
-import { getAuth, requireUser } from '../../utils/auth'
 import { listNodes } from '../../services/media-node-registry'
 import { NodeSettingsRepository } from '../../repositories/node-settings.repository'
 import { UsersRepository } from '../../repositories/users.repository'
@@ -15,11 +15,11 @@ export default defineEventHandler((event) => {
   const me = UsersRepository.findById(auth.userId)
   return listNodes().map((n) => ({
     nodeId: n.nodeId,
-    /** OBS server URL (null = single-server: push via the app's host) */
     rtmpUrl: n.publicRtmpAuthority ? obsServerUrl(n.publicRtmpAuthority) : null,
-    /** node load: assigned users vs auto-assign cap */
     assigned: NodeSettingsRepository.assignedCount(n.nodeId),
     maxUsers: NodeSettingsRepository.getMaxUsers(n.nodeId),
+    /** >0 = firmware runs the STUN probe responder → browser-true ICE probe */
+    probePort: n.probePort ?? 0,
     isMine: me?.nodeId === n.nodeId,
   }))
 })

@@ -125,7 +125,6 @@ export default defineNuxtConfig({
       // app/composables/useObsConfig.ts.
       srsPublicHost: process.env.PUBLIC_HOST || '',
       srsApiPort: process.env.SRS_API_PORT || '1985',
-      srsRtmpPort: process.env.SRS_RTMP_PORT || '1935',
       // Absolute API origin for split deployments (static frontend on a CDN,
       // API elsewhere). Empty = same-origin. Baked at `bun run generate` time.
       apiOrigin: process.env.API_ORIGIN || '',

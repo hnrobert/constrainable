@@ -15,8 +15,6 @@ export interface MediaNodeInfo {
   identifier: string
   /** OBS ingest AUTHORITY (host[:port]) for this node's users ("" = via app host) */
   publicRtmpAuthority: string
-  rtmpPort: number
-  srtPort: number
   hostname: string
   version: string
   connectedAt: number
@@ -28,6 +26,12 @@ export interface MediaNodeInfo {
    * (http://srs:38081 — the SRS SIDECAR, not the node itself).
    */
   srsFlvBase: string
+  /**
+   * UDP port of the node's STUN probe responder (browser-true latency
+   * measurement via ICE). 0 / missing = old firmware without it — the /nodes
+   * page falls back to server-side probing for that node.
+   */
+  probePort: number
 }
 
 /** nodeId → info */

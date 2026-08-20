@@ -41,9 +41,11 @@ export function useObsConfig() {
     return requestUrl.hostname
   })
   const server = computed(() => {
+    // node assignment carries the full authority (host[:port]); the fallback
+    // is the browse host on the standard port 1935 (omitted) — deployments
+    // with a remapped RTMP port set PUBLIC_RTMP_AUTHORITY, which wins here
     if (assignedServer.value) return assignedServer.value
-    const p = Number(cfg.public.srsRtmpPort || 1935)
-    return `rtmp://${ingestHost.value}${p === 1935 ? '' : `:${p}`}/live`
+    return obsServerUrl(ingestHost.value)
   })
   function streamKey(streamName: string, token: string): string {
     return `${streamName}?token=${token}`

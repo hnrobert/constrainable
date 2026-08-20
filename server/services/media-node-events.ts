@@ -28,9 +28,9 @@ interface RegisterPayload {
   /** pre-rename wire name still sent by older node binaries */
   origin?: string
   publicRtmpAuthority?: string
-  rtmpPort: number
-  srtPort: number
   srsFlvBase?: string
+  /** UDP port of the STUN probe responder (0/missing = old firmware) */
+  probePort?: number
   hostname: string
   version: string
 }
@@ -119,9 +119,8 @@ export function wireMediaNodeNamespace(io: SocketIOServer): void {
         // (mixed-version fleets during rollout). Hostname as last resort.
         identifier: payload.identifier || payload.origin || payload.hostname,
         publicRtmpAuthority: payload.publicRtmpAuthority ?? '',
-        rtmpPort: payload.rtmpPort,
-        srtPort: payload.srtPort,
         srsFlvBase: payload.srsFlvBase,
+        probePort: payload.probePort ?? 0,
         hostname: payload.hostname,
         version: payload.version,
       })
