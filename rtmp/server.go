@@ -55,14 +55,49 @@ var SRSAddr = "localhost:1935"
 // makes the final call (session row, limits, record flag). OnUnpublish fires
 // exactly once per gate-approved publish, on every teardown path: OBS
 // disconnect, upstream death, write failure, or KillStream.
+// GateLimits is the caps block carried in the publish:start ack.
+type GateLimits struct {
+	MaxWidth       int
+	MaxHeight      int
+	MaxFps         int
+	MaxBitrateKbps int
+}
+
+// PublishGrant is the control plane's verdict for one publish: allow/deny,
+// the event's caps, and which enforcement modes are on. The node enforces
+// the DECLARED spec locally (metadata-time, OBS-terminal) when Strict, and
+// hands the caps to the measured monitor when Measured.
+type PublishGrant struct {
+	Allowed  bool
+	Limits   *GateLimits
+	Strict   bool
+	Measured bool
+}
+
 var (
-	OnPublishGate func(streamName, token, authedUser string) bool
+	OnPublishGate func(streamName, token, authedUser string) PublishGrant
 	OnUnpublish   func(streamName string)
 	// OnPublishSpec fires when OBS' onMetaData arrives (right after publish
 	// accepts, before the first frame): the DECLARED spec from the encoder
 	// settings. Instant — no waiting for SRS API counters.
 	OnPublishSpec func(streamName string, spec StreamSpec)
 )
+
+// SpecViolations lists the declared-spec limit breaches ("" slice = clean).
+// Bitrate compares the declared video+audio data rates against the cap.
+func SpecViolations(sp StreamSpec, l *GateLimits) []string {
+	var reasons []string
+	if l.MaxWidth > 0 && sp.Width > l.MaxWidth || l.MaxHeight > 0 && sp.Height > l.MaxHeight {
+		reasons = append(reasons, "resolution exceeds limit")
+	}
+	if l.MaxFps > 0 && sp.Fps > float64(l.MaxFps) {
+		reasons = append(reasons, "fps exceeds limit")
+	}
+	if l.MaxBitrateKbps > 0 && int(sp.VideoKbps+sp.AudioKbps) > l.MaxBitrateKbps {
+		reasons = append(reasons, "bitrate exceeds limit")
+	}
+	return reasons
+}
 
 // StreamSpec is the declared encoder configuration from onMetaData.
 type StreamSpec struct {
@@ -161,7 +196,9 @@ func HandleOBS(conn net.Conn, app AppClient) {
 	authed := false  // true only after a successful authmod verify (stage 3)
 	authedUser := "" // the email that was verified (must match the stream name)
 	var up *Upstream
-	published := "" // final stream name once the control plane approves the publish
+	published := ""             // final stream name once the control plane approves the publish
+	var grantLimits *GateLimits // event caps from the publish grant
+	var grantStrict bool        // strict mode: reject declared-spec violations locally
 	defer func() {
 		if published == "" {
 			return
@@ -209,13 +246,36 @@ func HandleOBS(conn net.Conn, app AppClient) {
 				}
 			}
 			// Script data (type 18) carries onMetaData — OBS (librtmp) sends
-			// it as a DATA message, NOT a command, so the "@setDataFrame"
-			// command case below never fires for real OBS. Parse the declared
-			// spec here and surface it instantly.
-			if msg.Type == 18 && OnPublishSpec != nil && published != "" {
+			// it as a DATA message, NOT a command. It is the FIRST message
+			// after publish accepts, before any media frame, so under STRICT
+			// events the declared spec is checked HERE: a violation gets the
+			// same terminal BadName reject as an auth error and nothing is
+			// ever relayed (SRS never sees the stream).
+			if msg.Type == 18 && published != "" {
 				if vals := AmfDecodeAll(msg.Payload); len(vals) >= 3 {
 					if sp, ok := ParseMetadata(vals); ok {
-						OnPublishSpec(published, sp)
+						if grantStrict && grantLimits != nil {
+							if reasons := SpecViolations(sp, grantLimits); len(reasons) > 0 {
+								reasonText := strings.Join(reasons, "; ")
+								log.Printf("%s spec violation on '%s': %s (declared %dx%d@%.2f %.0fkbps) — rejecting before any frame",
+									remote, published, reasonText, sp.Width, sp.Height, sp.Fps, sp.VideoKbps+sp.AudioKbps)
+								// report first (socket write order keeps spec
+								// ahead of the publish:end the close triggers,
+								// so the app records the violation + bans)
+								if OnPublishSpec != nil {
+									OnPublishSpec(published, sp)
+								}
+								_ = cw.WriteMessage(&Message{Type: 20, CSID: 5, StreamID: 1, Payload: CmdOnStatusError(
+									"NetStream.Publish.BadName",
+									"Stream rejected: "+reasonText+". Lower your OBS resolution/FPS/bitrate to the event's limits and reconnect.")})
+								up.Close()
+								_ = conn.Close()
+								return
+							}
+						}
+						if OnPublishSpec != nil {
+							OnPublishSpec(published, sp)
+						}
 					}
 				}
 			}
@@ -417,7 +477,11 @@ func HandleOBS(conn net.Conn, app AppClient) {
 				// Session gate: the control plane opens the session (row, limits,
 				// record flag) before we tell OBS "go". Deny or ack timeout is
 				// fail-closed — BadName is terminal for OBS, no retry loop.
-				if OnPublishGate == nil || !OnPublishGate(final, token, authedUser) {
+				grant := PublishGrant{Allowed: false}
+				if OnPublishGate != nil {
+					grant = OnPublishGate(final, token, authedUser)
+				}
+				if !grant.Allowed {
 					log.Printf("%s publish '%s' denied by control plane", remote, final)
 					_ = cw.WriteMessage(&Message{Type: 20, CSID: 5, StreamID: 1, Payload: CmdOnStatusError(
 						"NetStream.Publish.BadName",
@@ -426,6 +490,7 @@ func HandleOBS(conn net.Conn, app AppClient) {
 					_ = conn.Close()
 					return
 				}
+				grantLimits, grantStrict = grant.Limits, grant.Strict
 				published = final
 				relaysMu.Lock()
 				relays[published] = relayHandle{conn: conn, up: up}

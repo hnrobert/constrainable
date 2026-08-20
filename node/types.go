@@ -49,6 +49,8 @@ type PublishAuthorized struct {
 	EventID   *int64  `json:"eventId,omitempty"`
 	Limits    *Limits `json:"limits,omitempty"`
 	Record    bool    `json:"record"`
+	Strict    bool    `json:"strict"`
+	Measured  bool    `json:"measured"`
 }
 
 // Limits mirrors the Node config's per-event / global stream caps.

@@ -199,7 +199,7 @@ func main() {
 	// (publish:start ack carries the session row, limits and record flag) once
 	// the upstream relay is up; OnUnpublish ends tracking (which reports
 	// publish:end + the DVR recording).
-	rtmp.OnPublishGate = func(streamName, token, authedUser string) bool {
+	rtmp.OnPublishGate = func(streamName, token, authedUser string) rtmp.PublishGrant {
 		var auth node.PublishAuthorized
 		err := socketClient.EmitWithAck("publish:start", node.PublishStart{
 			NodeID:      socketClient.NodeID(),
@@ -210,14 +210,30 @@ func main() {
 		}, &auth, 5*time.Second)
 		if err != nil {
 			log.Printf("[node] publish:start %s: %v (fail-closed)", streamName, err)
-			return false
+			return rtmp.PublishGrant{}
 		}
 		if !auth.Allow {
 			log.Printf("[node] publish:start %s denied: %s", streamName, auth.Reason)
-			return false
+			return rtmp.PublishGrant{}
 		}
-		manager.Start(streamName, auth.SessionID, auth.EventID, "", auth.Limits, auth.Record)
-		return true
+		var limits *rtmp.GateLimits
+		if auth.Limits != nil {
+			limits = &rtmp.GateLimits{
+				MaxWidth:       auth.Limits.MaxWidth,
+				MaxHeight:      auth.Limits.MaxHeight,
+				MaxFps:         auth.Limits.MaxFps,
+				MaxBitrateKbps: auth.Limits.MaxBitrateKbps,
+			}
+		}
+		// measured enforcement only when the event opted in — the caps go to
+		// the monitor solely for that; the declared gate uses them whenever
+		// Strict (checked locally in the RTMP handler, metadata-time).
+		monitorLimits := auth.Limits
+		if !auth.Measured {
+			monitorLimits = nil
+		}
+		manager.Start(streamName, auth.SessionID, auth.EventID, "", monitorLimits, auth.Record)
+		return rtmp.PublishGrant{Allowed: true, Limits: limits, Strict: auth.Strict, Measured: auth.Measured}
 	}
 	rtmp.OnUnpublish = func(streamName string) {
 		manager.End(streamName)
