@@ -19,6 +19,9 @@ const slug = computed(() => event.value?.slug ?? '')
 // slug-keyed fetch fires once with an empty slug and only recovers on
 // hydration; the SSR HTML used to embed that 400).
 const { data: guide } = useFetch<EventGuide>(`/api/events/${id}/guide`)
+// Same assignment-aware RTMP address as the Manual tab and the public /e page:
+// follows the viewer's pinned/assigned ingest node, NOT the request host.
+const { server } = useObsConfig()
 
 async function copy(text: string, label = 'Copied'): Promise<void> {
   try {
@@ -99,8 +102,8 @@ onMounted(async () => {
           <div class="space-y-1.5">
             <Label>Server</Label>
             <div class="flex items-center gap-2">
-              <code class="font-mono text-sm">{{ guide.server }}</code>
-              <Button variant="link" class="h-auto p-0 text-xs" @click="copy(guide.server, 'Copied server address')">Copy</Button>
+              <code class="font-mono text-sm">{{ server }}</code>
+              <Button variant="link" class="h-auto p-0 text-xs" @click="copy(server, 'Copied server address')">Copy</Button>
               <NuxtLink to="/nodes" class="text-xs underline decoration-dotted underline-offset-4">change / test nodes</NuxtLink>
             </div>
           </div>
