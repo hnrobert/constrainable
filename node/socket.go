@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -127,11 +128,30 @@ func (c *Client) markDead(ws *websocket.Conn) {
 	}
 }
 
+// warmAttach primes the app's LAZY socket.io attach: it hooks the HTTP
+// server on the first REGULAR request, and a websocket UPGRADE arriving
+// before any HTTP request is dropped by Node (no upgrade listener yet). One
+// cheap health GET before dialing guarantees the attach exists — fixes
+// cold-start connect failures against a freshly booted app.
+func (c *Client) warmAttach() {
+	req, err := http.NewRequest(http.MethodGet, c.apiOrigin+"/api/health", nil)
+	if err != nil {
+		return
+	}
+	hc := &http.Client{Timeout: 3 * time.Second}
+	resp, err := hc.Do(req)
+	if err == nil {
+		_ = resp.Body.Close()
+	}
+}
+
 // connectOnce establishes a WebSocket, performs the engine.io + socket.io
 // handshake, registers, and reads events until the connection drops.
 func (c *Client) connectOnce() error {
 	// Build the engine.io polling handshake URL (we need the session ID).
 	// For simplicity, we use the websocket transport directly.
+	c.warmAttach()
+
 	wsURL, err := c.wsURL()
 	if err != nil {
 		return fmt.Errorf("build ws url: %w", err)
