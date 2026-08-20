@@ -60,6 +60,16 @@ interface MetricsPayload {
   bitrateKbps?: number
 }
 
+interface SpecPayload {
+	nodeId: string
+	streamName: string
+	width: number
+	height: number
+	fps: number
+	videoKbps: number
+	audioKbps: number
+}
+
 interface EndPayload {
   sessionId: number
   endedAt: number
@@ -135,6 +145,10 @@ export function wireMediaNodeNamespace(io: SocketIOServer): void {
 
     socket.on('publish:metrics', (payload: MetricsPayload) => {
       handleMetrics(payload)
+    })
+
+    socket.on('publish:spec', (payload: SpecPayload) => {
+      handleSpec(payload)
     })
 
     socket.on('publish:end', (payload: EndPayload) => {
@@ -409,6 +423,74 @@ function handleRecordingReady(payload: RecordingReadyPayload): void {
   }
 }
 
+/**
+ * OBS' DECLARED spec from onMetaData — arrives right after publish accepts,
+ * before the first frame. Shows the spec instantly AND runs the limit check
+ * immediately (strict events punish before a single frame is served). The
+ * measured counters remain the ongoing authority (declared values can be
+ * forged by a custom publisher).
+ */
+function handleSpec(payload: SpecPayload): void {
+  const row = PublishSessionsRepository.findById(
+    PublishSessionsRepository.findActiveByStream(payload.streamName)?.id ?? -1,
+  )
+  if (!row) return
+  const bitrateKbps = Math.round((payload.videoKbps || 0) + (payload.audioKbps || 0))
+  PublishSessionsRepository.updateMetrics(row.id, {
+    width: payload.width || row.width,
+    height: payload.height || row.height,
+    fps: payload.fps || row.fps,
+    bitrateKbps: bitrateKbps || row.bitrateKbps,
+  })
+  emit('session:metric', {
+    ...snapshotFromRow(row, {
+      width: payload.width || row.width,
+      height: payload.height || row.height,
+      fps: payload.fps || row.fps,
+      bitrateKbps: bitrateKbps || row.bitrateKbps,
+    }),
+  })
+
+  // immediate limit gate on the declared values
+  const event = row.eventId ? EventsRepository.findById(row.eventId) : null
+  const limits = getLimitsFor(event)
+  const reasons: string[] = []
+  if (limits.maxWidth > 0 && payload.width > limits.maxWidth) reasons.push('resolution exceeds limit')
+  if (limits.maxHeight > 0 && payload.height > limits.maxHeight) reasons.push('resolution exceeds limit')
+  if (limits.maxFps > 0 && payload.fps > limits.maxFps) reasons.push('fps exceeds limit')
+  if (limits.maxBitrateKbps > 0 && bitrateKbps > limits.maxBitrateKbps) reasons.push('bitrate exceeds limit')
+  if (reasons.length === 0) return
+
+  PublishSessionsRepository.updateStatus(row.id, 'violating')
+  emit('session:violation', {
+    ...snapshotFromRow(row, { status: 'violating' }),
+    reasons,
+  })
+  if (event?.strictLimits) punishViolation(row, reasons)
+}
+
+/** strict-limits punishment: event-scoped ban + kill on the hosting node. */
+function punishViolation(row: { id: number; eventId: number | null; streamName: string; nodeId: string | null }, reasons: string[]): void {
+  const reasonText = reasons.join('; ')
+  ban({
+    email: row.streamName,
+    eventId: row.eventId,
+    reason: `strict limits violation: ${reasonText}`,
+    bannedBy: 'system:strict-limits',
+  })
+  audit('warn', 'publish', `strict-limits ban: ${row.streamName} (${reasonText})`, {
+    streamName: row.streamName,
+    detail: { sessionId: row.id, eventId: row.eventId, reasons },
+  })
+  const io = getSocketIO()
+  if (io && row.nodeId) {
+    emitToNode(io, row.nodeId, 'node:kick', {
+      streamName: row.streamName,
+      reason: `strict limits violation: ${reasonText}`,
+    })
+  }
+}
+
 function handleViolation(payload: ViolationPayload): void {
   const row = PublishSessionsRepository.findById(payload.sessionId)
   if (!row) return
@@ -419,26 +501,7 @@ function handleViolation(payload: ViolationPayload): void {
   // ban: every reconnect is refused at the policy stage) and kill the
   // stream on its hosting node.
   const event = row.eventId ? EventsRepository.findById(row.eventId) : null
-  if (event?.strictLimits) {
-    const reasonText = payload.reasons.join('; ')
-    ban({
-      email: row.streamName,
-      eventId: event.id,
-      reason: `strict limits violation: ${reasonText}`,
-      bannedBy: 'system:strict-limits',
-    })
-    audit('warn', 'publish', `strict-limits ban: ${row.streamName} (${reasonText})`, {
-      streamName: row.streamName,
-      detail: { sessionId: payload.sessionId, eventId: event.id, reasons: payload.reasons },
-    })
-    const io = getSocketIO()
-    if (io && row.nodeId) {
-      emitToNode(io, row.nodeId, 'node:kick', {
-        streamName: row.streamName,
-        reason: `strict limits violation: ${reasonText}`,
-      })
-    }
-  }
+  if (event?.strictLimits) punishViolation(row, payload.reasons)
   audit('warn', 'publish', `media-node violation: ${row.streamName} (${payload.reasons.join('; ')})`, {
     streamName: row.streamName,
     detail: { reasons: payload.reasons, nodeId: 'remote' },

@@ -82,6 +82,13 @@ const dashboardSchema = z.object({
    * rendered by RichText (html:false, so no raw HTML).
    */
   notice: z.string().default(''),
+  /**
+   * NEW-USER announcement pool, newest-first (one single-line announcement
+   * per row). Every registration POPS the top row: it becomes that user's
+   * dashboard announcement and is removed from the pool. Empty pool = new
+   * users start without an announcement.
+   */
+  announcementPool: z.array(z.string()).default([]),
 })
 
 export const appConfigSchema = z.object({

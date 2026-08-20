@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Megaphone } from 'lucide-vue-next'
+import { Megaphone, Trash2 } from 'lucide-vue-next'
 import type { UserWithGroupsView, GroupView } from '#shared/groups'
 import type { DataTableColumn } from '~/components/DataTable.vue'
 
@@ -126,31 +126,30 @@ const columns: DataTableColumn[] = [
 // Admin-authored notice aimed at ONE user — shown on their dashboard home as
 // "Announcement for you". Edited in a per-row dialog; saved immediately via
 // PATCH /api/users/:id (independent of the row drafts / SaveBar below).
+const announceOpen = ref(false)
 const announceTarget = ref<UserWithGroupsView | null>(null)
 const announceDraft = ref('')
 const announceSaving = ref(false)
-// dialog "open" = a target is selected; closing clears it.
-const announceOpen = computed({
-  get: () => announceTarget.value != null,
-  set: (v: boolean) => {
-    if (!v) announceTarget.value = null
-  },
-})
 
 function openAnnouncement(u: UserWithGroupsView): void {
   announceTarget.value = u
   announceDraft.value = u.announcement ?? ''
+  announceOpen.value = true
 }
 
 async function saveAnnouncement(next: string | null): Promise<void> {
-  if (!announceTarget.value) return
+  // Capture the target FIRST — closing the dialog nulls announceTarget, and a
+  // Save that raced the close used to read null and silently save nothing.
+  const target = announceTarget.value
+  if (!target) return
   announceSaving.value = true
   try {
-    await $fetch(`/api/users/${announceTarget.value.id}`, {
+    await $fetch(`/api/users/${target.id}`, {
       method: 'PATCH',
       body: { announcement: next },
     })
     toast.success(next ? 'Announcement saved' : 'Announcement cleared')
+    announceOpen.value = false
     announceTarget.value = null
     await refresh()
   } catch (e: any) {
@@ -158,6 +157,20 @@ async function saveAnnouncement(next: string | null): Promise<void> {
   } finally {
     announceSaving.value = false
   }
+}
+
+/** Delete a user (server guards: not yourself, not the last admin). */
+function deleteUser(u: UserWithGroupsView): void {
+  confirm.ask(`Delete ${u.email}? Their group memberships and latency data go with the account; historical sessions and audit entries stay.`, async () => {
+    try {
+      await $fetch(`/api/users/${u.id}`, { method: 'DELETE' })
+      delete draft.value[u.id]
+      toast.info(`${u.email} deleted`)
+      await Promise.all([refresh(), refreshNodes()])
+    } catch (e: any) {
+      toast.error('Delete failed: ' + (e?.data?.statusMessage || e?.message || ''))
+    }
+  }, { actionLabel: 'Delete', destructive: true })
 }
 </script>
 
@@ -244,15 +257,26 @@ async function saveAnnouncement(next: string | null): Promise<void> {
             <span class="text-xs text-muted-foreground">{{ new Date(row.createdAt).toLocaleDateString('en-US') }}</span>
           </template>
           <template #cell-actions="{ row }">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              :aria-label="`Announcement for ${row.email}`"
-              :class="row.announcement ? 'text-primary' : 'text-muted-foreground'"
-              @click="openAnnouncement(row)"
-            >
-              <Megaphone :size="14" />
-            </Button>
+            <div class="flex justify-end gap-1">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                :aria-label="`Announcement for ${row.email}`"
+                :class="row.announcement ? 'text-primary' : 'text-muted-foreground'"
+                @click="openAnnouncement(row)"
+              >
+                <Megaphone :size="14" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                class="text-muted-foreground hover:text-destructive"
+                :aria-label="`Delete ${row.email}`"
+                @click="deleteUser(row)"
+              >
+                <Trash2 :size="14" />
+              </Button>
+            </div>
           </template>
         </DataTable>
       </CardContent>
@@ -299,9 +323,11 @@ async function saveAnnouncement(next: string | null): Promise<void> {
           >
             Clear
           </Button>
-          <AlertDialogAction @click.prevent="saveAnnouncement(announceDraft.trim() || null)">
+          <!-- Plain button on purpose: AlertDialogAction auto-closes the dialog
+               on click, which used to null the target before the save ran. -->
+          <Button :disabled="announceSaving" @click="saveAnnouncement(announceDraft.trim() || null)">
             {{ announceSaving ? 'Saving…' : 'Save' }}
-          </AlertDialogAction>
+          </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

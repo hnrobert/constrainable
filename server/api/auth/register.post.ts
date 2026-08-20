@@ -25,6 +25,9 @@ import {
   passesWhitelist,
 } from '../../utils/registration'
 import { consumeCode } from '../../utils/email-code'
+import { getConfig, invalidateConfig } from '../../utils/config-store'
+import { AppConfigRepository } from '../../repositories/app-config.repository'
+import { appConfigSchema } from '#shared/config'
 
 const MIN_PASSWORD = 6
 
@@ -80,6 +83,28 @@ export default defineEventHandler(async (event) => {
   // traveling. See server/utils/authmod.ts.
   const authmod = mintAuthmod(email, password)
   const user = UsersRepository.insert({ email, passwordHash, role, authmodSalt: authmod.salt, authmodVerifier: authmod.verifierCipher })
+
+  // Auto-assign a new-user announcement: POP the newest row of the config's
+  // announcement pool (dashboard.announcementPool, newest-first) and make it
+  // this user's announcement. No await inside the read-modify-write, so on
+  // the single-threaded loop concurrent registrations can't take the same
+  // row. Persisted via the same parse→upsert→invalidate path as updateConfig
+  // (not used directly to avoid its generic config-audit line per signup).
+  const pool = getConfig().dashboard.announcementPool
+  if (pool.length > 0) {
+    const [announcement, ...rest] = pool
+    UsersRepository.updateAnnouncement(user.id, announcement!)
+    const next = appConfigSchema.parse({
+      ...getConfig(),
+      dashboard: { ...getConfig().dashboard, announcementPool: rest },
+    })
+    AppConfigRepository.upsert(JSON.stringify(next))
+    invalidateConfig()
+    audit('info', 'auth', `announcement auto-assigned to ${email} from pool`, {
+      actor: email,
+      detail: { userId: user.id, remaining: rest.length },
+    })
+  }
 
   // Best-effort invite consumption: join the invite's group if the code is valid.
   // An invalid/expired invite must NOT block registration — just skip it.

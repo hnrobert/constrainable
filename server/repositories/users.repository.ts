@@ -33,6 +33,14 @@ export const UsersRepository = {
   insert(values: NewUser): User {
     return db.insert(users).values(values).returning().get()
   },
+  /** Hard-delete an account (node latencies + group memberships cascade). */
+  remove(id: number): void {
+    db.delete(users).where(eq(users.id, id)).run()
+  },
+  /** Count accounts by role (used by the last-admin delete guard). */
+  countByRole(role: User['role']): number {
+    return db.select({ n: count() }).from(users).where(eq(users.role, role)).get()?.n ?? 0
+  },
   /** Change a user's role (admin ⇄ user). */
   updateRole(id: number, role: User['role']): void {
     db.update(users).set({ role }).where(eq(users.id, id)).run()

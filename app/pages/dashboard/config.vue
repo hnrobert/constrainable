@@ -123,6 +123,18 @@ const disallowedText = computed<string>({
       .filter((p) => p.length > 0)
   },
 })
+// New-user announcement pool — one single-line announcement per row, NEWEST
+// FIRST (top row is popped for the next registration). See register.post.ts.
+const announcementPoolText = computed<string>({
+  get: () => form.value?.dashboard.announcementPool.join('\n') ?? '',
+  set: (v) => {
+    if (!form.value) return
+    form.value.dashboard.announcementPool = v
+      .split('\n')
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0)
+  },
+})
 
 const dirty = computed(
   () =>
@@ -227,6 +239,19 @@ function discardAndLeave(): void {
               Shown to every signed-in user on their dashboard home, alongside their own private
               note. Markdown supported (formulas, mermaid). Leave empty to hide the card.
               Hot-reloads on save.
+            </template>
+          </FieldRow>
+          <FieldRow label="New-user announcement pool (one per line, newest on top)">
+            <Textarea
+              v-model="announcementPoolText"
+              rows="4"
+              class="w-full"
+              placeholder="Room 3-201 — arrive 30 minutes early&#10;Room 4-105 — bring your own headset"
+            />
+            <template #hint>
+              Every NEW registration pops the TOP line: it becomes that user's dashboard
+              announcement and the line is consumed (removed here). Empty pool = new users start
+              without an announcement.
             </template>
           </FieldRow>
         </CardContent>
