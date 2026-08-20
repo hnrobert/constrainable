@@ -208,6 +208,17 @@ func HandleOBS(conn net.Conn, app AppClient) {
 					return
 				}
 			}
+			// Script data (type 18) carries onMetaData — OBS (librtmp) sends
+			// it as a DATA message, NOT a command, so the "@setDataFrame"
+			// command case below never fires for real OBS. Parse the declared
+			// spec here and surface it instantly.
+			if msg.Type == 18 && OnPublishSpec != nil && published != "" {
+				if vals := AmfDecodeAll(msg.Payload); len(vals) >= 3 {
+					if sp, ok := ParseMetadata(vals); ok {
+						OnPublishSpec(published, sp)
+					}
+				}
+			}
 
 		case 20, 17: // AMF0 / AMF3 command
 			vals := AmfDecodeAll(msg.Payload)
