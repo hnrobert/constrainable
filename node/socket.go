@@ -4,9 +4,11 @@
 package node
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/url"
 	"strconv"
 	"strings"
@@ -23,15 +25,24 @@ import (
 // as a protocol violation and force-closes the socket.
 const nsp = "/media-node"
 
+// Liveness: engine.io pings every 25s (pingInterval) — a link silent longer
+// than readDeadline is dead (half-open TCP/blackholed NAT: no FIN ever
+// arrives, so WITHOUT a deadline the client would wait forever and never
+// reconnect). Handshake reads get a much shorter budget.
+const (
+	connectAckTimeout = 10 * time.Second
+	readDeadline      = 90 * time.Second
+)
+
 // Client manages the persistent Socket.IO connection to the Node control plane.
 type Client struct {
 	apiOrigin string // e.g. http://constrainable-app:31954
-	token      string
-	register   RegisterPayload
+	token     string
+	register  RegisterPayload
 
-	mu       sync.Mutex
-	ws       *websocket.Conn
-	nodeID   string
+	mu        sync.Mutex
+	ws        *websocket.Conn
+	nodeID    string
 	connected bool
 
 	// pending acks: requestID → channel. IDs MUST be NUMERIC strings —
@@ -41,9 +52,9 @@ type Client struct {
 	nextID  atomic.Uint64
 
 	// event handlers (set by the owner before Connect)
-	OnKick     func(NodeKick)
-	OnDelete   func(RecordingDelete) error
-	OnConfig   func(ConfigLimits)
+	OnKick   func(NodeKick)
+	OnDelete func(RecordingDelete) error
+	OnConfig func(ConfigLimits)
 
 	reconnectCh chan struct{}
 	done        chan struct{}
@@ -53,7 +64,7 @@ type Client struct {
 // (apiOrigin = the constrainable-app URL, env API_ORIGIN).
 func NewClient(apiOrigin, token string, reg RegisterPayload) *Client {
 	return &Client{
-		apiOrigin:    strings.TrimRight(apiOrigin, "/"),
+		apiOrigin:   strings.TrimRight(apiOrigin, "/"),
 		token:       token,
 		register:    reg,
 		reconnectCh: make(chan struct{}, 1),
@@ -105,6 +116,17 @@ func (c *Client) Close() {
 	}
 }
 
+// markDead clears the connection bookkeeping when a socket dies, so Emit
+// fails fast with "not connected" instead of writing to a dead socket.
+func (c *Client) markDead(ws *websocket.Conn) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.connected = false
+	if c.ws == ws {
+		c.ws = nil
+	}
+}
+
 // connectOnce establishes a WebSocket, performs the engine.io + socket.io
 // handshake, registers, and reads events until the connection drops.
 func (c *Client) connectOnce() error {
@@ -115,7 +137,7 @@ func (c *Client) connectOnce() error {
 		return fmt.Errorf("build ws url: %w", err)
 	}
 
-	ws, err := websocket.Dial(wsURL, "", c.apiOrigin)
+	ws, err := c.wsDial(wsURL)
 	if err != nil {
 		return fmt.Errorf("ws dial: %w", err)
 	}
@@ -125,9 +147,12 @@ func (c *Client) connectOnce() error {
 	c.mu.Unlock()
 
 	// Send engine.io OPEN is implicit with websocket transport (server sends "0{sid}")
-	// Read the engine.io open packet
+	// Read the engine.io open packet (bounded: a server that accepts TCP but
+	// never speaks must not wedge the client)
 	var msg string
+	_ = ws.SetReadDeadline(time.Now().Add(connectAckTimeout))
 	if err := websocket.Message.Receive(ws, &msg); err != nil {
+		c.markDead(ws)
 		return fmt.Errorf("read engine.io open: %w", err)
 	}
 	if !strings.HasPrefix(msg, "0") {
@@ -142,8 +167,10 @@ func (c *Client) connectOnce() error {
 		return fmt.Errorf("send socket.io connect: %w", err)
 	}
 
-	// Read the socket.io CONNECT ack: 40/media-node,
+	// Read the socket.io CONNECT ack: 40/media-node, (same bound)
+	_ = ws.SetReadDeadline(time.Now().Add(connectAckTimeout))
 	if err := websocket.Message.Receive(ws, &msg); err != nil {
+		c.markDead(ws)
 		return fmt.Errorf("read socket.io connect ack: %w", err)
 	}
 	if !strings.HasPrefix(msg, "40/media-node") {
@@ -165,18 +192,21 @@ func (c *Client) connectOnce() error {
 	// Read events until disconnect
 	err = c.readLoop(ws)
 
-	c.mu.Lock()
-	c.connected = false
-	c.mu.Unlock()
+	c.markDead(ws)
 	log.Printf("[node] disconnected: %v", err)
 	return err
 }
 
-// readLoop processes incoming WebSocket messages (engine.io ping + socket.io events).
+// readLoop processes incoming WebSocket messages (engine.io ping + socket.io
+// events). Every read is deadline-bounded: a healthy link delivers a server
+// ping at least every 25s, so exceeding readDeadline means the link died
+// silently — bail so Run() reconnects instead of waiting on a dead socket.
 func (c *Client) readLoop(ws *websocket.Conn) error {
 	for {
+		_ = ws.SetReadDeadline(time.Now().Add(readDeadline))
 		var msg string
 		if err := websocket.Message.Receive(ws, &msg); err != nil {
+			c.markDead(ws)
 			return err
 		}
 		if len(msg) == 0 {
@@ -375,6 +405,51 @@ func (c *Client) EmitWithAck(event string, payload any, result any, timeout time
 	case <-time.After(timeout):
 		return fmt.Errorf("ack timeout after %v for %s", timeout, event)
 	}
+}
+
+// wsDial dials the WebSocket with the ENTIRE handshake under a deadline:
+// we own the TCP conn, bound it with SetDeadline (covers the HTTP 101
+// upgrade read too — websocket.Dial would block forever on a server that
+// accepts TCP but never speaks), then hand it to websocket.NewClient and
+// clear the deadline so readLoop can apply its own per-read bounds.
+func (c *Client) wsDial(wsURL string) (*websocket.Conn, error) {
+	u, err := url.Parse(wsURL)
+	if err != nil {
+		return nil, err
+	}
+	hostPort := u.Host
+	if u.Port() == "" {
+		defPort := "80"
+		if u.Scheme == "wss" {
+			defPort = "443"
+		}
+		hostPort = net.JoinHostPort(u.Hostname(), defPort)
+	}
+
+	dialer := &net.Dialer{Timeout: connectAckTimeout}
+	var conn net.Conn
+	if u.Scheme == "wss" {
+		conn, err = tls.DialWithDialer(dialer, "tcp", hostPort, &tls.Config{ServerName: u.Hostname()})
+	} else {
+		conn, err = dialer.Dial("tcp", hostPort)
+	}
+	if err != nil {
+		return nil, err
+	}
+	_ = conn.SetDeadline(time.Now().Add(connectAckTimeout))
+
+	cfg, err := websocket.NewConfig(wsURL, c.apiOrigin)
+	if err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+	ws, err := websocket.NewClient(cfg, conn)
+	if err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+	_ = conn.SetDeadline(time.Time{}) // per-read deadlines take over
+	return ws, nil
 }
 
 // wsURL converts the node origin to a WebSocket URL with the socket.io path.
