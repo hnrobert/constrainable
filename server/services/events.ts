@@ -26,6 +26,8 @@ export interface EventView {
   recordEnabled: boolean
   /** strict limits: violations stop the stream and ban the publisher from the event */
   strictLimits: boolean
+  /** also enforce limits on MEASURED data (5s deltas); default off */
+  enforceMeasuredLimits: boolean
   /**
    * When true, OBS publishers must authenticate with their website account via
    * the Go RTMP gateway (authmod challenge-response); SRS event auth unchanged.
@@ -54,6 +56,7 @@ export interface EventInput {
   limitsOverride?: LimitsOverride | null
   recordEnabled?: boolean
   strictLimits?: boolean
+  enforceMeasuredLimits?: boolean
   /** toggles OBS "Use authentication" enforcement (account auth via the gateway). */
   requireAccountAuth?: boolean
   visibility?: EventVisibility
@@ -76,6 +79,7 @@ function toView(e: Event): EventView {
     limitsOverride: e.limitsOverride ? (JSON.parse(e.limitsOverride) as LimitsOverride) : null,
     recordEnabled: e.recordEnabled,
     strictLimits: e.strictLimits,
+    enforceMeasuredLimits: e.enforceMeasuredLimits,
     requireAccountAuth: e.requireAccountAuth,
     visibility: e.visibility,
     groups: groupRows.map((g) => ({ id: g.id, name: g.name })),
@@ -151,6 +155,7 @@ export function createEvent(input: EventInput): EventView {
     limitsOverride,
     recordEnabled: input.recordEnabled ?? true,
     strictLimits: input.strictLimits ?? false,
+    enforceMeasuredLimits: input.enforceMeasuredLimits ?? false,
     // account auth is mandatory for every event (single-URL gateway design)
     requireAccountAuth: true,
     visibility: input.visibility ?? 'registered',

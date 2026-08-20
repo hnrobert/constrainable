@@ -62,6 +62,7 @@ const settingsDirty = computed(() => {
     s.status !== e.status ||
     s.recordEnabled !== e.recordEnabled ||
     s.strictLimits !== e.strictLimits ||
+    s.enforceMeasuredLimits !== e.enforceMeasuredLimits ||
     s.visibility !== e.visibility ||
     s.streamGuide !== e.streamGuide
   const lo = e.limitsOverride ?? {}
@@ -131,6 +132,7 @@ async function saveSettings(): Promise<boolean> {
         status: s.status,
         recordEnabled: s.recordEnabled,
         strictLimits: s.strictLimits,
+        enforceMeasuredLimits: s.enforceMeasuredLimits,
         visibility: s.visibility,
         streamGuide: s.streamGuide,
         limitsOverride: limitsPayload(),
@@ -292,8 +294,20 @@ const statusOptions: { value: EventStatus; label: string }[] = [
           <Label for="strict-limits" class="cursor-pointer">
             Strict limits
             <span class="block text-xs font-normal text-muted-foreground">
-              A stream violating the limits below is stopped immediately and the publisher is
-              banned from this event (same as a manual ban — every reconnect is refused).
+              A stream whose DECLARED settings (checked at connect) violate the limits below is
+              stopped immediately and the publisher is banned from this event (same as a manual
+              ban — every reconnect is refused).
+            </span>
+          </Label>
+        </div>
+        <div class="flex items-start gap-2">
+          <Checkbox v-model="settings.enforceMeasuredLimits" id="enforce-measured" class="mt-1" />
+          <Label for="enforce-measured" class="cursor-pointer">
+            Also enforce on measured data
+            <span class="block text-xs font-normal text-muted-foreground">
+              Keep checking the ACTUAL stream (5s averages) after connect — catches mid-stream
+              setting changes and forged declarations. Without this, only the encoder's declared
+              values are checked once at connect.
             </span>
           </Label>
         </div>

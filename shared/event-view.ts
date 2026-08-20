@@ -25,6 +25,8 @@ export interface EventView {
   recordEnabled: boolean
   /** strict limits: violations stop the stream and ban the publisher from the event */
   strictLimits: boolean
+  /** also enforce limits on MEASURED data (5s deltas); default off — declared onMetaData is the baseline gate */
+  enforceMeasuredLimits: boolean
   /**
    * When true, OBS publishers must authenticate with their website account
    * (email + login password) via OBS' "Use authentication" fields. The Go RTMP
@@ -54,6 +56,7 @@ export interface EventInput {
   limitsOverride?: Record<string, number | null> | null
   recordEnabled?: boolean
   strictLimits?: boolean
+  enforceMeasuredLimits?: boolean
   /** toggles OBS "Use authentication" enforcement (account auth via the gateway). */
   requireAccountAuth?: boolean
   visibility?: EventVisibility

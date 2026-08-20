@@ -27,6 +27,7 @@ export default defineEventHandler((): EventView[] => {
         limitsOverride: e.limitsOverride ? (JSON.parse(e.limitsOverride) as LimitsOverride) : null,
         recordEnabled: e.recordEnabled,
         strictLimits: e.strictLimits,
+        enforceMeasuredLimits: e.enforceMeasuredLimits,
         requireAccountAuth: e.requireAccountAuth,
         visibility: e.visibility,
         groups: groupRows,

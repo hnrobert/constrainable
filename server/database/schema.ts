@@ -111,6 +111,13 @@ export const events = sqliteTable(
      */
     strictLimits: integer('strict_limits', { mode: 'boolean' }).notNull().default(false),
     /**
+     * ALSO enforce limits on MEASURED stream data (5s counter deltas from the
+     * node monitor). Off by default — the DECLARED spec (onMetaData) is the
+     * baseline gate; measured enforcement catches mid-stream changes and
+     * forged declarations, per event.
+     */
+    enforceMeasuredLimits: integer('enforce_measured_limits', { mode: 'boolean' }).notNull().default(false),
+    /**
      * When true, OBS publishers must authenticate with their website account
      * (email + login password) via OBS' native "Use authentication" fields. The
      * Go RTMP gateway front-door performs the Adobe authmod challenge-response;

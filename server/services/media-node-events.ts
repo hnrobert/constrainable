@@ -335,12 +335,18 @@ async function handlePublishStart(
       allow: true,
       sessionId: row.id,
       eventId: auth.eventId ?? null,
-      limits: {
-        maxWidth: limits.maxWidth,
-        maxHeight: limits.maxHeight,
-        maxFps: limits.maxFps,
-        maxBitrateKbps: limits.maxBitrateKbps,
-      },
+      // Declared-spec enforcement happens HERE (publish:spec handler) and is
+      // unconditional. The MEASURED check runs on the node — hand it the
+      // limits only when this event opts in; otherwise the node collects
+      // metrics without ever reporting violations.
+      limits: event?.enforceMeasuredLimits
+        ? {
+            maxWidth: limits.maxWidth,
+            maxHeight: limits.maxHeight,
+            maxFps: limits.maxFps,
+            maxBitrateKbps: limits.maxBitrateKbps,
+          }
+        : undefined,
       record,
     }
   } catch (err) {
