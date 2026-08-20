@@ -65,6 +65,10 @@ interface PublishAuthorizedAck {
   eventId?: number | null
   limits?: { maxWidth: number; maxHeight: number; maxFps: number; maxBitrateKbps: number }
   record?: boolean
+  /** strict events: the node rejects declared-spec violations locally (OBS-terminal) */
+  strict?: boolean
+  /** measured enforcement (5s deltas on the node's monitor) */
+  measured?: boolean
 }
 
 interface MetricsPayload {
@@ -330,18 +334,18 @@ async function handlePublishStart(
       allow: true,
       sessionId: row.id,
       eventId: auth.eventId ?? null,
-      // Declared-spec enforcement happens HERE (publish:spec handler) and is
-      // unconditional. The MEASURED check runs on the node — hand it the
-      // limits only when this event opts in; otherwise the node collects
-      // metrics without ever reporting violations.
-      limits: event?.enforceMeasuredLimits
-        ? {
-            maxWidth: limits.maxWidth,
-            maxHeight: limits.maxHeight,
-            maxFps: limits.maxFps,
-            maxBitrateKbps: limits.maxBitrateKbps,
-          }
-        : undefined,
+      // Limits always travel with the grant: the node checks the DECLARED
+      // spec against them locally when strict (metadata-time, OBS-terminal),
+      // and runs the MEASURED 5s monitor against them when measured. The
+      // app-side publish:spec handler still records/bans either way.
+      limits: {
+        maxWidth: limits.maxWidth,
+        maxHeight: limits.maxHeight,
+        maxFps: limits.maxFps,
+        maxBitrateKbps: limits.maxBitrateKbps,
+      },
+      strict: event?.strictLimits ?? false,
+      measured: event?.enforceMeasuredLimits ?? false,
       record,
     }
   } catch (err) {
