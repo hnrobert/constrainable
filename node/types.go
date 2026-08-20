@@ -12,6 +12,7 @@ type RegisterPayload struct {
 	SRSFlvBase          string `json:"srsFlvBase"`          // how the control plane pulls FLV from this node's SRS
 	Hostname            string `json:"hostname"`            // human-readable name
 	Version             string `json:"version"`             // media-node binary version
+	ProbePort           int    `json:"probePort"`           // UDP port of the STUN probe responder (0 = none, old binary)
 }
 
 // RegisteredAck is Node's response to a successful registration.

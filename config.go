@@ -26,6 +26,7 @@ type Config struct {
 
 	// Listeners
 	RTMPPort   int // RTMP ingest (OBS pushes here)
+	ProbeUDPPort int // STUN responder for browser latency probes (UDP)
 	SRSUDPPort int // SRS rtc_server UDP listen — browsers' WebRTC media port
 	// (must equal the published host port: the SDP candidate carries it)
 	SRTPort int // SRT ingest (scaffold; not yet implemented)
@@ -61,6 +62,7 @@ func LoadConfig() (*Config, error) {
 		NodeIdentifier:      envOr("NODE_IDENTIFIER", "media-node"),
 		PublicRtmpAuthority: envOr("PUBLIC_RTMP_AUTHORITY", ""),
 		RTMPPort:            envOrInt("RTMP_PORT", 1935),
+		ProbeUDPPort:        envOrInt("PROBE_UDP_PORT", 38111), // browser ICE latency probe (STUN responder)
 		SRSUDPPort:          envOrInt("SRS_UDP_PORT", 38000),
 		SRSAddr:             envOr("SRS_ADDR", "srs:1935"),                   // docker sidecar service name
 		SRSApiBase:          envOr("SRS_API_BASE", "http://srs:1985/api/v1"), // docker sidecar service name

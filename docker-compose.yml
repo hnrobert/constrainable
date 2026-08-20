@@ -48,6 +48,10 @@ services:
       - /etc/timezone:/etc/timezone:ro   # host tz name (debian-style, optional)
     ports:
       - "1935:1935" # RTMP ingest (OBS pushes here)
+      # Browser ICE latency probe (STUN responder, node/probe.go). Host port
+      # must equal the container's PROBE_UDP_PORT — the SDP the app mints
+      # carries this number.
+      - "${PROBE_UDP_PORT:-38111}:${PROBE_UDP_PORT:-38111}/udp"
     networks:
       - constrainable-ingest
       # - ingest-shared   # external shared network (see header)

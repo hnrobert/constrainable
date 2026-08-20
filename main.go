@@ -145,6 +145,15 @@ func main() {
 	srsClient := media.NewSRSClient(cfg.SRSApiBase)
 
 	// Socket.IO client — ALL communication with the Node control plane
+	// Browser-side latency probe: STUN responder on its own UDP port (see
+	// node/probe.go). Failure is non-fatal — the rest of the node works; the
+	// control plane just reports the node as probe-less.
+	go func() {
+		if err := node.ServeProbe(fmt.Sprintf(":%d", cfg.ProbeUDPPort), cfg.AuthToken); err != nil {
+			log.Printf("[probe] STUN responder failed: %v", err)
+		}
+	}()
+
 	socketClient := node.NewClient(cfg.APIOrigin, cfg.AuthToken, node.RegisterPayload{
 		Identifier:          cfg.NodeIdentifier,
 		PublicRtmpAuthority: cfg.PublicRtmpAuthority,
@@ -153,6 +162,7 @@ func main() {
 		SRSFlvBase:          cfg.SRSFlvBase,
 		Hostname:            cfg.Hostname,
 		Version:             version,
+		ProbePort:           cfg.ProbeUDPPort,
 	})
 
 	// Session manager
