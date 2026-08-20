@@ -4,15 +4,6 @@ import type { EventView, EventStatus, EventVisibility } from '#shared/event-view
 import type { GroupView } from '#shared/groups'
 import type { DataTableColumn } from '~/components/DataTable.vue'
 
-interface RosterEntry {
-  enrollmentId: number
-  studentNumber: string
-  name: string
-  email: string | null
-  seatLabel: string | null
-  hasKey: boolean
-}
-
 const route = useRoute()
 const id = Number(route.params.id)
 const toast = useToast()
@@ -23,11 +14,10 @@ const isAdmin = computed(() => user.value?.role === 'admin')
 // Sync fetch (NO top-level await) so this page doesn't drag the dashboard
 // layout into an async Suspense boundary (client hydration mismatch). Nuxt
 // still awaits the registered useFetch promises during SSR and serializes the
-// results; the template reads event/roster directly (populated on SSR for
-// direct reads), and the watchEffect below (flush:'sync') populates the editable
+// results; the template reads event directly (populated on SSR for direct
+// reads), and the watchEffect below (flush:'sync') populates the editable
 // `settings` copy at the instant `event` is assigned, before the render pass.
 const { data: event, refresh: refreshEvent } = useFetch<EventView>(`/api/events/${id}`)
-const { data: roster, refresh: refreshRoster } = useFetch<RosterEntry[]>(`/api/events/${id}/roster`)
 
 // ---- settings (admin-only) ----
 const settings = ref<EventView | null>(null)
@@ -71,6 +61,7 @@ const settingsDirty = computed(() => {
     s.description !== e.description ||
     s.status !== e.status ||
     s.recordEnabled !== e.recordEnabled ||
+    s.strictLimits !== e.strictLimits ||
     s.visibility !== e.visibility ||
     s.streamGuide !== e.streamGuide
   const lo = e.limitsOverride ?? {}
@@ -139,6 +130,7 @@ async function saveSettings(): Promise<boolean> {
         description: s.description,
         status: s.status,
         recordEnabled: s.recordEnabled,
+        strictLimits: s.strictLimits,
         visibility: s.visibility,
         streamGuide: s.streamGuide,
         limitsOverride: limitsPayload(),
@@ -183,54 +175,6 @@ function discardAndLeave(): void {
   proceed()
 }
 
-// ---- roster CSV import (admin) ----
-const csvText = ref('')
-const importing = ref(false)
-function parseCsv(text: string): { studentNumber: string; name: string; email?: string; seatLabel?: string }[] {
-  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
-  let rows = lines.map((l) => l.split(/[,\t;]/).map((c) => c.trim()))
-  if (rows.length && /name|student/i.test(rows[0]?.join(' ') ?? '')) rows = rows.slice(1)
-  return rows
-    .map((r) => ({
-      studentNumber: r[0] ?? '',
-      name: r[1] ?? '',
-      email: r[2] || undefined,
-      seatLabel: r[3] || undefined,
-    }))
-    .filter((r) => r.studentNumber && r.name)
-}
-async function importRoster(): Promise<void> {
-  const students = parseCsv(csvText.value)
-  if (students.length === 0) {
-    toast.error('No valid rows parsed (user ID, name)')
-    return
-  }
-  importing.value = true
-  try {
-    const r = await $fetch<{ created: number; updated: number }>(`/api/events/${id}/roster/bulk`, {
-      method: 'POST',
-      body: { students },
-    })
-    toast.success(`Import complete: ${r.created} new, ${r.updated} updated`)
-    csvText.value = ''
-    await refreshRoster()
-  } catch (e: any) {
-    toast.error('Import failed: ' + (e?.data?.statusMessage || e?.message || ''))
-  } finally {
-    importing.value = false
-  }
-}
-function removeEntry(enrollmentId: number): void {
-  confirm.ask('Remove this user from the roster?', async () => {
-    try {
-      await $fetch(`/api/events/${id}/roster/${enrollmentId}`, { method: 'DELETE' })
-      await refreshRoster()
-      toast.info('Removed')
-    } catch (e: any) {
-      toast.error('Remove failed: ' + (e?.data?.statusMessage || e?.message || ''))
-    }
-  }, { actionLabel: 'Remove' })
-}
 
 
 async function copy(text: string, label = 'Copied'): Promise<void> {
@@ -248,13 +192,6 @@ const statusOptions: { value: EventStatus; label: string }[] = [
   { value: 'live', label: 'Live' },
   { value: 'ended', label: 'Ended' },
   { value: 'archived', label: 'Archived' },
-]
-
-const rosterColumns: DataTableColumn[] = [
-  { key: 'studentNumber', header: 'User ID' },
-  { key: 'name', header: 'Name' },
-  { key: 'seatLabel', header: 'Seat', class: 'text-muted-foreground' },
-  { key: 'actions', header: '', headClass: 'w-0' },
 ]
 
 </script>
@@ -350,6 +287,16 @@ const rosterColumns: DataTableColumn[] = [
           Compliant publishes are archived in real time as MKV — no processing happens when a stream stops.
           A user's re-publishes append to the same recording.
         </p>
+        <div class="flex items-start gap-2">
+          <Checkbox v-model="settings.strictLimits" id="strict-limits" class="mt-1" />
+          <Label for="strict-limits" class="cursor-pointer">
+            Strict limits
+            <span class="block text-xs font-normal text-muted-foreground">
+              A stream violating the limits below is stopped immediately and the publisher is
+              banned from this event (same as a manual ban — every reconnect is refused).
+            </span>
+          </Label>
+        </div>
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div class="space-y-1.5">
             <Label>Max width (px)</Label>
@@ -373,29 +320,6 @@ const rosterColumns: DataTableColumn[] = [
         </div>
       </CardContent>
     </Card>
-
-    <Card v-if="isAdmin">
-      <CardHeader><CardTitle>Roster ({{ roster?.length ?? 0 }})</CardTitle></CardHeader>
-      <CardContent class="space-y-4">
-        <p class="text-xs text-muted-foreground">Paste CSV: one row per line as <code>user_id,name[,email][,seat]</code>. A header row is skipped automatically.</p>
-        <Textarea v-model="csvText" rows="4" placeholder="2024001,Alice,alice@x.edu,A1&#10;2024002,Bob,,B2" />
-        <div class="flex items-center justify-end gap-3">
-          <Button variant="outline" :disabled="importing" @click="importRoster">{{ importing ? 'Importing…' : 'Import' }}</Button>
-        </div>
-        <DataTable
-          :columns="rosterColumns"
-          :rows="roster ?? []"
-          :row-key="(r: RosterEntry) => r.enrollmentId"
-          empty="No roster yet."
-        >
-          <template #cell-seatLabel="{ row }">{{ row.seatLabel ?? '—' }}</template>
-          <template #cell-actions="{ row }">
-            <Button size="sm" variant="destructive" @click="removeEntry(row.enrollmentId)">Remove</Button>
-          </template>
-        </DataTable>
-      </CardContent>
-    </Card>
-
 
     <SaveBar :dirty="settingsDirty" :saving="saving" :saved="saved" @save="saveSettings" @discard="resetSettings" />
     <UnsavedLeaveDialog

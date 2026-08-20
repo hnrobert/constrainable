@@ -45,6 +45,10 @@ export const UsersRepository = {
   updateDashboardNotice(id: number, notice: string | null): void {
     db.update(users).set({ dashboardNotice: notice }).where(eq(users.id, id)).run()
   },
+  /** Replace the admin-authored announcement for this user (null clears it). */
+  updateAnnouncement(id: number, announcement: string | null): void {
+    db.update(users).set({ announcement }).where(eq(users.id, id)).run()
+  },
   /** Replace the password hash (used by legacy re-hash on login + future resets). */
   updatePassword(id: number, passwordHash: string): void {
     db.update(users).set({ passwordHash }).where(eq(users.id, id)).run()

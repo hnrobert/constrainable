@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Megaphone } from 'lucide-vue-next'
 import type { UserWithGroupsView, GroupView } from '#shared/groups'
 import type { DataTableColumn } from '~/components/DataTable.vue'
 
@@ -118,7 +119,46 @@ const columns: DataTableColumn[] = [
   { key: 'groups', header: 'Groups' },
   { key: 'node', header: 'Node' },
   { key: 'createdAt', header: 'Created' },
+  { key: 'actions', header: '', headClass: 'w-0' },
 ]
+
+/* --------------------- per-user dashboard announcement ------------------- */
+// Admin-authored notice aimed at ONE user — shown on their dashboard home as
+// "Announcement for you". Edited in a per-row dialog; saved immediately via
+// PATCH /api/users/:id (independent of the row drafts / SaveBar below).
+const announceTarget = ref<UserWithGroupsView | null>(null)
+const announceDraft = ref('')
+const announceSaving = ref(false)
+// dialog "open" = a target is selected; closing clears it.
+const announceOpen = computed({
+  get: () => announceTarget.value != null,
+  set: (v: boolean) => {
+    if (!v) announceTarget.value = null
+  },
+})
+
+function openAnnouncement(u: UserWithGroupsView): void {
+  announceTarget.value = u
+  announceDraft.value = u.announcement ?? ''
+}
+
+async function saveAnnouncement(next: string | null): Promise<void> {
+  if (!announceTarget.value) return
+  announceSaving.value = true
+  try {
+    await $fetch(`/api/users/${announceTarget.value.id}`, {
+      method: 'PATCH',
+      body: { announcement: next },
+    })
+    toast.success(next ? 'Announcement saved' : 'Announcement cleared')
+    announceTarget.value = null
+    await refresh()
+  } catch (e: any) {
+    toast.error('Save failed: ' + (e?.data?.statusMessage || e?.message || ''))
+  } finally {
+    announceSaving.value = false
+  }
+}
 </script>
 
 <template>
@@ -203,6 +243,17 @@ const columns: DataTableColumn[] = [
           <template #cell-createdAt="{ row }">
             <span class="text-xs text-muted-foreground">{{ new Date(row.createdAt).toLocaleDateString('en-US') }}</span>
           </template>
+          <template #cell-actions="{ row }">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              :aria-label="`Announcement for ${row.email}`"
+              :class="row.announcement ? 'text-primary' : 'text-muted-foreground'"
+              @click="openAnnouncement(row)"
+            >
+              <Megaphone :size="14" />
+            </Button>
+          </template>
         </DataTable>
       </CardContent>
     </Card>
@@ -223,5 +274,36 @@ const columns: DataTableColumn[] = [
       :destructive="confirm.state.destructive"
       @accept="confirm.accept"
     />
+
+    <!-- per-user dashboard announcement editor -->
+    <AlertDialog v-model:open="announceOpen">
+      <AlertDialogContent class="max-w-lg">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Announcement for {{ announceTarget?.email }}</AlertDialogTitle>
+          <AlertDialogDescription>
+            Shown on this user's dashboard home as "Announcement for you". Markdown supported.
+            Leave empty / clear to remove.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <Textarea
+          v-model="announceDraft"
+          rows="5"
+          placeholder="e.g. Your streams will be reviewed before the final — please keep the canvas visible."
+        />
+        <AlertDialogFooter>
+          <AlertDialogCancel :disabled="announceSaving">Cancel</AlertDialogCancel>
+          <Button
+            variant="outline"
+            :disabled="announceSaving || !announceDraft.trim()"
+            @click="saveAnnouncement(null)"
+          >
+            Clear
+          </Button>
+          <AlertDialogAction @click.prevent="saveAnnouncement(announceDraft.trim() || null)">
+            {{ announceSaving ? 'Saving…' : 'Save' }}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   </div>
 </template>

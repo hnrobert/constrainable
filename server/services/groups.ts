@@ -88,6 +88,7 @@ export function listUsersWithGroups(): UserWithGroupsView[] {
     groups: GroupsRepository.findGroupsForUser(u.id).map((g) => ({ id: g.id, name: g.name })),
     nodeId: u.nodeId ?? null,
     latencies: Object.fromEntries(latencies.get(u.id) ?? []),
+    announcement: u.announcement ?? null,
     createdAt: u.createdAt.getTime(),
   }))
 }

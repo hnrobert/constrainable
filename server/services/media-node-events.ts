@@ -7,14 +7,14 @@
  */
 import type { Server as SocketIOServer, Socket } from 'socket.io'
 import { env } from '../utils/env'
-import { register, disconnect, adjustStreamCount, getNode } from './media-node-registry'
+import { register, disconnect, adjustStreamCount, getNode, emitToNode } from './media-node-registry'
 import { authorizePublish } from './access-control'
 import { PublishSessionsRepository } from '../repositories/publish-sessions.repository'
 import { RecordingsRepository } from '../repositories/recordings.repository'
 import { getConfig, getLimitsFor } from '../utils/config-store'
 import { EventsRepository } from '../repositories/events.repository'
 import { UsersRepository } from '../repositories/users.repository'
-import { isSiteWideBanned, isBlocked } from './stream-bans'
+import { isSiteWideBanned, isBlocked, ban } from './stream-bans'
 import { verifierFromCipher, verifyResponse } from '../utils/authmod'
 import { obsServerUrl } from '#shared/rtmp'
 import { verifyMediaSignature } from '../utils/signed-url'
@@ -413,6 +413,32 @@ function handleViolation(payload: ViolationPayload): void {
   const row = PublishSessionsRepository.findById(payload.sessionId)
   if (!row) return
   PublishSessionsRepository.updateStatus(payload.sessionId, 'violating')
+
+  // STRICT limits: the event is configured to treat violations like a ban —
+  // ban the publisher from THIS event (identical enforcement to a manual
+  // ban: every reconnect is refused at the policy stage) and kill the
+  // stream on its hosting node.
+  const event = row.eventId ? EventsRepository.findById(row.eventId) : null
+  if (event?.strictLimits) {
+    const reasonText = payload.reasons.join('; ')
+    ban({
+      email: row.streamName,
+      eventId: event.id,
+      reason: `strict limits violation: ${reasonText}`,
+      bannedBy: 'system:strict-limits',
+    })
+    audit('warn', 'publish', `strict-limits ban: ${row.streamName} (${reasonText})`, {
+      streamName: row.streamName,
+      detail: { sessionId: payload.sessionId, eventId: event.id, reasons: payload.reasons },
+    })
+    const io = getSocketIO()
+    if (io && row.nodeId) {
+      emitToNode(io, row.nodeId, 'node:kick', {
+        streamName: row.streamName,
+        reason: `strict limits violation: ${reasonText}`,
+      })
+    }
+  }
   audit('warn', 'publish', `media-node violation: ${row.streamName} (${payload.reasons.join('; ')})`, {
     streamName: row.streamName,
     detail: { reasons: payload.reasons, nodeId: 'remote' },

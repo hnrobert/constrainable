@@ -22,6 +22,23 @@ export default defineEventHandler(async (event) => {
   }
   const body = await readBody(event)
 
+  // Admin-authored announcement aimed at this user (shown on their dashboard
+  // home as "Announcement for you"). string sets, null clears; 4000-char cap.
+  if ('announcement' in (body ?? {})) {
+    const raw = body.announcement
+    if (typeof raw !== 'string' && raw !== null) {
+      throw createError({ statusCode: 400, statusMessage: 'announcement must be a string or null' })
+    }
+    const target = UsersRepository.findById(id)
+    if (!target) throw createError({ statusCode: 404, statusMessage: 'user not found' })
+    const announcement = raw === null ? null : raw.slice(0, 4000)
+    UsersRepository.updateAnnouncement(id, announcement)
+    audit('info', 'admin', `announcement ${announcement ? 'set for' : 'cleared for'} ${target.email}`, {
+      actor: event.context.auth ? UsersRepository.findById(event.context.auth.userId)?.email ?? null : null,
+      detail: { userId: id },
+    })
+  }
+
   if (body?.role != null) {
     const role = String(body.role)
     if (role !== 'admin' && role !== 'user') {

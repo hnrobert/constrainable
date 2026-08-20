@@ -23,6 +23,8 @@ export interface EventView {
   status: EventStatus
   limitsOverride: Record<string, number | null> | null
   recordEnabled: boolean
+  /** strict limits: violations stop the stream and ban the publisher from the event */
+  strictLimits: boolean
   /**
    * When true, OBS publishers must authenticate with their website account
    * (email + login password) via OBS' "Use authentication" fields. The Go RTMP
@@ -51,6 +53,7 @@ export interface EventInput {
   status?: EventStatus
   limitsOverride?: Record<string, number | null> | null
   recordEnabled?: boolean
+  strictLimits?: boolean
   /** toggles OBS "Use authentication" enforcement (account auth via the gateway). */
   requireAccountAuth?: boolean
   visibility?: EventVisibility

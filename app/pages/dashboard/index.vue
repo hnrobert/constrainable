@@ -14,15 +14,18 @@ const toast = useToast()
 const { data: events } = useFetch<EventView[]>('/api/events')
 
 /* ------------------------------- notices -------------------------------- */
-// Two dashboard-home notices: the admin-configured site notice (config
-// dashboard.notice, identical for everyone) and the user's own private note
-// (users.dashboard_notice — only the user sees and edits it).
+// Three dashboard-home notices, newest scope first: the admin-configured site
+// notice (config dashboard.notice, identical for everyone), the admin-authored
+// announcement aimed at THIS user (users.announcement, set from the Users
+// page), and the user's own private note (users.dashboard_notice).
 interface MeState {
   dashboardNotice: string | null
+  announcement: string | null
   siteNotice: string
 }
 const { data: me } = useFetch<MeState>('/api/me')
 const siteNotice = computed(() => me.value?.siteNotice ?? '')
+const myAnnouncement = computed(() => me.value?.announcement ?? '')
 
 // personal note: view state + inline edit state (declared before the watch
 // that reads `editing` in its immediate callback)
@@ -113,6 +116,17 @@ const columns: DataTableColumn[] = [
       </CardHeader>
       <CardContent>
         <RichText :source="siteNotice" />
+      </CardContent>
+    </Card>
+
+    <!-- admin-authored announcement aimed at THIS user (Users page → 📢) -->
+    <Card v-if="myAnnouncement" class="border-primary/40">
+      <CardHeader>
+        <CardTitle class="flex items-center gap-2"><Megaphone :size="16" /> Announcement for you</CardTitle>
+        <CardDescription>From the administrators, for your attention</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <RichText :source="myAnnouncement" />
       </CardContent>
     </Card>
 

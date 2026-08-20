@@ -70,7 +70,7 @@ async function create(): Promise<void> {
     <div class="flex items-center justify-between">
       <div class="space-y-1">
         <h1 class="text-2xl font-semibold">Events</h1>
-        <p class="text-muted-foreground">Each event has its own roster, stream keys, and config overrides.</p>
+        <p class="text-muted-foreground">Each event has its own stream keys and config overrides.</p>
       </div>
       <Button v-if="isAdmin" @click="creating = !creating">
         {{ creating ? 'Cancel' : '+ New event' }}

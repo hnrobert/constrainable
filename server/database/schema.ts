@@ -37,6 +37,13 @@ export const users = sqliteTable('users', {
    * the user management UI. null/'' = no note card.
    */
   dashboardNotice: text('dashboard_notice'),
+  /**
+   * Admin-authored announcement aimed at THIS user — shown on their dashboard
+   * home as "Announcement for you" (set from the Users page). Distinct from
+   * the global site notice (config dashboard.notice) and from the user's own
+   * note above. null/'' = card hidden.
+   */
+  announcement: text('announcement'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(now),
 })
 
@@ -97,6 +104,12 @@ export const events = sqliteTable(
     /** JSON: per-event limits override (null fields = inherit global) */
     limitsOverride: text('limits_override'),
     recordEnabled: integer('record_enabled', { mode: 'boolean' }).notNull().default(true),
+    /**
+     * Strict limits: when ON, a stream that violates the event's limits is
+     * stopped immediately AND the publisher is banned from this event (same
+     * enforcement as a manual ban — every reconnect is refused at policy).
+     */
+    strictLimits: integer('strict_limits', { mode: 'boolean' }).notNull().default(false),
     /**
      * When true, OBS publishers must authenticate with their website account
      * (email + login password) via OBS' native "Use authentication" fields. The

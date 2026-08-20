@@ -23,6 +23,8 @@ export interface UserWithGroupsView {
   nodeId: string | null
   /** last-visit latency snapshot: nodeId → ms (drives the admin matrix) */
   latencies: Record<string, number>
+  /** admin-authored announcement aimed at this user (null = none) */
+  announcement: string | null
   createdAt: number
 }
 
