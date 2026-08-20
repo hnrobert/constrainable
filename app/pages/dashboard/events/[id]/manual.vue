@@ -567,6 +567,11 @@ sudo apt install obs-studio</pre>
               includes H.264 in its name is suitable.
             </li>
             <li>
+              Tick <strong>Rescale Output</strong> and set the rescale resolution — at most
+              <code>{{ limits.maxWidth }}×{{ limits.maxHeight }}</code> for this event — keeping
+              the <strong>Downscale Filter</strong> on <strong>Bicubic</strong>.
+            </li>
+            <li>
               Set the <strong>Bitrate</strong> — up to
               <code>{{ limits.maxBitrateKbps }} kbps</code> for this event.
             </li>
@@ -574,7 +579,7 @@ sudo apt install obs-studio</pre>
           <figure class="space-y-1.5">
             <img
               src="/manual/output_settings.png"
-              alt="OBS output settings in Advanced mode with the x264 encoder and bitrate field"
+              alt="OBS output settings in Advanced mode: x264 encoder, Rescale Output with Bicubic filter, bitrate field"
               class="w-full rounded-lg border"
               loading="lazy"
             />
@@ -605,14 +610,15 @@ sudo apt install obs-studio</pre>
               <code>{{ limits.maxWidth }}×{{ limits.maxHeight }}</code> for this event.
             </li>
             <li>
-              Set both <strong>Base (Canvas)</strong> and <strong>Output (Scaled)</strong> FPS —
+              Set both <strong>Base (Canvas)</strong> and <strong>Output (Scaled)</strong> FPS:
+              pick <strong>Integer FPS Value</strong> (not a fractional Common value) and stay
               at most <code>{{ limits.maxFps }} fps</code>, and at least 2 (30 recommended).
             </li>
           </ol>
           <figure class="space-y-1.5">
             <img
               src="/manual/video_settings.png"
-              alt="OBS video settings with base and output resolution and FPS fields"
+              alt="OBS video settings: base/output resolution, Bicubic downscale filter and Integer FPS Value"
               class="w-full rounded-lg border"
               loading="lazy"
             />

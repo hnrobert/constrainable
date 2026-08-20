@@ -134,7 +134,12 @@ export function wireMediaNodeNamespace(io: SocketIOServer): void {
         // (mixed-version fleets during rollout). Hostname as last resort.
         identifier: payload.identifier || payload.origin || payload.hostname,
         srsFlvBase: payload.srsFlvBase,
+        publicOrigin: payload.publicOrigin ?? '',
+        publicRtmpPort: payload.publicRtmpPort ?? 1935,
+        publicProbeUdpPort: payload.publicProbeUdpPort ?? 0,
+        publicSrsUdpPort: payload.publicSrsUdpPort ?? 0,
         // legacy PUBLIC_RTMP_AUTHORITY (host[:port]) splits into origin+port
+        // (only fills gaps — explicit new fields win)
         ...splitLegacyAuthority(payload),
         hostname: payload.hostname,
         version: payload.version,

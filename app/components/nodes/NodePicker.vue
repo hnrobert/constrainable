@@ -38,8 +38,11 @@ async function browserProbe(nodeId: string): Promise<number | null> {
     pc.createDataChannel('probe')
     const offer = await pc.createOffer()
     await pc.setLocalDescription(offer)
+    // responseType:'text' — ofetch hands non-JSON content-types back as a
+    // BLOB, and setRemoteDescription(Blob) throws (silently caught → n/a).
     const answer = await $fetch<string>(`/api/nodes/probe-ice/${encodeURIComponent(nodeId)}`, {
       method: 'POST',
+      responseType: 'text',
       headers: { 'content-type': 'application/sdp' },
       body: offer.sdp ?? '',
     })

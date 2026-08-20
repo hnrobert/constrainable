@@ -172,13 +172,14 @@ function fmt(ts: number | null): string {
           <CardHeader><CardTitle>Recommended output settings</CardTitle></CardHeader>
           <CardContent>
             <ul class="space-y-1.5 text-sm text-muted-foreground">
-              <li>Resolution: up to <code>{{ guide.limits.maxWidth }}×{{ guide.limits.maxHeight }}</code></li>
-              <li>Frame rate: up to <code>{{ guide.limits.maxFps }} fps</code></li>
+              <li>Resolution: up to <code>{{ guide.limits.maxWidth }}×{{ guide.limits.maxHeight }}</code> (Rescale Output, Bicubic)</li>
+              <li>Frame rate: up to <code>{{ guide.limits.maxFps }} fps</code> (an <strong>Integer FPS Value</strong>)</li>
               <li>Video bitrate: up to <code>{{ guide.limits.maxBitrateKbps }} kbps</code></li>
+              <li>Encoder: <strong>H.264</strong> — any variant in its name works</li>
             </ul>
             <p class="mt-3 text-xs text-muted-foreground">
-              Streams that exceed these limits are flagged and may be disconnected. Set your canvas FPS to
-              at least 2 (30 recommended) — a 1 FPS canvas fails to connect.
+              Streams that exceed these limits are flagged and may be disconnected. Pick an Integer FPS
+              Value of at least 2 (30 recommended) — a 1 FPS canvas fails to connect.
             </p>
           </CardContent>
         </Card>

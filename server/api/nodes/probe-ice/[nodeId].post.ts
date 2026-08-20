@@ -51,8 +51,11 @@ export default defineEventHandler(async (event) => {
     'a=setup:active',
     'a=sctp-port:5000',
     `a=candidate:1 1 udp 2130706431 ${host} ${node.publicProbeUdpPort} typ host generation 0`,
-    'a=end-of-candidates',
-  ].join('\r\n')
+    // NOTE: no `a=end-of-candidates` here — Chrome's SDP parser REJECTS it as
+    // a standalone attribute line in a remote description ("Invalid SDP
+    // line"), which used to kill the probe silently. The inline candidate is
+    // complete signaling; nothing trickles.
+  ].join('\r\n') + '\r\n' // trailing CRLF: RFC 4566 — Chrome rejects an unterminated last line
 
   setHeader(event, 'content-type', 'application/sdp')
   setHeader(event, 'cache-control', 'no-store')
