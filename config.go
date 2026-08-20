@@ -62,7 +62,6 @@ func LoadConfig() (*Config, error) {
 		PublicRtmpAuthority: envOr("PUBLIC_RTMP_AUTHORITY", ""),
 		RTMPPort:            envOrInt("RTMP_PORT", 1935),
 		SRSUDPPort:          envOrInt("SRS_UDP_PORT", 38000),
-		SRTPort:             envOrInt("SRT_PORT", 9000),
 		SRSAddr:             envOr("SRS_ADDR", "srs:1935"),                   // docker sidecar service name
 		SRSApiBase:          envOr("SRS_API_BASE", "http://srs:1985/api/v1"), // docker sidecar service name
 		SRSHTTPPort:         envOrInt("SRS_HTTP_PORT", 38081),                // internal-only (never published); 38080 is the node's own play port

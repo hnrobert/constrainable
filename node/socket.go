@@ -267,8 +267,18 @@ func (c *Client) handleSocketIO(payload string) error {
 		return nil
 	case '1': // disconnect packet
 		return fmt.Errorf("socket.io disconnect from server")
-	case '2': // event: ["eventname",args]
-		return c.handleEvent(rest)
+	case '2': // event: [<id>]["eventname",args] — the id is present when the
+		// sender expects an ack back; keep it so the handler can reply.
+		reqID := ""
+		if len(rest) > 0 && rest[0] >= '0' && rest[0] <= '9' {
+			i := 0
+			for i < len(rest) && rest[i] >= '0' && rest[i] <= '9' {
+				i++
+			}
+			reqID = rest[:i]
+			rest = rest[i:]
+		}
+		return c.handleEvent(rest, reqID)
 	case '3': // ack: <id>[args]
 		return c.handleAck(rest)
 	case '4': // error packets (44 connect_error is handled at connect time)
@@ -278,8 +288,9 @@ func (c *Client) handleSocketIO(payload string) error {
 	return nil
 }
 
-// handleEvent dispatches a socket.io event by name.
-func (c *Client) handleEvent(raw string) error {
+// handleEvent dispatches a socket.io event by name. reqID is the socket.io
+// packet id when the server expects an ack ("" for fire-and-forget events).
+func (c *Client) handleEvent(raw, reqID string) error {
 	// Parse ["eventname",{...}]
 	var parts []json.RawMessage
 	if err := json.Unmarshal([]byte(raw), &parts); err != nil {
@@ -291,6 +302,21 @@ func (c *Client) handleEvent(raw string) error {
 	var event string
 	if err := json.Unmarshal(parts[0], &event); err != nil {
 		return err
+	}
+
+	// Latency probe from the control plane: echo the payload back as a
+	// socket.io CLIENT-ACK frame (45<nsp>,<id>[args]) so the app can measure
+	// the round trip. Firmware without this handler simply never acks — the
+	// app shows "n/a" for those nodes until they update.
+	if event == "node:ping" && reqID != "" {
+		c.mu.Lock()
+		ws := c.ws
+		c.mu.Unlock()
+		if ws == nil {
+			return nil
+		}
+		reply := fmt.Sprintf("45%s,%s[%s]", nsp, reqID, string(parts[1]))
+		return websocket.Message.Send(ws, reply)
 	}
 
 	switch event {
