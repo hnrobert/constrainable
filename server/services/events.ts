@@ -199,6 +199,8 @@ export function updateEvent(id: number, patch: EventInput): EventView {
   if (patch.endsAt !== undefined) set.endsAt = toTs(patch.endsAt)
   if (patch.status != null) set.status = patch.status
   if (patch.recordEnabled != null) set.recordEnabled = patch.recordEnabled
+  if (patch.strictLimits != null) set.strictLimits = patch.strictLimits
+  if (patch.enforceMeasuredLimits != null) set.enforceMeasuredLimits = patch.enforceMeasuredLimits
   if (patch.visibility != null) set.visibility = patch.visibility
   if (patch.limitsOverride !== undefined) {
     set.limitsOverride =
