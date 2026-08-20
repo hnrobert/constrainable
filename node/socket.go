@@ -320,7 +320,8 @@ func (c *Client) handleEvent(raw, reqID string) error {
 		if ws == nil {
 			return nil
 		}
-		reply := fmt.Sprintf("45%s,%s[%s]", nsp, reqID, string(parts[1]))
+		// socket.io v5 ACK wire form: engine '4' + packet '3' → 43<nsp>,<id>[args]
+		reply := fmt.Sprintf("43%s,%s[%s]", nsp, reqID, string(parts[1]))
 		return websocket.Message.Send(ws, reply)
 	}
 
@@ -346,7 +347,7 @@ func (c *Client) handleEvent(raw, reqID string) error {
 			if ws == nil {
 				return
 			}
-			reply := fmt.Sprintf("45%s,%s[%s]", nsp, reqID, data)
+			reply := fmt.Sprintf("43%s,%s[%s]", nsp, reqID, data)
 			_ = websocket.Message.Send(ws, reply)
 		}()
 		return nil
