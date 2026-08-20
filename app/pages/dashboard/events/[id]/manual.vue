@@ -723,6 +723,7 @@ sudo apt install obs-studio</pre>
             <li>Open OBS.</li>
             <li>Click the <strong>Start Streaming</strong> button in the bottom-right corner.</li>
             <li>Make sure the status shows <strong>LIVE</strong> — your stream is being received.</li>
+            <li>See if the event requires you to record locally as a backup, if so, you can click the <strong>Start Recording</strong> button to record everything locally simultaneously.</li>
           </ol>
           <figure class="space-y-1.5">
             <img

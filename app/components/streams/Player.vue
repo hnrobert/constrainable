@@ -5,9 +5,16 @@
  * start without an authenticated session); the media flows directly
  * browser ↔ the hosting node's SRS over UDP (ICE candidate from the node).
  *
- * Failure UX: a watchdog (wall-clock — ICE may hang forever on blackholed
- * UDP) surfaces a terminal error with the reason; the user retries. The
- * attempt token keeps late ICE events from resurrecting a torn-down pc.
+ * Failure UX: two watchdogs (wall-clock — ICE may hang forever on blackholed
+ * UDP, and SRS's rtmp→rtc bridge + the publisher's keyframe interval can
+ * legitimately delay the FIRST frame by seconds) surface terminal errors with
+ * the reason; the user retries. The attempt token keeps late ICE events from
+ * resurrecting a torn-down pc.
+ *
+ * "Playing" is honest: it flips only when the FIRST FRAME is decoded
+ * (video resize event, videoWidth>0) — never on ICE connect alone, which
+ * used to show a black video labelled Playing while the bridge/keyframe was
+ * still pending.
  */
 import type { IceServer } from '#shared/rtmp'
 
@@ -23,7 +30,12 @@ let attempt = 0
 
 /** wall-clock cap — Chrome can sit in `checking` 30s+ on blackholed UDP */
 const WHEP_CONNECT_TIMEOUT_MS = 8_000
+/** after ICE connects: first frame must land within this. Covers SRS's lazy
+ * rtmp→rtc bridge spin-up plus up to ~2 publisher keyframe intervals. */
+const FIRST_FRAME_TIMEOUT_MS = 12_000
 let watchdog: ReturnType<typeof setTimeout> | undefined
+let frameWatchdog: ReturnType<typeof setTimeout> | undefined
+let onFirstFrame: (() => void) | null = null
 
 async function resolveUrls(): Promise<void> {
   status.value = 'loading'
@@ -40,6 +52,12 @@ async function resolveUrls(): Promise<void> {
 function teardown(): void {
   if (watchdog) clearTimeout(watchdog)
   watchdog = undefined
+  if (frameWatchdog) clearTimeout(frameWatchdog)
+  frameWatchdog = undefined
+  if (onFirstFrame && videoEl.value) {
+    videoEl.value.removeEventListener('resize', onFirstFrame)
+    onFirstFrame = null
+  }
   if (pc) {
     try {
       pc.getSenders().forEach((s) => s.track?.stop())
@@ -64,10 +82,15 @@ async function startWebrtc(): Promise<void> {
     pc.addTransceiver('video', { direction: 'recvonly' })
     pc.addTransceiver('audio', { direction: 'recvonly' })
 
+    let merged: MediaStream | null = null
     pc.ontrack = (e) => {
       if (a !== attempt) return
       if (!videoEl.value) return
-      videoEl.value.srcObject = e.streams[0] ?? null
+      // SRS answers may carry no msid (streams[] empty) — fall back to a
+      // locally merged MediaStream so the video still renders.
+      merged ??= new MediaStream()
+      merged.addTrack(e.track)
+      videoEl.value.srcObject = merged
       videoEl.value.play().catch(() => {})
     }
 
@@ -77,7 +100,27 @@ async function startWebrtc(): Promise<void> {
       if (st === 'connected') {
         if (watchdog) clearTimeout(watchdog)
         watchdog = undefined
-        status.value = 'playing'
+        // ICE is up — now WAIT for an actual decoded frame (see header): the
+        // rtmp→rtc bridge + keyframe interval can black-screen for seconds.
+        const v = videoEl.value
+        if (v && v.videoWidth > 0) {
+          status.value = 'playing'
+          return
+        }
+        onFirstFrame = () => {
+          if (a !== attempt || !videoEl.value || videoEl.value.videoWidth === 0) return
+          if (frameWatchdog) clearTimeout(frameWatchdog)
+          frameWatchdog = undefined
+          status.value = 'playing'
+        }
+        v?.addEventListener('resize', onFirstFrame)
+        frameWatchdog = setTimeout(() => {
+          if (a !== attempt || !pc) return
+          fail(
+            'connected but no video frames — the stream may still be bridging or waiting for a keyframe; retry',
+            a,
+          )
+        }, FIRST_FRAME_TIMEOUT_MS)
       } else if (st === 'failed') {
         fail(`WebRTC connection failed (UDP to the node blocked?)`, a)
       }

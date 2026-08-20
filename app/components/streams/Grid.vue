@@ -15,7 +15,12 @@ const props = defineProps<{
 const emit = defineEmits<{ watch: [streamName: string] }>()
 
 const tileRefs = new Map<string, HTMLVideoElement | null>()
+/** lifecycle: a pc exists for the tile */
 const playing = ref<Set<string>>(new Set())
+/** honest playback: the tile video goes opaque only once a frame is DECODED —
+ *  before that the snapshot poster stays visible instead of a black box
+ *  (SRS's lazy rtmp→rtc bridge + keyframe wait can delay frames by seconds) */
+const framed = ref<Set<string>>(new Set())
 const playAll = ref(false)
 const players = new Map<string, RTCPeerConnection>()
 
@@ -31,10 +36,17 @@ async function startTile(name: string) {
     const pc = new RTCPeerConnection({ iceServers: urls.iceServers ?? [] })
     pc.addTransceiver('video', { direction: 'recvonly' })
     pc.addTransceiver('audio', { direction: 'recvonly' })
+    let merged: MediaStream | null = null
     pc.ontrack = (e) => {
-      video.srcObject = e.streams[0] ?? null
+      // no-msid SRS answers → merge tracks locally so the video renders
+      merged ??= new MediaStream()
+      merged.addTrack(e.track)
+      video.srcObject = merged
       video.play().catch(() => {})
     }
+    video.addEventListener('resize', () => {
+      if (video.videoWidth > 0) framed.value.add(name)
+    }, { once: true })
     const offer = await pc.createOffer()
     await pc.setLocalDescription(offer)
     const resp = await fetch(urls.whep, {
@@ -53,6 +65,7 @@ async function startTile(name: string) {
 
 function stopTile(name: string) {
   playing.value.delete(name)
+  framed.value.delete(name)
   const p = players.get(name)
   if (p) {
     try {
@@ -142,7 +155,7 @@ const statusVariant: Record<string, 'secondary' | 'warning' | 'success' | 'destr
           <video
             :ref="(el) => tileRefs.set(s.streamName, el as HTMLVideoElement | null)"
             class="absolute inset-0 size-full object-contain"
-            :class="playing.has(s.streamName) ? 'opacity-100' : 'opacity-0'"
+            :class="framed.has(s.streamName) ? 'opacity-100' : 'opacity-0'"
             autoplay
             muted
             playsinline
