@@ -35,10 +35,14 @@ services:
       # Stable unique identity of this node (drives nodeId: user assignments,
       # session ownership, quotas). NOT an address.
       NODE_IDENTIFIER: ${NODE_IDENTIFIER:-$(hostname)}
-      # OBS ingest authority host[:port]; empty = derived from
-      # NODE_IDENTIFIER. Also the default source of the WebRTC ICE candidate
-      # host (same machine as SRS).
-      PUBLIC_RTMP_AUTHORITY: ${PUBLIC_RTMP_AUTHORITY:-}
+      # Public reachability of this node — reported to the control plane and
+      # handed through to browsers (the OBS ingest URL, the ICE latency-probe
+      # port, the WebRTC media port). PUBLIC_MEDIA_NODE_ORIGIN empty = users push via the
+      # app's own host; it is also the default WebRTC ICE candidate host.
+      PUBLIC_MEDIA_NODE_ORIGIN: ${PUBLIC_MEDIA_NODE_ORIGIN:-}
+      PUBLIC_MEDIA_NODE_RTMP_PORT: ${PUBLIC_MEDIA_NODE_RTMP_PORT:-1935}
+      PUBLIC_MEDIA_NODE_PROBE_UDP_PORT: ${PUBLIC_MEDIA_NODE_PROBE_UDP_PORT:-38111}
+      PUBLIC_MEDIA_NODE_SRS_UDP_PORT: ${PUBLIC_MEDIA_NODE_SRS_UDP_PORT:-38000}
       # Shared auth token (must match the backend; empty = no auth)
       MEDIA_NODE_AUTH_TOKEN: ${MEDIA_NODE_AUTH_TOKEN:-}
     volumes:
@@ -47,11 +51,11 @@ services:
       - /etc/localtime:/etc/localtime:ro # host tz (linux; symlink resolves inside)
       - /etc/timezone:/etc/timezone:ro   # host tz name (debian-style, optional)
     ports:
-      - "1935:1935" # RTMP ingest (OBS pushes here)
-      # Browser ICE latency probe (STUN responder, node/probe.go). Host port
-      # must equal the container's PROBE_UDP_PORT — the SDP the app mints
-      # carries this number.
-      - "${PROBE_UDP_PORT:-38111}:${PROBE_UDP_PORT:-38111}/udp"
+      # RTMP ingest (OBS pushes here): public port maps to the fixed 1935
+      - "${PUBLIC_MEDIA_NODE_RTMP_PORT:-1935}:1935"
+      # Browser ICE latency probe (STUN responder, node/probe.go): the app's
+      # probe SDP carries the PUBLIC port; the responder listens on PROBE_UDP_PORT
+      - "${PUBLIC_MEDIA_NODE_PROBE_UDP_PORT:-38111}:${PROBE_UDP_PORT:-38111}/udp"
     networks:
       - constrainable-ingest
       # - ingest-shared   # external shared network (see header)
@@ -64,7 +68,7 @@ services:
   # then starts. DVR segments land in ./records. udp is published for
   # DIRECT WebRTC media (ICE): browsers send UDP straight to this port — it
   # cannot be path-routed through an HTTP proxy, so the host in
-  # SRS_RTC_CANDIDATE / PUBLIC_RTMP_AUTHORITY must resolve directly to this
+  # SRS_RTC_CANDIDATE / PUBLIC_MEDIA_NODE_ORIGIN must resolve directly to this
   # machine (DNS-only, not a CDN proxy edge).
   # SRS: DVR filenames + logs follow the HOST timezone via the read-only
   # /etc/localtime mount (macOS Docker Desktop: add `TZ: ${TZ:-Asia/Shanghai}`

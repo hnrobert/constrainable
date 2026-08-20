@@ -156,13 +156,15 @@ func main() {
 
 	socketClient := node.NewClient(cfg.APIOrigin, cfg.AuthToken, node.RegisterPayload{
 		Identifier:          cfg.NodeIdentifier,
-		PublicRtmpAuthority: cfg.PublicRtmpAuthority,
+		PublicOrigin:       cfg.PublicOrigin,
+		PublicRTMPPort:     cfg.PublicRTMPPort,
+		PublicProbeUDPPort: cfg.PublicProbeUDPPort,
+		PublicSrsUDPPort:   cfg.PublicSrsUDPPort,
 		RTMPPort:            cfg.RTMPPort,
 		SRTPort:             cfg.SRTPort,
 		SRSFlvBase:          cfg.SRSFlvBase,
 		Hostname:            cfg.Hostname,
 		Version:             version,
-		ProbePort:           cfg.ProbeUDPPort,
 	})
 
 	// Session manager

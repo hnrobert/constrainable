@@ -17,17 +17,16 @@ type Config struct {
 	AuthToken      string // shared secret with Node (socket auth)
 	NodeIdentifier string // stable unique identity (drives nodeId: user
 	// assignments, session ownership, quotas). NOT an address.
-	PublicRtmpAuthority string // PUBLIC_RTMP_AUTHORITY — the OBS ingest
-	// AUTHORITY (host[:port], URL terms) for users assigned to this node,
-	// e.g. ingest.example.com or ingest.example.com:21935 when the tunnel
-	// remaps RTMP. A full rtmp:// URL is accepted and reduced to its
-	// authority. Empty = derived from PUBLIC_NODE_ORIGIN's host.
-	Hostname string // human-readable name
+	PublicOrigin       string // PUBLIC_MEDIA_NODE_ORIGIN — public hostname/IP of this node ("" = users push via the app's host)
+	PublicRTMPPort     int    // PUBLIC_MEDIA_NODE_RTMP_PORT — publicly mapped RTMP ingest port
+	PublicProbeUDPPort int    // PUBLIC_MEDIA_NODE_PROBE_UDP_PORT — publicly mapped STUN probe responder port
+	PublicSrsUDPPort   int    // PUBLIC_MEDIA_NODE_SRS_UDP_PORT — publicly mapped SRS WebRTC UDP (media) port
+	Hostname           string // human-readable name
 
 	// Listeners
-	RTMPPort   int // RTMP ingest (OBS pushes here)
+	RTMPPort     int // RTMP ingest (OBS pushes here)
 	ProbeUDPPort int // STUN responder for browser latency probes (UDP)
-	SRSUDPPort int // SRS rtc_server UDP listen — browsers' WebRTC media port
+	SRSUDPPort   int // SRS rtc_server UDP listen — browsers' WebRTC media port
 	// (must equal the published host port: the SDP candidate carries it)
 	SRTPort int // SRT ingest (scaffold; not yet implemented)
 
@@ -57,23 +56,26 @@ type Config struct {
 // LoadConfig reads environment variables.
 func LoadConfig() (*Config, error) {
 	c := &Config{
-		APIOrigin:           envOr("API_ORIGIN", "http://localhost:31954"),
-		AuthToken:           os.Getenv("MEDIA_NODE_AUTH_TOKEN"),
-		NodeIdentifier:      envOr("NODE_IDENTIFIER", "media-node"),
-		PublicRtmpAuthority: envOr("PUBLIC_RTMP_AUTHORITY", ""),
-		RTMPPort:            envOrInt("RTMP_PORT", 1935),
-		ProbeUDPPort:        envOrInt("PROBE_UDP_PORT", 38111), // browser ICE latency probe (STUN responder)
-		SRSUDPPort:          envOrInt("SRS_UDP_PORT", 38000),
-		SRSAddr:             envOr("SRS_ADDR", "srs:1935"),                   // docker sidecar service name
-		SRSApiBase:          envOr("SRS_API_BASE", "http://srs:1985/api/v1"), // docker sidecar service name
-		SRSHTTPPort:         envOrInt("SRS_HTTP_PORT", 38081),                // internal-only (never published); 38080 is the node's own play port
-		SRSFlvBase:          envOr("SRS_FLV_BASE", ""),                       // empty = derived from SELF_ORIGIN below
-		SRSBin:              envOr("SRS_BIN", ""),                            // empty = SRS runs elsewhere
-		SRSConfigTpl:        envOr("SRS_CONFIG_TEMPLATE", "/etc/media-node/srs.conf.template"),
-		SRSConfigPath:       envOr("SRS_CONFIG_PATH", "/tmp/srs.conf"),
-		SRSRTCCandidate:     envOr("SRS_RTC_CANDIDATE", ""),
-		RecordDir:           envOr("RECORD_DIR", "./records"),
-		AllowDirectSRS:      os.Getenv("ALLOW_DIRECT_SRS") == "true",
+		APIOrigin:          envOr("API_ORIGIN", "http://localhost:31954"),
+		AuthToken:          os.Getenv("MEDIA_NODE_AUTH_TOKEN"),
+		NodeIdentifier:     envOr("NODE_IDENTIFIER", "media-node"),
+		PublicOrigin:       envOr("PUBLIC_MEDIA_NODE_ORIGIN", ""),
+		PublicRTMPPort:     envOrInt("PUBLIC_MEDIA_NODE_RTMP_PORT", 1935),
+		PublicProbeUDPPort: envOrInt("PUBLIC_MEDIA_NODE_PROBE_UDP_PORT", envOrInt("PROBE_UDP_PORT", 38111)),
+		PublicSrsUDPPort:   envOrInt("PUBLIC_MEDIA_NODE_SRS_UDP_PORT", envOrInt("SRS_UDP_PORT", 38000)),
+		RTMPPort:           envOrInt("RTMP_PORT", 1935),
+		ProbeUDPPort:       envOrInt("PROBE_UDP_PORT", 38111), // browser ICE latency probe (STUN responder)
+		SRSUDPPort:         envOrInt("SRS_UDP_PORT", 38000),
+		SRSAddr:            envOr("SRS_ADDR", "srs:1935"),                   // docker sidecar service name
+		SRSApiBase:         envOr("SRS_API_BASE", "http://srs:1985/api/v1"), // docker sidecar service name
+		SRSHTTPPort:        envOrInt("SRS_HTTP_PORT", 38081),                // internal-only (never published); 38080 is the node's own play port
+		SRSFlvBase:         envOr("SRS_FLV_BASE", ""),                       // empty = derived from SELF_ORIGIN below
+		SRSBin:             envOr("SRS_BIN", ""),                            // empty = SRS runs elsewhere
+		SRSConfigTpl:       envOr("SRS_CONFIG_TEMPLATE", "/etc/media-node/srs.conf.template"),
+		SRSConfigPath:      envOr("SRS_CONFIG_PATH", "/tmp/srs.conf"),
+		SRSRTCCandidate:    envOr("SRS_RTC_CANDIDATE", ""),
+		RecordDir:          envOr("RECORD_DIR", "./records"),
+		AllowDirectSRS:     os.Getenv("ALLOW_DIRECT_SRS") == "true",
 	}
 
 	if h, err := os.Hostname(); err == nil && h != "" {
@@ -85,26 +87,17 @@ func LoadConfig() (*Config, error) {
 	c.APIOrigin = strings.TrimRight(c.APIOrigin, "/")
 	c.SRSApiBase = strings.TrimRight(c.SRSApiBase, "/")
 
-	// OBS ingest authority for assigned users: PUBLIC_RTMP_AUTHORITY
-	// (reduced to host[:port] when a full URL is given), else derived from
-	// the public origin's host. The app renders rtmp://<authority>/live.
-	if c.PublicRtmpAuthority != "" {
-		a := c.PublicRtmpAuthority
-		if i := strings.Index(a, "://"); i >= 0 {
-			a = a[i+3:]
-		}
-		if i := strings.IndexByte(a, '/'); i >= 0 {
-			a = a[:i]
-		}
-		c.PublicRtmpAuthority = a
+	// Public origin is a BARE HOST (a full URL is tolerated and reduced).
+	if c.PublicOrigin != "" {
+		c.PublicOrigin = originHost(c.PublicOrigin)
 	}
 
 	// WebRTC candidate: browsers connect DIRECTLY over UDP to this host.
-	// Derive from the OBS ingest authority's host (same machine as SRS);
-	// loopback when nothing public is configured (single-server default).
+	// Derive from the public origin (same machine as SRS); loopback when
+	// nothing public is configured (single-server default).
 	if c.SRSRTCCandidate == "" {
-		if c.PublicRtmpAuthority != "" {
-			c.SRSRTCCandidate = originHost(c.PublicRtmpAuthority)
+		if c.PublicOrigin != "" {
+			c.SRSRTCCandidate = originHost(c.PublicOrigin)
 		} else {
 			c.SRSRTCCandidate = "127.0.0.1" // single-server default
 		}
