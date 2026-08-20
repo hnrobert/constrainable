@@ -4,6 +4,10 @@
         "buildx",
         "constrainable",
         "ffprobe",
-        "rtmp"
+        "localtime",
+        "objs",
+        "ossrs",
+        "rtmp",
+        "timezone"
     ]
 }

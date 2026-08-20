@@ -21,12 +21,12 @@ type Session struct {
 	Record      bool
 	StartedAt   time.Time
 
-	mu        sync.Mutex
-	active    bool
-	compliant bool
-	Width     int
-	Height    int
-	Fps       float64
+	mu          sync.Mutex
+	active      bool
+	compliant   bool
+	Width       int
+	Height      int
+	Fps         float64
 	BitrateKbps int
 }
 
@@ -156,10 +156,12 @@ func (m *Manager) monitor(s *Session, limits *node.Limits) {
 		}
 
 		s.mu.Lock()
-		s.Width = info.Video.Width
-		s.Height = info.Video.Height
-		s.Fps = info.Video.Fps
-		s.BitrateKbps = info.Kbps
+		if info.Video != nil {
+			s.Width = info.Video.Width
+			s.Height = info.Video.Height
+			s.Fps = info.Video.Fps
+		}
+		s.BitrateKbps = info.BitrateKbps()
 		s.mu.Unlock()
 
 		// Report metrics

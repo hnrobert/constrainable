@@ -27,28 +27,42 @@ func NewSRSClient(apiBase string) *SRSClient {
 }
 
 // SRSStreamInfo mirrors SRS /api/v1/streams response fields we need.
+// VERIFIED against a live response: `kbps` is an OBJECT {recv_30s,send_30s}
+// (NOT a number — decoding it as an int fails the WHOLE payload, so metrics
+// never reach the dashboard), and `video`/`audio` are null until the first
+// frames arrive — hence the pointers.
 type SRSStreamInfo struct {
-	Name   string `json:"name"`
-	LiveMs int64  `json:"liveMs"`
-	Clients int   `json:"clients"`
-	Frames int   `json:"frames"`
-	SendBytes int64 `json:"sendBytes"`
-	Kbps   int    `json:"kbps"` // total bitrate
-	Video  struct {
-		Codec  string  `json:"codec"`
-		Profile string `json:"profile"`
-		Level  string  `json:"level"`
-		Width  int     `json:"width"`
-		Height int     `json:"height"`
-		Fps    float64 `json:"fps"` // SRS may report as frames/30s or direct fps
+	Name      string `json:"name"`
+	LiveMs    int64  `json:"liveMs"`
+	Clients   int    `json:"clients"`
+	Frames    int    `json:"frames"`
+	SendBytes int64  `json:"sendBytes"`
+	Kbps      struct {
+		Recv30s int `json:"recv_30s"` // what SRS receives FROM the publisher
+		Send30s int `json:"send_30s"`
+	} `json:"kbps"`
+	Publish struct {
+		Active bool   `json:"active"`
+		Cid    string `json:"cid"` // SRS client id of the publisher
+	} `json:"publish"`
+	Video *struct {
+		Codec   string  `json:"codec"`
+		Profile string  `json:"profile"`
+		Level   string  `json:"level"`
+		Width   int     `json:"width"`
+		Height  int     `json:"height"`
+		Fps     float64 `json:"fps"`
 	} `json:"video"`
-	Audio struct {
-		Codec string `json:"codec"`
-		SampleRate int `json:"sample_rate"`
-		Channel int `json:"channel"`
-		Profile string `json:"profile"`
+	Audio *struct {
+		Codec      string `json:"codec"`
+		SampleRate int    `json:"sample_rate"`
+		Channel    int    `json:"channel"`
+		Profile    string `json:"profile"`
 	} `json:"audio"`
 }
+
+// BitrateKbps is the publish-side bitrate (what SRS receives from OBS).
+func (i *SRSStreamInfo) BitrateKbps() int { return i.Kbps.Recv30s }
 
 // GetStreamInfo fetches metrics for one live stream by name.
 // Returns nil if not found or on error.

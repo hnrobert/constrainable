@@ -25,7 +25,10 @@ services:
     image: ghcr.io/hnrobert/constrainable-media-node:latest
     container_name: constrainable-media-node
     environment:
-      TZ: ${TZ:-Asia/Shanghai}
+      # Timezone: on a LINUX host the read-only mounts below make the container
+      # follow the HOST's timezone — leave TZ unset. On macOS (Docker Desktop)
+      # host /etc isn't shared; uncomment TZ instead:
+      #   TZ: ${TZ:-Asia/Shanghai}
       # The constrainable-app backend URL (Socket.IO + auth)
       API_ORIGIN: ${API_ORIGIN:-http://localhost:31954}
       # Stable unique identity of this node (drives nodeId: user assignments,
@@ -52,6 +55,8 @@ services:
     volumes:
       - ./records:/records
       - srs-conf:/srs-config
+      - /etc/localtime:/etc/localtime:ro # host tz (linux; symlink resolves inside)
+      - /etc/timezone:/etc/timezone:ro   # host tz name (debian-style, optional)
     ports:
       - "1935:1935" # RTMP ingest (OBS pushes here)
       # Direct browser FLV pulls (proxy /live/ on PUBLIC_NODE_ORIGIN → this port). Every pull is
@@ -67,11 +72,12 @@ services:
 
   # SRS sidecar: waits for the config the node renders onto the shared volume,
   # then starts. DVR segments land in ./records.
+  # SRS: DVR filenames + logs follow the HOST timezone via the read-only
+  # /etc/localtime mount (macOS Docker Desktop: add `TZ: ${TZ:-Asia/Shanghai}`
+  # under an `environment:` block — host /etc isn't shared there).
   srs:
     image: ossrs/srs:6
     container_name: constrainable-srs
-    environment:
-      TZ: ${TZ:-Asia/Shanghai} # align log timestamps with the node
     command:
       - sh
       - -c
@@ -79,6 +85,8 @@ services:
     volumes:
       - ./records:/records
       - srs-conf:/srs-config
+      - /etc/localtime:/etc/localtime:ro # host tz (linux; symlink resolves inside)
+      - /etc/timezone:/etc/timezone:ro   # host tz name (debian-style, optional)
     networks:
       - constrainable-ingest
     depends_on:
