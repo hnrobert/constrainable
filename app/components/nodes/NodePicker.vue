@@ -10,7 +10,8 @@
  * responder (node/probe.go, UDP publicProbeUdpPort — new firmware) and reads
  * candidate-pair currentRoundTripTime from getStats(). Nodes without the
  * responder (old firmware) show n/a until updated. Samples are recorded via
- * /api/nodes/measure (feeds the latency-first allocator + admin matrix).
+ * /api/nodes/measure (feeds the admin latency matrix; users with no node yet
+ * get their one-time automatic assignment there).
  */
 interface NodeRow {
   nodeId: string
@@ -25,7 +26,7 @@ interface NodeRow {
 }
 
 const toast = useToast()
-const { data: nodes, refresh } = useFetch<NodeRow[]>('/api/nodes')
+const { data: nodes, refresh, status: nodesStatus } = useFetch<NodeRow[]>('/api/nodes')
 
 /* ------------------------------ latency test ----------------------------- */
 const rtts = ref<Record<string, number | null> | null>(null)
@@ -107,15 +108,15 @@ function rttChip(ms: number | null | undefined): { label: string; cls: string } 
 
 /* ------------------------------- selection ------------------------------- */
 const selecting = ref<string | null>(null)
-async function select(n: NodeRow | null): Promise<void> {
-  selecting.value = n?.nodeId ?? 'auto'
+async function select(n: NodeRow): Promise<void> {
+  selecting.value = n.nodeId
   try {
     await $fetch('/api/nodes/select', {
       method: 'POST',
-      body: { nodeId: n?.nodeId ?? null },
+      body: { nodeId: n.nodeId },
     })
-    toast.success(n ? `Streaming locked to ${n.nodeId}` : 'Back to automatic node choice')
-    await refresh()
+    toast.success(`Streaming locked to ${n.nodeId}`)
+    await Promise.all([refresh(), refreshAssignment()])
   } catch (e: any) {
     toast.error('Select failed: ' + (e?.data?.statusMessage || e?.message || ''))
   } finally {
@@ -123,7 +124,18 @@ async function select(n: NodeRow | null): Promise<void> {
   }
 }
 
+const { data: assignment, refresh: refreshAssignment } = useFetch<{ assigned: string | null }>(
+  '/api/nodes/assignment',
+  { default: () => ({ assigned: null }) },
+)
 const myNode = computed(() => (nodes.value ?? []).find((n) => n.isMine) ?? null)
+/** assigned but its row isn't in the online list → the node is offline
+ *  (only judged once the node list has actually loaded — no pending flash) */
+const offlineMine = computed(() => {
+  if (nodesStatus.value !== 'success') return null
+  const id = assignment.value.assigned
+  return id && !myNode.value && !(nodes.value ?? []).some((n) => n.nodeId === id) ? id : null
+})
 </script>
 
 <template>
@@ -131,10 +143,14 @@ const myNode = computed(() => (nodes.value ?? []).find((n) => n.isMine) ?? null)
     <div class="flex flex-wrap items-center gap-3">
       <span v-if="myNode" class="text-sm">
         Your node: <strong class="font-medium">{{ myNode.nodeId }}</strong>
-        <Button variant="link" class="h-auto p-2 text-xs" :disabled="selecting === 'auto'" @click="select(null)">switch to automatic</Button>
+        <span class="ml-2 text-xs text-muted-foreground">switch anytime by picking another node below</span>
+      </span>
+      <span v-else-if="offlineMine" class="text-sm text-warn">
+        Your node <strong class="font-medium">{{ offlineMine }}</strong> is currently offline — pick
+        another node below to stream now.
       </span>
       <span v-else class="text-sm text-muted-foreground">
-        No node selected — automatic (least-loaded) allocation applies.
+        No ingest node assigned to you yet — choose one below.
       </span>
       <Button variant="outline" size="sm" class="ml-auto" :disabled="pinging" @click="pingNodes">
         {{ pinging ? 'Testing…' : 'Test latency' }}

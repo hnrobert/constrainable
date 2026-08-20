@@ -9,11 +9,17 @@
  * Legacy single-file .mp4 rows are served raw with full HTTP Range support.
  */
 import { createReadStream } from 'node:fs'
-import { writeFileSync, rmSync } from 'node:fs'
-import { join } from 'node:path'
+import { writeFileSync, rmSync, mkdirSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import { Readable } from 'node:stream'
 import { env } from '../../../utils/env'
-import { resolveRecordingFile, resolveSegments } from '../../../services/recordings'
+import {
+  resolveRecordingFile,
+  resolveSegments,
+  hostingNodeIdOf,
+  materializeRemoteSegments,
+} from '../../../services/recordings'
+import { RecordingsRepository } from '../../../repositories/recordings.repository'
 
 function pipeFfmpeg(event: any, args: string[], mime: string, downloadName?: string): Promise<any> {
   const proc = Bun.spawn([env.ffmpegPath, '-v', 'error', ...args], {
@@ -48,12 +54,43 @@ export default defineEventHandler(async (event) => {
   const f = resolveRecordingFile(id)
   const isDownload = getQuery(event).download !== undefined
 
+  // NODE-HOSTED recording: the segment files live on a media node's disk —
+  // relay them over the socket into a temp dir first, then serve the copies
+  // through the exact same local pipeline below. Temp cleanup on finish.
+  const row = RecordingsRepository.findById(id)!
+  const hostNode = hostingNodeIdOf(row)
+  let segAbsPaths: string[] = segs.map((rel) => join(env.recordDir, rel))
+  let remoteDir: string | null = null
+  if (hostNode) {
+    if (segs.length === 0) {
+      throw createError({ statusCode: 410, statusMessage: 'recording has no segments' })
+    }
+    const m = await materializeRemoteSegments(hostNode, segs, id)
+    segAbsPaths = m.absPaths
+    remoteDir = m.dir
+  }
+  event.node.res.on('finish', () => {
+    if (remoteDir) {
+      try {
+        rmSync(remoteDir, { force: true, recursive: true })
+      } catch {
+        /* ignore */
+      }
+    }
+  })
+
   // Modern MKV segments (or multi-segment): glue on demand, zero transcode.
-  if (f.absPath.endsWith('.mkv') || segs.length > 1) {
-    const list = join(env.recordDir, '_tmp', `concat_${id}_${Date.now()}.txt`)
+  // Single-segment FLV from a node is also glued (mp4 for play / mkv for
+  // download) — the raw-serve branch below needs a LOCAL file for ranges.
+  if (f.absPath.endsWith('.mkv') || segs.length > 1 || hostNode) {
+    const tmpDir = join(env.recordDir, '_tmp')
+    mkdirSync(tmpDir, { recursive: true })
+    const list = join(tmpDir, `concat_${id}_${Date.now()}.txt`)
     writeFileSync(
       list,
-      segs.map((rel) => `file '${join(env.recordDir, rel).replaceAll("'", "'\\''")}'`).join('\n'),
+      // ABSOLUTE paths: the concat demuxer resolves entries relative to the
+      // LIST FILE's directory (not cwd) — a relative RECORD_DIR broke this.
+      segAbsPaths.map((abs) => `file '${resolve(abs).replaceAll("'", "'\\''")}'`).join('\n'),
     )
     event.node.res.on('finish', () => {
       try {

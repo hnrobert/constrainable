@@ -25,6 +25,7 @@ import {
   passesWhitelist,
 } from '../../utils/registration'
 import { consumeCode } from '../../utils/email-code'
+import { allocate } from '../../services/node-assignment'
 import { getConfig, invalidateConfig } from '../../utils/config-store'
 import { AppConfigRepository } from '../../repositories/app-config.repository'
 import { appConfigSchema } from '#shared/config'
@@ -84,6 +85,13 @@ export default defineEventHandler(async (event) => {
   const authmod = mintAuthmod(email, password)
   const user = UsersRepository.insert({ email, passwordHash, role, authmodSalt: authmod.salt, authmodVerifier: authmod.verifierCipher })
 
+  // The ONE automatic node assignment every user gets: pick the most suitable
+  // node by current load (no latency samples exist yet — see
+  // services/node-assignment.ts). If no node is online the user stays
+  // unassigned and recordVisit's one-time backfill catches them later.
+  const assignedNode = allocate(user.id)
+  if (assignedNode) UsersRepository.updateNode(user.id, assignedNode)
+
   // Auto-assign a new-user announcement: POP the newest row of the config's
   // announcement pool (dashboard.announcementPool, newest-first) and make it
   // this user's announcement. No await inside the read-modify-write, so on
@@ -125,7 +133,7 @@ export default defineEventHandler(async (event) => {
   setCookie(event, cookie.name, cookie.value, cookie.options)
   audit('info', 'auth', `register: ${email} (${role})`, {
     actor: email,
-    detail: { userId: user.id, role, first: isFirst, verified: !isFirst, joinedGroup },
+    detail: { userId: user.id, role, first: isFirst, verified: !isFirst, joinedGroup, assignedNode },
   })
   return { id: user.id, email: user.email, role: user.role }
 })

@@ -307,6 +307,12 @@ export const recordings = sqliteTable(
     streamName: text('stream_name').notNull(),
     studentLabel: text('student_label'),
     /**
+     * Which media node holds the segment FILES (null = on this app's disk,
+     * under RECORD_DIR). Node recordings are served by RELAYING the bytes
+     * over the socket control channel (node:rec:* events).
+     */
+    nodeId: text('node_id'),
+    /**
      * JSON array of segment file paths (relative to RECORD_DIR), in
      * chronological order — real-time MKV files, one per publish. Appending a
      * user's re-publish just grows this list; no stop-time transcoding. Merge

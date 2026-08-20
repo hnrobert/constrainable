@@ -1,8 +1,8 @@
 /**
  * Ingest node list for the USER-facing /nodes page (any logged-in user — the
  * admin matrix stays at /api/media-nodes). One row per REGISTERED node: OBS
- * address, load (assigned / auto-assign cap), whether it's the caller's
- * current pin, and the STUN probe port for browser-side ICE latency probing
+ * address, load (assigned users / assignment cap), whether it's the caller's
+ * current node, and the STUN probe port for browser-side ICE latency probing
  * (0 = old firmware without the responder).
  */
 import { listNodes, rtmpAuthority } from '../../services/media-node-registry'

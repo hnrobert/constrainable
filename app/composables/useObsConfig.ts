@@ -5,8 +5,8 @@ import { obsServerUrl } from '#shared/rtmp'
  * at runtime, in priority order:
  *   1. PUBLIC_HOST override (runtime config) when set explicitly
  *   2. the user's ASSIGNED media node's full OBS address (PUBLIC_MEDIA_NODE_ORIGIN
- *      + PUBLIC_MEDIA_NODE_RTMP_PORT on the node
- *      — admin-assigned or first-visit auto-allocation), used VERBATIM
+ *      + PUBLIC_MEDIA_NODE_RTMP_PORT on the node — assigned once at
+ *      registration, changeable via /nodes or by an admin), used VERBATIM
  *   3. API_ORIGIN's hostname in split deployments (frontend elsewhere; OBS
  *      pushes to the origin server)
  *   4. the origin the user is BROWSING from (wherever the app is reachable,

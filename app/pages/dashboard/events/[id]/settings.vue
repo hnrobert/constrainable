@@ -295,8 +295,9 @@ const statusOptions: { value: EventStatus; label: string }[] = [
             Strict limits
             <span class="block text-xs font-normal text-muted-foreground">
               A stream whose DECLARED settings (checked at connect) violate the limits below is
-              stopped immediately and the publisher is banned from this event (same as a manual
-              ban — every reconnect is refused).
+              rejected immediately — the publisher gets an OBS error before a single frame is
+              relayed and can reconnect as soon as their settings comply. No ban is recorded.
+              Without this, breaches are only flagged on the dashboard.
             </span>
           </Label>
         </div>
@@ -307,7 +308,7 @@ const statusOptions: { value: EventStatus; label: string }[] = [
             <span class="block text-xs font-normal text-muted-foreground">
               Keep checking the ACTUAL stream (5s averages) after connect — catches mid-stream
               setting changes and forged declarations. Without this, only the encoder's declared
-              values are checked once at connect.
+              values are checked once at connect (and only enforced when strict limits is on).
             </span>
           </Label>
         </div>

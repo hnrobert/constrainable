@@ -27,7 +27,11 @@ export default defineEventHandler(async (event) => {
   if (!user?.authmodVerifier) {
     // Unknown username: `known: false` lets the gateway treat this as placeholder
     // credentials (no-auth events accept any non-empty login) instead of a hard
-    // auth failure. No enumeration: same shape as the known-user path.
+    // auth failure. No enumeration: same shape as the known-user path. Audited
+    // without attribution — the account doesn't exist, the string is untrusted.
+    audit('warn', 'auth', 'authmod verify failed: unknown user', {
+      detail: { attemptedEmail: email || null, source: 'http' },
+    })
     return { allow: false, known: false }
   }
   const ok = verifyResponse({

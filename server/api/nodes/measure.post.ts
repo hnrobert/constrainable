@@ -1,9 +1,10 @@
 /**
- * Record the browser's latency snapshot for this visit and auto-assign a node
- * on the user's FIRST visit (latency-first, quota-aware — see
- * services/node-assignment.ts). Any logged-in user; body:
- *   { latencies: [{ nodeId, latencyMs }] }
- * Returns the (possibly newly assigned) nodeId.
+ * Record the browser's latency snapshot for this visit (feeds the admin
+ * latency matrix). Also the ONE-TIME backfill: a user who somehow has no node
+ * yet (registered before this model / while no node was online) is assigned
+ * their best node here — with fresh browser RTTs — and never auto-changed
+ * again. Any logged-in user; body: { latencies: [{ nodeId, latencyMs }] }.
+ * Returns the user's (possibly newly assigned) nodeId.
  */
 import { recordVisit } from '../../services/node-assignment'
 

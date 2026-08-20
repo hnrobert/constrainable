@@ -13,9 +13,9 @@ useAuth().fetchSession().catch(() => null)
     <div class="space-y-1">
       <h1 class="text-2xl font-semibold">Ingest Nodes</h1>
       <p class="text-muted-foreground">
-        Pin yourself to an ingest node (allocation is load-ordered automatically when you leave
-        it unselected). Once selected you can only stream through that node — the OBS address on
-        your event guide page follows your choice.
+        Your ingest node was chosen for you when you registered; you can switch to any node
+        below. Once selected you can only stream through that node — the OBS address on your
+        event guide page follows your choice.
       </p>
     </div>
 

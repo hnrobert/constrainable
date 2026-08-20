@@ -23,14 +23,16 @@ function ensureDraft(u: UserWithGroupsView): void {
     draft.value[u.id] = { role: u.role, groupIds: u.groups.map((g) => g.id), nodeId: u.nodeId }
   }
 }
-/** Select value: sentinel 'auto' for "no manual pin" (reka rejects empty values). */
-const AUTO = 'auto'
+/** Select value: sentinel for "no node" (reka rejects empty SelectItem values).
+ *  There is no auto option — clearing means the user gets their one-time
+ *  backfill assignment on their next latency report. */
+const NONE = '(none)'
 function nodeOf(u: UserWithGroupsView): string {
-  return draft.value[u.id]?.nodeId ?? u.nodeId ?? AUTO
+  return draft.value[u.id]?.nodeId ?? u.nodeId ?? NONE
 }
 function setNode(u: UserWithGroupsView, v: unknown): void {
   ensureDraft(u)
-  draft.value[u.id]!.nodeId = v === AUTO || typeof v !== 'string' ? null : v
+  draft.value[u.id]!.nodeId = v === NONE || typeof v !== 'string' ? null : v
 }
 /** Latency chips: sorted ascending, unknown-last. */
 function latencyChips(u: UserWithGroupsView): { nodeId: string; ms: number }[] {
@@ -236,7 +238,7 @@ function deleteUser(u: UserWithGroupsView): void {
               >
                 <SelectTrigger class="h-8"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem :value="AUTO">auto (lowest latency)</SelectItem>
+                  <SelectItem :value="NONE">unassigned</SelectItem>
                   <SelectItem v-for="n in mediaNodes ?? []" :key="n.nodeId" :value="n.nodeId">
                     {{ n.nodeId }} ({{ n.assignedUsers }}/{{ n.maxUsers }})
                   </SelectItem>

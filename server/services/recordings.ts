@@ -8,6 +8,7 @@ import { statSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { createError } from 'h3'
 import { RecordingsRepository } from '../repositories/recordings.repository'
+import { PublishSessionsRepository } from '../repositories/publish-sessions.repository'
 import type { Recording } from '../database/schema'
 import { env } from '../utils/env'
 import { audit } from './audit'
@@ -103,11 +104,26 @@ const MIME: Record<string, string> = {
   '.webm': 'video/webm',
 }
 
-/** All segment paths (relative to RECORD_DIR) for a recording, chronological. */
+/** Which media node holds this recording's files (null = local disk). Falls
+ *  back to the publish session for rows recorded before the column existed. */
+export function hostingNodeIdOf(row: Recording): string | null {
+  if (row.nodeId) return row.nodeId
+  if (row.sessionId) {
+    const s = PublishSessionsRepository.findById(row.sessionId)
+    if (s?.nodeId) return s.nodeId
+  }
+  return null
+}
+
+/** All segment paths (relative to RECORD_DIR) for a recording, chronological.
+ *  NODE-hosted rows return the DB list as-is — the files live on the node and
+ *  are materialized on demand (materializeRemoteSegments); only LOCAL rows are
+ *  filtered by on-disk existence. */
 export function resolveSegments(id: number): string[] {
   const row = RecordingsRepository.findById(id)
   if (!row) throw createError({ statusCode: 404, statusMessage: 'recording not found' })
   const segs: string[] = row.segments ? JSON.parse(row.segments) : [row.filePath]
+  if (hostingNodeIdOf(row)) return segs
   return segs.filter((rel) => {
     try {
       statSync(join(env.recordDir, rel))
@@ -121,6 +137,17 @@ export function resolveSegments(id: number): string[] {
 export function resolveRecordingFile(id: number): ResolvedFile {
   const row = RecordingsRepository.findById(id)
   if (!row) throw createError({ statusCode: 404, statusMessage: 'recording not found' })
+  if (hostingNodeIdOf(row)) {
+    // node-hosted: served via the relay pipeline (multi-segment branch, or a
+    // single raw segment once materialized) — never statSync local disk
+    const ext = row.filePath.slice(row.filePath.lastIndexOf('.')).toLowerCase()
+    return {
+      absPath: join(env.recordDir, row.filePath), // virtual; only the ext is used
+      filename: row.filePath.split('/').pop() ?? `recording-${id}${ext}`,
+      mime: MIME[ext] ?? 'application/octet-stream',
+      size: row.sizeBytes,
+    }
+  }
   const absPath = join(env.recordDir, row.filePath)
   let size: number
   try {
@@ -153,4 +180,122 @@ export function deleteRecording(id: number): void {
     streamName: row.streamName,
     detail: { id, filePath: row.filePath },
   })
+}
+
+/* ------------------- node-hosted recording file relay ------------------- */
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { getSocket } from './media-node-registry'
+import { getSocketIO } from '../utils/socket-io'
+
+/**
+ * Delivery hub: node:rec:data / node:rec:end events are consumed at the
+ * NAMESPACE level (media-node-events.ts, like every other node→server event)
+ * and dispatched here by reqId. Attaching listeners directly to the socket
+ * from a request handler proved unreliable (same sid, onAny saw the event,
+ * per-request listener never fired) — the namespace-level route is the
+ * pattern every other node event already uses.
+ */
+type RecChunkHandler = (payload: { reqId?: string; data?: string }) => void
+type RecEndHandler = (payload: { reqId?: string; error?: string }) => void
+const pendingPulls = new Map<string, { onData: RecChunkHandler; onEnd: RecEndHandler }>()
+
+export function dispatchRecChunk(payload: { reqId?: string; data?: string }): void {
+  pendingPulls.get(payload?.reqId ?? '')?.onData(payload)
+}
+export function dispatchRecEnd(payload: { reqId?: string; error?: string }): void {
+  const entry = pendingPulls.get(payload?.reqId ?? '')
+  if (entry) {
+    entry.onEnd(payload)
+    pendingPulls.delete(payload?.reqId!)
+  }
+}
+
+const REC_PULL_START_TIMEOUT_MS = 3_000
+const REC_PULL_TIMEOUT_MS = 30_000
+
+export interface MaterializedSegments {
+  /** absolute paths of the downloaded copies (concat-list ready) */
+  absPaths: string[]
+  /** the temp dir they live in (caller removes when done) */
+  dir: string
+}
+
+/**
+ * Pull a node-hosted recording's segments over the socket control channel
+ * ('node:rec:pull' → chunks of 'node:rec:data' → 'node:rec:stop') into a temp
+ * dir under RECORD_DIR/_remote. The existing local serve pipeline (ffmpeg
+ * concat) then runs unchanged against the copies. Sequential per segment;
+ * sizes are recording-sized (tens–hundreds of MB) so this is a download-time
+ * cost, not a listing one.
+ */
+export async function materializeRemoteSegments(
+  nodeId: string,
+  segs: string[],
+  recordingId: number,
+): Promise<MaterializedSegments> {
+  const io = getSocketIO()
+  const socket = io ? getSocket(io, nodeId) : null
+  if (!socket) throw createError({ statusCode: 502, statusMessage: 'hosting node is offline' })
+
+  const dir = join(env.recordDir, '_remote', nodeId.replace(/[^\w.-]/g, '_'), String(recordingId))
+  mkdirSync(dir, { recursive: true })
+  const absPaths: string[] = []
+
+  for (const rel of segs) {
+    const safe = rel.replace(/\.\.(\/|\\)/g, '').replace(/^\/+/, '')
+    const abs = join(dir, safe.replaceAll('/', '__'))
+    const reqId = `rec-${recordingId}-${Math.random().toString(36).slice(2, 10)}`
+
+    await new Promise<void>((resolve, reject) => {
+      const chunks: Buffer[] = []
+      let settled = false
+      let lastActivity = Date.now()
+      const cleanup = (): void => {
+        pendingPulls.delete(reqId)
+        clearInterval(stallTimer)
+      }
+      const stallTimer = setInterval(() => {
+        if (Date.now() - lastActivity > REC_PULL_TIMEOUT_MS) {
+          socket.emit('node:rec:stop', { reqId })
+          finish(new Error('node file transfer stalled'))
+        }
+      }, 2_000)
+      const finish = (err: Error | null): void => {
+        if (settled) return
+        settled = true
+        cleanup()
+        if (err) reject(err)
+        else {
+          try {
+            const out = Buffer.concat(chunks)
+            console.log('[rec-dbg] writing', abs, 'from', chunks.length, 'chunks =', out.length, 'bytes, head:', out.subarray(0, 4).toString('hex'))
+            writeFileSync(abs, out)
+            absPaths.push(abs)
+            resolve()
+          } catch (e) {
+            reject(e instanceof Error ? e : new Error('temp write failed'))
+          }
+        }
+      }
+      function onData(payload: { reqId?: string; data?: string }): void {
+        if (payload?.reqId !== reqId || !payload.data) {
+          console.log('[rec-relay] data filtered', payload?.reqId, 'want', reqId, 'len', payload?.data?.length)
+          return
+        }
+        lastActivity = Date.now()
+        chunks.push(Buffer.from(payload.data, 'base64'))
+      }
+      function onEnd(payload: { reqId?: string; error?: string }): void {
+        if (payload?.reqId !== reqId) return
+        finish(payload.error ? new Error(`node: ${payload.error}`) : null)
+      }
+      pendingPulls.set(reqId, { onData, onEnd })
+      socket
+        .timeout(REC_PULL_START_TIMEOUT_MS)
+        .emit('node:rec:pull', { reqId, relPath: safe }, (err: unknown) => {
+          if (err) finish(new Error('node did not start the file transfer (old firmware?) — update the node'))
+        })
+    })
+  }
+  return { absPaths, dir }
 }

@@ -20,6 +20,7 @@ import { obsServerUrl } from '#shared/rtmp'
 import { audit } from './audit'
 import { emit } from '../utils/bus'
 import { emitNodesChanged } from './media-node-snapshot'
+import { dispatchRecChunk, dispatchRecEnd } from './recordings'
 import type { PublishSession } from '../database/schema'
 import type { SessionSnapshot, SessionStatus, RecordingSnapshot } from '#shared/events'
 
@@ -183,6 +184,14 @@ export function wireMediaNodeNamespace(io: SocketIOServer): void {
       handleRecordingReady(payload)
     })
 
+    // recording-file relay delivery (see services/recordings.ts — downloads)
+    socket.on('node:rec:data', (payload: { reqId?: string; data?: string }) => {
+      dispatchRecChunk(payload)
+    })
+    socket.on('node:rec:end', (payload: { reqId?: string; error?: string }) => {
+      dispatchRecEnd(payload)
+    })
+
     socket.on('violation', (payload: ViolationPayload) => {
       handleViolation(payload)
     })
@@ -217,7 +226,15 @@ export function wireMediaNodeNamespace(io: SocketIOServer): void {
         const email = String(p?.email ?? '').trim().toLowerCase()
         const user = email ? UsersRepository.findByEmail(email) : undefined
         if (!user?.authmodVerifier) {
-          // Unknown username: placeholder credentials, not a hard auth failure
+          // Unknown username: placeholder credentials, not a hard auth failure.
+          // Audited for visibility, but NOT attributed to the attempted address
+          // — the account doesn't exist and the string is untrusted input.
+          audit('warn', 'auth', 'authmod verify failed: unknown user', {
+            detail: {
+              attemptedEmail: email || null,
+              nodeId: listNodes().find((n) => n.socketId === socket.id)?.nodeId ?? null,
+            },
+          })
           ack?.({ allow: false, known: false })
           return
         }
@@ -424,6 +441,7 @@ function handleRecordingReady(payload: RecordingReadyPayload): void {
       sessionId: payload.sessionId ?? null,
       streamName: payload.streamName,
       studentLabel: null,
+      nodeId: payload.nodeId ?? null,
       filePath: rel,
       segments: JSON.stringify(payload.segments.map((s) => s.relPath)),
       sizeBytes: payload.sizeBytes,
@@ -470,10 +488,12 @@ function handleSpec(payload: SpecPayload, ack?: (r: { allow: boolean; reason?: s
   })
 
   // Immediate limit gate on the declared values. The verdict goes back as an
-  // ACK: the NODE rejects the connection exactly like a wrong password
-  // (OBS-terminal BadName, zero frames relayed). No ban is recorded —
+  // ACK. STRICT events: the node rejects the connection exactly like a wrong
+  // password (OBS-terminal BadName, zero frames relayed) — no ban recorded,
   // "wrong settings" is a client fix, not a violation to punish for; an
-  // admin can still ban manually from the live panel.
+  // admin can still ban manually from the live panel. NON-strict events:
+  // advisory only — the breach is flagged and shown on the dashboard, but
+  // the stream continues (measured enforcement is the separate opt-in).
   const event = row.eventId ? EventsRepository.findById(row.eventId) : null
   const limits = getLimitsFor(event)
   const strict = event?.strictLimits ?? false
@@ -494,12 +514,16 @@ function handleSpec(payload: SpecPayload, ack?: (r: { allow: boolean; reason?: s
     ...snapshotFromRow(row, { status: 'violating' }),
     reasons: reasonList,
   })
-  audit('warn', 'publish', `spec rejected: ${row.streamName} (${reasonList.join('; ')})`, {
+  audit('warn', 'publish', `spec ${strict ? 'rejected' : 'exceeds limits'}: ${row.streamName} (${reasonList.join('; ')})`, {
     actor: row.streamName,
     eventId: row.eventId ?? null,
     streamName: row.streamName,
     detail: { sessionId: row.id, strict, reasons: reasonList },
   })
+  if (!strict) {
+    ack?.({ allow: true })
+    return
+  }
   ack?.({ allow: false, reason: reasonList.join('; ') + '. Lower your OBS resolution/FPS/bitrate and reconnect.' })
 }
 
