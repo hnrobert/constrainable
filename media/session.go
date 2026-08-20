@@ -6,6 +6,7 @@ package media
 
 import (
 	"log"
+	"math"
 	"sync"
 	"time"
 
@@ -28,6 +29,13 @@ type Session struct {
 	Height      int
 	Fps         float64
 	BitrateKbps int
+
+	// deltas for derived metrics: the SRS API reports NO fps, and kbps is a
+	// 30s rolling average (0 right after start) — both are computed from the
+	// cumulative counters between consecutive polls
+	lastFrames    int64
+	lastRecvBytes int64
+	lastPollAt    time.Time
 }
 
 // Manager owns all active sessions on this node.
@@ -159,9 +167,21 @@ func (m *Manager) monitor(s *Session, limits *node.Limits) {
 		if info.Video != nil {
 			s.Width = info.Video.Width
 			s.Height = info.Video.Height
-			s.Fps = info.Video.Fps
 		}
-		s.BitrateKbps = info.BitrateKbps()
+		// fps/bitrate from counter deltas (Frames / RecvBytes are cumulative)
+		now := time.Now()
+		if !s.lastPollAt.IsZero() {
+			dt := now.Sub(s.lastPollAt).Seconds()
+			if dt > 0.1 {
+				if fps := float64(int64(info.Frames)-s.lastFrames) / dt; fps > 0 {
+					s.Fps = math.Round(fps*100) / 100
+				}
+				if kbps := float64(info.RecvBytes-s.lastRecvBytes) * 8 / dt / 1000; kbps > 0 {
+					s.BitrateKbps = int(math.Round(kbps))
+				}
+			}
+		}
+		s.lastFrames, s.lastRecvBytes, s.lastPollAt = int64(info.Frames), info.RecvBytes, now
 		s.mu.Unlock()
 
 		// Report metrics

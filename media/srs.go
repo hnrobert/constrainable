@@ -37,6 +37,7 @@ type SRSStreamInfo struct {
 	Clients   int    `json:"clients"`
 	Frames    int    `json:"frames"`
 	SendBytes int64  `json:"sendBytes"`
+	RecvBytes int64  `json:"recvBytes"` // cumulative bytes SRS received FROM the publisher
 	Kbps      struct {
 		Recv30s int `json:"recv_30s"` // what SRS receives FROM the publisher
 		Send30s int `json:"send_30s"`
