@@ -168,6 +168,8 @@ func main() {
 
 	// WHEP relay target: SRSApiBase (…/api/v1) minus the API path prefix
 	socketClient.SRSWhepBase = strings.TrimSuffix(cfg.SRSApiBase, "/api/v1")
+	// Recording-file relay target: this node's records dir (DVR mounts here)
+	socketClient.RecordDir = cfg.RecordDir
 
 	// Session manager
 	manager := media.NewManager(

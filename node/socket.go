@@ -4,7 +4,9 @@
 package node
 
 import (
+	"context"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +14,8 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -43,9 +47,13 @@ type Client struct {
 	register  RegisterPayload
 
 	mu        sync.Mutex
+	writeMu   sync.Mutex
 	ws        *websocket.Conn
 	nodeID    string
 	connected bool
+
+	// in-flight recording-file streams: reqId → cancel
+	recPulls sync.Map
 
 	// pending acks: requestID → channel. IDs MUST be NUMERIC strings —
 	// socket.io's parser reads packet ids as an integer run; a hex id with
@@ -60,7 +68,10 @@ type Client struct {
 	// SRS whep base for signaling relays (e.g. http://srs:1985) — set by the
 	// owner from SRSApiBase before Connect; empty disables node:whep.
 	SRSWhepBase string
-	OnConfig    func(ConfigLimits)
+	// Records dir for recording-file relays (node:rec:*) — set from RecordDir
+	// before Connect; empty disables the file relay.
+	RecordDir string
+	OnConfig  func(ConfigLimits)
 
 	reconnectCh chan struct{}
 	done        chan struct{}
@@ -325,6 +336,48 @@ func (c *Client) handleEvent(raw, reqID string) error {
 		return websocket.Message.Send(ws, reply)
 	}
 
+	// Recording-file relay: the control plane streams a recording segment
+	// back over the socket (the files live on THIS node's disk, mounted at
+	// ./records — never published otherwise). Path-validated to stay inside
+	// RecordDir. Ack starts the transfer; chunks arrive as node:rec:data and
+	// the app sends node:rec:stop when it has enough (or on viewer disconnect).
+	if event == "node:rec:pull" && reqID != "" {
+		var pull RecPull
+		if err := json.Unmarshal(parts[1], &pull); err != nil {
+			return err
+		}
+		log.Printf("[rec] pull received reqId=%s rel=%s", pull.ReqID, pull.RelPath)
+		go func() {
+			// ALWAYS end the transfer (clean EOF included) — the control
+			// plane waits for this to finish the download; silence = stall.
+			end := RecEnd{ReqID: pull.ReqID}
+			if err := c.streamFile(pull); err != nil {
+				end.Error = err.Error()
+			}
+			if e := c.Emit("node:rec:end", end); e != nil {
+				log.Printf("[rec] end emit failed: %v", e)
+			}
+		}()
+		reply := fmt.Sprintf("43%s,%s[\"true\"]", nsp, reqID)
+		c.mu.Lock()
+		ws := c.ws
+		c.mu.Unlock()
+		if ws == nil {
+			return nil
+		}
+		return websocket.Message.Send(ws, reply)
+	}
+	if event == "node:rec:stop" {
+		var stop RecStop
+		if err := json.Unmarshal(parts[1], &stop); err != nil {
+			return err
+		}
+		if cancel, ok := c.recPulls.LoadAndDelete(stop.ReqID); ok {
+			cancel.(context.CancelFunc)()
+		}
+		return nil
+	}
+
 	// WHEP signaling relay: the control plane cannot reach this node's SRS
 	// HTTP API (deliberately never published), so browsers' playback offers
 	// are forwarded here. POST to the colocated SRS, ack with the answer SDP.
@@ -426,6 +479,57 @@ func (c *Client) handleAck(raw string) error {
 	return nil
 }
 
+// streamFile relays one file under RecordDir (path-validated) to the control
+// plane in base64 chunks until EOF, cancellation or a size cap.
+func (c *Client) streamFile(p RecPull) error {
+	if c.RecordDir == "" {
+		return fmt.Errorf("node has no records dir configured")
+	}
+	clean := filepath.Clean(p.RelPath)
+	if filepath.IsAbs(clean) || strings.HasPrefix(clean, "..") || filepath.Base(clean) == "" {
+		return fmt.Errorf("invalid path")
+	}
+	abs := filepath.Join(c.RecordDir, clean)
+	if !strings.HasPrefix(abs, filepath.Clean(c.RecordDir)+string(os.PathSeparator)) {
+		return fmt.Errorf("path escapes records dir")
+	}
+	f, err := os.Open(abs)
+	if err != nil {
+		return fmt.Errorf("open %s: %w", clean, err)
+	}
+	st, _ := f.Stat()
+	log.Printf("[rec] streaming %s (%d bytes)", clean, st.Size())
+	defer f.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c.recPulls.Store(p.ReqID, context.CancelFunc(cancel))
+	defer c.recPulls.Delete(p.ReqID)
+
+	buf := make([]byte, 256*1024)
+	total := 0
+	for total < 2*1024*1024*1024 {
+		n, err := f.Read(buf)
+		if n > 0 {
+			total += n
+			if e := c.Emit("node:rec:data", RecChunk{ReqID: p.ReqID, Data: base64.StdEncoding.EncodeToString(buf[:n])}); e != nil {
+				log.Printf("[rec] chunk emit failed after %d bytes: %v", total, e)
+				return nil
+			}
+		}
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil // stopped by the app — normal teardown
+			}
+			if err == io.EOF {
+				return nil
+			}
+			return fmt.Errorf("read: %w", err)
+		}
+	}
+	return nil
+}
+
 // relayWhep forwards a browser's WHEP offer to this node's colocated SRS and
 // returns the ack payload: {answer} on 201, {error} otherwise.
 func (c *Client) relayWhep(r WhepRelay) map[string]string {
@@ -449,19 +553,27 @@ func (c *Client) relayWhep(r WhepRelay) map[string]string {
 }
 
 // Emit sends a fire-and-forget event (namespaced: 42<nsp>,["event",payload]).
-func (c *Client) Emit(event string, payload any) error {
+// sendWrite serializes outbound frames — x/net/websocket is NOT safe for
+// concurrent Message.Send (a 100KB+ relay chunk racing a pong from the read
+// loop interleaves frames and corrupts the stream).
+func (c *Client) sendWrite(msg string) error {
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
 	c.mu.Lock()
 	ws := c.ws
 	c.mu.Unlock()
 	if ws == nil {
 		return fmt.Errorf("not connected")
 	}
+	return websocket.Message.Send(ws, msg)
+}
+
+func (c *Client) Emit(event string, payload any) error {
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
-	msg := fmt.Sprintf("42%s,[\"%s\",%s]", nsp, event, data)
-	return websocket.Message.Send(ws, msg)
+	return c.sendWrite(fmt.Sprintf("42%s,[\"%s\",%s]", nsp, event, data))
 }
 
 // EmitWithAck sends an event and waits for the ack (with timeout).

@@ -24,6 +24,30 @@ type WhepRelay struct {
 	Offer      string `json:"offer"`
 }
 
+// RecPull asks this node to stream one recording file (path RELATIVE to its
+// records dir) back over the socket — the files are only reachable this way.
+type RecPull struct {
+	ReqID   string `json:"reqId"`
+	RelPath string `json:"relPath"`
+}
+
+// RecChunk is one base64 chunk of a streamed recording file.
+type RecChunk struct {
+	ReqID string `json:"reqId"`
+	Data  string `json:"data"`
+}
+
+// RecEnd reports a file stream finished ("" = clean EOF / stopped).
+type RecEnd struct {
+	ReqID string `json:"reqId"`
+	Error string `json:"error,omitempty"`
+}
+
+// RecStop cancels an in-flight file stream.
+type RecStop struct {
+	ReqID string `json:"reqId"`
+}
+
 // RegisteredAck is Node's response to a successful registration.
 type RegisteredAck struct {
 	NodeID string `json:"nodeId"`
