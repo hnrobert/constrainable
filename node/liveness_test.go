@@ -32,7 +32,7 @@ func TestHandshakeDeadlineOnSilentServer(t *testing.T) {
 		}
 	}()
 
-	c := NewClient("http://"+ln.Addr().String(), "", RegisterPayload{Origin: "t", Hostname: "h", Version: "t"})
+	c := NewClient("http://"+ln.Addr().String(), "", RegisterPayload{Identifier: "t", Hostname: "h", Version: "t"})
 	start := time.Now()
 	err = c.connectOnce()
 	elapsed := time.Since(start)
@@ -48,7 +48,7 @@ func TestHandshakeDeadlineOnSilentServer(t *testing.T) {
 // markDead must clear both flags so Emit fails fast ("not connected")
 // instead of writing to a dead socket.
 func TestMarkDeadClearsState(t *testing.T) {
-	c := NewClient("http://127.0.0.1:1", "", RegisterPayload{Origin: "t"})
+	c := NewClient("http://127.0.0.1:1", "", RegisterPayload{Identifier: "t"})
 	// simulate a live connection: markDead(nil) with c.ws==nil clears flags only
 	c.mu.Lock()
 	c.connected = true

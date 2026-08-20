@@ -147,7 +147,6 @@ func main() {
 	// Socket.IO client — ALL communication with the Node control plane
 	socketClient := node.NewClient(cfg.APIOrigin, cfg.AuthToken, node.RegisterPayload{
 		Identifier:          cfg.NodeIdentifier,
-		Origin:              cfg.NodeIdentifier,
 		PublicRtmpAuthority: cfg.PublicRtmpAuthority,
 		RTMPPort:            cfg.RTMPPort,
 		SRTPort:             cfg.SRTPort,
