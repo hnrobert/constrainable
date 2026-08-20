@@ -49,7 +49,9 @@ type Config struct {
 	SRSBin          string // path to the SRS binary (empty = don't start SRS)
 	SRSConfigPath   string // path to the rendered SRS config
 	SRSConfigTpl    string // path to the config template (embedded in image)
-	SRSRTCCandidate string // WebRTC ICE candidate (rendered into config)
+	SRSRTCCandidate string // WebRTC ICE candidate advertised to browsers.
+	// Empty + PUBLIC_NODE_ORIGIN set ⇒ derived from its host
+	// (browsers must reach this directly over UDP).
 
 	// Recording (SRS DVR writes FLV; Go only needs the dir for file cleanup)
 	RecordDir string
@@ -76,7 +78,7 @@ func LoadConfig() (*Config, error) {
 		SRSBin:              envOr("SRS_BIN", ""),                            // empty = SRS runs elsewhere
 		SRSConfigTpl:        envOr("SRS_CONFIG_TEMPLATE", "/etc/media-node/srs.conf.template"),
 		SRSConfigPath:       envOr("SRS_CONFIG_PATH", "/tmp/srs.conf"),
-		SRSRTCCandidate:     envOr("SRS_RTC_CANDIDATE", "127.0.0.1"),
+		SRSRTCCandidate:     envOr("SRS_RTC_CANDIDATE", ""),
 		RecordDir:           envOr("RECORD_DIR", "./records"),
 		AllowDirectSRS:      os.Getenv("ALLOW_DIRECT_SRS") == "true",
 	}
@@ -114,11 +116,17 @@ func LoadConfig() (*Config, error) {
 		}
 		c.PublicRtmpAuthority = a
 	} else if c.PublicNodeOrigin != "" {
-		host := strings.TrimPrefix(strings.TrimPrefix(c.PublicNodeOrigin, "https://"), "http://")
-		if i := strings.IndexAny(host, "/:"); i >= 0 {
-			host = host[:i]
+		c.PublicRtmpAuthority = originHost(c.PublicNodeOrigin)
+	}
+
+	// WebRTC candidate: browsers connect DIRECTLY over UDP to this host —
+	// derive from the public origin when not set explicitly.
+	if c.SRSRTCCandidate == "" {
+		if c.PublicNodeOrigin != "" {
+			c.SRSRTCCandidate = originHost(c.PublicNodeOrigin)
+		} else {
+			c.SRSRTCCandidate = "127.0.0.1" // single-server default
 		}
-		c.PublicRtmpAuthority = host
 	}
 
 	// Advertised FLV base defaults to the identifier's host + the SRS
@@ -156,4 +164,13 @@ func envOrInt(key string, def int) int {
 		}
 	}
 	return def
+}
+
+// originHost strips scheme, path and port from an origin URL, leaving the host.
+func originHost(origin string) string {
+	host := strings.TrimPrefix(strings.TrimPrefix(origin, "https://"), "http://")
+	if i := strings.IndexAny(host, "/:"); i >= 0 {
+		host = host[:i]
+	}
+	return host
 }

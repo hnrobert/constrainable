@@ -71,7 +71,10 @@ services:
     restart: unless-stopped
 
   # SRS sidecar: waits for the config the node renders onto the shared volume,
-  # then starts. DVR segments land in ./records.
+  # then starts. DVR segments land in ./records. udp/8000 is published for
+  # DIRECT WebRTC media (ICE): browsers send UDP straight to this port — it
+  # cannot be path-routed through an HTTP proxy, so PUBLIC_NODE_ORIGIN's host
+  # must resolve directly to this machine (DNS-only, not a CDN proxy edge).
   # SRS: DVR filenames + logs follow the HOST timezone via the read-only
   # /etc/localtime mount (macOS Docker Desktop: add `TZ: ${TZ:-Asia/Shanghai}`
   # under an `environment:` block — host /etc isn't shared there).
@@ -87,15 +90,19 @@ services:
       - srs-conf:/srs-config
       - /etc/localtime:/etc/localtime:ro # host tz (linux; symlink resolves inside)
       - /etc/timezone:/etc/timezone:ro   # host tz name (debian-style, optional)
+    ports:
+      - "${SRS_UDP_PORT:-8000}:8000/udp" # WebRTC media (direct ICE, browsers)
     networks:
       - constrainable-ingest
     depends_on:
       - media-node
     restart: unless-stopped
-    # Deliberately NOT published: browsers must reach the NODE's play entry
-    # (:38080 on media-node) so every pull passes the auth gate. The control
-    # plane pulls FLV from this sidecar over the deployment network via
-    # SRS_FLV_BASE.
+    # SRS's HTTP ports (FLV :38081 / API :1985) are deliberately NOT
+    # published: browsers reach the NODE's play entry (:38080 on media-node)
+    # so every pull passes the auth gate; the control plane pulls FLV via
+    # SRS_FLV_BASE over the deployment network. Only udp/8000 is public —
+    # WebRTC media carries its own DTLS-SRTP encryption and is gated by the
+    # WHEP signaling the app proxies.
 
 volumes:
   srs-conf:
