@@ -113,6 +113,20 @@ async function create(): Promise<void> {
       </CardContent>
     </Card>
 
+    <!-- ingest node pick + browser latency test — every user, before streaming -->
+    <Card>
+      <CardHeader>
+        <CardTitle>Your ingest node</CardTitle>
+        <CardDescription>
+          Pick the node you publish through (and test each node's latency from your own network)
+          — the OBS address on every event guide follows this choice.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <NodesNodePicker />
+      </CardContent>
+    </Card>
+
     <Card>
       <CardContent>
         <DataTable
