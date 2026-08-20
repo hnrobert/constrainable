@@ -4,23 +4,21 @@
  * bus event (forwarded to admin dashboards over Socket.IO — the nodes page
  * updates in realtime instead of polling).
  */
-import { listNodes } from './media-node-registry'
+import { listNodes, rtmpAuthority } from './media-node-registry'
 import { NodeSettingsRepository } from '../repositories/node-settings.repository'
 import { UsersRepository } from '../repositories/users.repository'
 import { emit } from '../utils/bus'
 import type { MediaNodeSnapshot } from '#shared/events'
 import { obsServerUrl } from '#shared/rtmp'
 
-/** the node's OBS ingest URL from its reported authority host[:port]
- *  (a redundant :1935 is omitted — shared/rtmp.ts) */
-function rtmpUrl(n: { publicRtmpAuthority: string }): string | null {
-  return n.publicRtmpAuthority ? obsServerUrl(n.publicRtmpAuthority) : null
-}
-
 export function nodesSnapshot(): MediaNodeSnapshot[] {
   return listNodes().map((n) => ({
     nodeId: n.nodeId,
-    rtmpUrl: rtmpUrl(n),
+    rtmpUrl: n.publicOrigin ? obsServerUrl(rtmpAuthority(n)) : null,
+    publicOrigin: n.publicOrigin,
+    publicRtmpPort: n.publicRtmpPort,
+    publicProbeUdpPort: n.publicProbeUdpPort,
+    publicSrsUdpPort: n.publicSrsUdpPort,
     version: n.version,
     activeStreams: n.activeStreams,
     connectedAt: n.connectedAt,

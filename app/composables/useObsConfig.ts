@@ -4,7 +4,8 @@ import { obsServerUrl } from '#shared/rtmp'
  * Builds OBS connection strings for a publisher. The ingest host is derived
  * at runtime, in priority order:
  *   1. PUBLIC_HOST override (runtime config) when set explicitly
- *   2. the user's ASSIGNED media node's full OBS address (PUBLIC_RTMP_AUTHORITY
+ *   2. the user's ASSIGNED media node's full OBS address (PUBLIC_MEDIA_NODE_ORIGIN
+ *      + PUBLIC_MEDIA_NODE_RTMP_PORT on the node
  *      — admin-assigned or first-visit auto-allocation), used VERBATIM
  *   3. API_ORIGIN's hostname in split deployments (frontend elsewhere; OBS
  *      pushes to the origin server)
@@ -20,10 +21,14 @@ export function useObsConfig() {
   // node has no public origin — single-server default)
   const { data: assignment } = useFetch<{
     assigned: string | null
-    assignedPublicOrigin: string
     assignedRtmpAuthority: string
+    assignedPublic: { origin: string; rtmpPort: number; probeUdpPort: number; srsUdpPort: number }
   }>('/api/nodes/assignment', {
-    default: () => ({ assigned: null, assignedPublicOrigin: '', assignedRtmpAuthority: '' }),
+    default: () => ({
+      assigned: null,
+      assignedRtmpAuthority: '',
+      assignedPublic: { origin: '', rtmpPort: 1935, probeUdpPort: 0, srsUdpPort: 0 },
+    }),
   })
 
   // the assigned node's OBS authority (host[:port]) → rtmp://<authority>/live
@@ -43,7 +48,7 @@ export function useObsConfig() {
   const server = computed(() => {
     // node assignment carries the full authority (host[:port]); the fallback
     // is the browse host on the standard port 1935 (omitted) — deployments
-    // with a remapped RTMP port set PUBLIC_RTMP_AUTHORITY, which wins here
+    // with a remapped RTMP port set PUBLIC_MEDIA_NODE_ORIGIN + PUBLIC_MEDIA_NODE_RTMP_PORT on the node
     if (assignedServer.value) return assignedServer.value
     return obsServerUrl(ingestHost.value)
   })

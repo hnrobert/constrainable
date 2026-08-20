@@ -13,8 +13,16 @@ export interface MediaNodeInfo {
   nodeId: string
   socketId: string
   identifier: string
-  /** OBS ingest AUTHORITY (host[:port]) for this node's users ("" = via app host) */
-  publicRtmpAuthority: string
+  /**
+   * Public reachability reported at registration (PUBLIC_MEDIA_NODE_ORIGIN /
+   * PUBLIC_MEDIA_NODE_RTMP_PORT / PUBLIC_MEDIA_NODE_PROBE_UDP_PORT / PUBLIC_MEDIA_NODE_SRS_UDP_PORT on the
+   * node). publicOrigin "" = users push via the app's host. All four are
+   * handed through to the frontend (OBS URL, ICE latency probe, WebRTC).
+   */
+  publicOrigin: string
+  publicRtmpPort: number
+  publicProbeUdpPort: number
+  publicSrsUdpPort: number
   hostname: string
   version: string
   connectedAt: number
@@ -26,12 +34,6 @@ export interface MediaNodeInfo {
    * (http://srs:38081 — the SRS SIDECAR, not the node itself).
    */
   srsFlvBase: string
-  /**
-   * UDP port of the node's STUN probe responder (browser-true latency
-   * measurement via ICE). 0 / missing = old firmware without it — the /nodes
-   * page falls back to server-side probing for that node.
-   */
-  probePort: number
 }
 
 /** nodeId → info */
@@ -45,6 +47,19 @@ const offlineSince = new Map<string, number>()
 /** process start — grace anchor for nodes never seen since boot */
 const bootedAt = Date.now()
 
+/**
+ * OBS ingest authority for a node — "host[:port]", the redundant :1935
+ * omitted (shared/rtmp.ts normalizes it again downstream). '' = via app host.
+ */
+export function rtmpAuthority(n: {
+  publicOrigin: string
+  publicRtmpPort?: number
+}): string {
+  if (!n.publicOrigin) return ''
+  const port = n.publicRtmpPort ?? 1935
+  return port === 1935 ? n.publicOrigin : `${n.publicOrigin}:${port}`
+}
+
 /** Derive a stable nodeId from the node's NODE_IDENTIFIER. */
 export function deriveNodeId(origin: string): string {
   return origin
@@ -57,10 +72,25 @@ export function deriveNodeId(origin: string): string {
 /** Register (or re-register) a node connection. Returns the nodeId. */
 export function register(
   socket: Socket,
+  // the public fields are optional at the call site (defaults applied below)
   info: Omit<
     MediaNodeInfo,
-    'nodeId' | 'socketId' | 'connectedAt' | 'activeStreams' | 'srsFlvBase'
-  > & { srsFlvBase?: string; publicRtmpAuthority?: string },
+    | 'nodeId'
+    | 'socketId'
+    | 'connectedAt'
+    | 'activeStreams'
+    | 'srsFlvBase'
+    | 'publicOrigin'
+    | 'publicRtmpPort'
+    | 'publicProbeUdpPort'
+    | 'publicSrsUdpPort'
+  > & {
+    srsFlvBase?: string
+    publicOrigin?: string
+    publicRtmpPort?: number
+    publicProbeUdpPort?: number
+    publicSrsUdpPort?: number
+  },
 ): string {
   const nodeId = deriveNodeId(info.identifier || info.hostname)
   const existing = nodes.get(nodeId)
@@ -71,7 +101,10 @@ export function register(
     connectedAt: Date.now(),
     activeStreams: existing?.activeStreams ?? 0,
     srsFlvBase: info.srsFlvBase || `http://${info.identifier}:38081`,
-    publicRtmpAuthority: info.publicRtmpAuthority || '',
+    publicOrigin: info.publicOrigin || '',
+    publicRtmpPort: info.publicRtmpPort || 1935,
+    publicProbeUdpPort: info.publicProbeUdpPort ?? 0,
+    publicSrsUdpPort: info.publicSrsUdpPort ?? 0,
   }
   nodes.set(nodeId, entry)
   offlineSince.delete(nodeId)

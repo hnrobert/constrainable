@@ -5,7 +5,7 @@
  *   - ice-ufrag/pwd derived from the shared node auth token (the responder
  *     validates nothing but answers with MI computed over the same pwd, which
  *     is what makes the browser's ICE agent ACCEPT the response)
- *   - one host candidate: the node's public authority host + probePort
+ *   - one host candidate: the node's PUBLIC_MEDIA_NODE_ORIGIN + PUBLIC_MEDIA_NODE_PROBE_UDP_PORT
  * The DTLS fingerprint is a placeholder — DTLS never completes (there is no
  * peer); the browser reads the candidate-pair RTT from getStats() long before
  * the connection gives up and the page closes the PC.
@@ -22,13 +22,13 @@ export default defineEventHandler(async (event) => {
   const nodeId = String(getRouterParam(event, 'nodeId') ?? '')
   const node = getNode(nodeId)
   if (!node) throw createError({ statusCode: 404, statusMessage: 'node not found' })
-  if (!node.probePort) {
+  if (!node.publicProbeUdpPort) {
     throw createError({
       statusCode: 501,
       statusMessage: 'node firmware has no probe port — falling back to server-side probe',
     })
   }
-  const host = node.publicRtmpAuthority.split(':')[0]
+  const host = node.publicOrigin
   if (!host) {
     throw createError({ statusCode: 501, statusMessage: 'node has no public authority — server-side probe only' })
   }
@@ -50,7 +50,7 @@ export default defineEventHandler(async (event) => {
     `a=fingerprint:sha-256 ${DUMMY_FP}`,
     'a=setup:active',
     'a=sctp-port:5000',
-    `a=candidate:1 1 udp 2130706431 ${host} ${node.probePort} typ host generation 0`,
+    `a=candidate:1 1 udp 2130706431 ${host} ${node.publicProbeUdpPort} typ host generation 0`,
     'a=end-of-candidates',
   ].join('\r\n')
 

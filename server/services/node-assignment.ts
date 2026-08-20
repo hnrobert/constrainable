@@ -17,7 +17,7 @@ const OFFLINE_GRACE_MS = Number(process.env.NODE_REASSIGN_GRACE_MS || 5 * 60 * 1
  * OFFLINE_GRACE_MS loses its users — they are reallocated on their next
  * visit (and admins can move anyone anytime).
  */
-import { listNodes, getNode, nodeOfflineForMs } from './media-node-registry'
+import { listNodes, getNode, nodeOfflineForMs, rtmpAuthority } from './media-node-registry'
 import { NodeSettingsRepository } from '../repositories/node-settings.repository'
 import { NodeLatenciesRepository } from '../repositories/node-latencies.repository'
 import { UsersRepository } from '../repositories/users.repository'
@@ -26,6 +26,13 @@ export interface AssignmentView {
   assigned: string | null
   /** the assigned node's OBS ingest authority, host[:port] ("" = via app host) */
   assignedRtmpAuthority: string
+  /** the assigned node's public reachability, handed through to browsers */
+  assignedPublic: {
+    origin: string
+    rtmpPort: number
+    probeUdpPort: number
+    srsUdpPort: number
+  }
 }
 
 /** What the client needs on load: its assignment + the probe list. */
@@ -35,7 +42,13 @@ export function assignmentView(userId: number): AssignmentView {
   const node = assigned ? getNode(assigned) : undefined
   return {
     assigned,
-    assignedRtmpAuthority: node?.publicRtmpAuthority || '',
+    assignedRtmpAuthority: node ? rtmpAuthority(node) : '',
+    assignedPublic: {
+      origin: node?.publicOrigin ?? '',
+      rtmpPort: node?.publicRtmpPort ?? 1935,
+      probeUdpPort: node?.publicProbeUdpPort ?? 0,
+      srsUdpPort: node?.publicSrsUdpPort ?? 0,
+    },
   }
 }
 

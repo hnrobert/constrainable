@@ -11,8 +11,12 @@ interface NodeRow {
   rtmpUrl: string | null
   assigned: number
   maxUsers: number
+  /** public reachability handed through from the node's register payload */
+  publicOrigin: string
+  publicRtmpPort: number
   /** >0 = node runs the STUN probe responder → browser-true ICE probe */
-  probePort: number
+  publicProbeUdpPort: number
+  publicSrsUdpPort: number
   isMine: boolean
 }
 
@@ -24,7 +28,7 @@ const { data: nodes, refresh } = useFetch<NodeRow[]>('/api/nodes')
 
 /* ------------------------------ latency test ----------------------------- */
 // Browser-true RTT: an ICE check against the node's STUN responder
-// (node/probe.go, UDP probePort — new firmware). The page mints the answer
+// (node/probe.go, UDP publicProbeUdpPort — new firmware). The page mints the answer
 // SDP via /api/nodes/probe-ice, then reads candidate-pair
 // currentRoundTripTime — the exact network path the user's WebRTC playback
 // takes. Nodes without the responder (old firmware) show n/a until updated.
@@ -75,7 +79,7 @@ async function pingNodes(): Promise<void> {
     const list = nodes.value ?? []
     // probe every node in parallel; ones without the responder get null → n/a
     const results = await Promise.all(
-      list.map(async (n) => ({ id: n.nodeId, ms: n.probePort > 0 ? await browserProbe(n.nodeId) : null })),
+      list.map(async (n) => ({ id: n.nodeId, ms: n.publicProbeUdpPort > 0 ? await browserProbe(n.nodeId) : null })),
     )
     rtts.value = Object.fromEntries(results.map((r) => [r.id, r.ms]))
 
@@ -179,13 +183,9 @@ const myNode = computed(() => (nodes.value ?? []).find((n) => n.isMine) ?? null)
                   v-if="rtts"
                   class="rounded-sm bg-muted px-1.5 py-0.5 font-mono text-xs tabular-nums"
                   :class="rttChip(rtts[n.nodeId]).cls"
-                  :title="n.probePort > 0 ? 'measured from your browser (ICE)' : 'node firmware has no probe responder — update it to measure'"
+                  :title="n.publicProbeUdpPort > 0 ? 'measured from your browser (ICE)' : 'node firmware has no probe responder — update it to measure'"
                 >{{ rttChip(rtts[n.nodeId]).label }}</span>
                 <span v-else class="text-xs text-muted-foreground">—</span>
-              </td>
-              <td class="py-2.5 pr-4">
-                <code v-if="n.rtmpUrl" class="font-mono text-xs">{{ n.rtmpUrl }}</code>
-                <span v-else class="text-xs text-muted-foreground">via site host</span>
               </td>
               <td class="py-2.5 pr-4 tabular-nums" :class="{ 'text-destructive': n.assigned > n.maxUsers }">
                 {{ n.assigned }} / {{ n.maxUsers }}

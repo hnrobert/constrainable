@@ -79,6 +79,13 @@ export interface MediaNodeSnapshot {
   nodeId: string
   /** OBS ingest URL (null = single-server: users push via the app's host) */
   rtmpUrl: string | null
+  /** public reachability reported by the node, handed through to browsers */
+  publicOrigin: string
+  publicRtmpPort: number
+  /** STUN latency-probe responder port (0 = old firmware, no probe) */
+  publicProbeUdpPort: number
+  /** SRS WebRTC media UDP port (0 = unreported) */
+  publicSrsUdpPort: number
   version: string
   activeStreams: number
   connectedAt: number

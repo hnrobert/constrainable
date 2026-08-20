@@ -5,7 +5,7 @@
  * current pin, and the STUN probe port for browser-side ICE latency probing
  * (0 = old firmware without the responder).
  */
-import { listNodes } from '../../services/media-node-registry'
+import { listNodes, rtmpAuthority } from '../../services/media-node-registry'
 import { NodeSettingsRepository } from '../../repositories/node-settings.repository'
 import { UsersRepository } from '../../repositories/users.repository'
 import { obsServerUrl } from '#shared/rtmp'
@@ -15,11 +15,15 @@ export default defineEventHandler((event) => {
   const me = UsersRepository.findById(auth.userId)
   return listNodes().map((n) => ({
     nodeId: n.nodeId,
-    rtmpUrl: n.publicRtmpAuthority ? obsServerUrl(n.publicRtmpAuthority) : null,
+    rtmpUrl: n.publicOrigin ? obsServerUrl(rtmpAuthority(n)) : null,
     assigned: NodeSettingsRepository.assignedCount(n.nodeId),
     maxUsers: NodeSettingsRepository.getMaxUsers(n.nodeId),
+    /** public reachability handed through to the browser (register payload) */
+    publicOrigin: n.publicOrigin,
+    publicRtmpPort: n.publicRtmpPort,
     /** >0 = firmware runs the STUN probe responder → browser-true ICE probe */
-    probePort: n.probePort ?? 0,
+    publicProbeUdpPort: n.publicProbeUdpPort,
+    publicSrsUdpPort: n.publicSrsUdpPort,
     isMine: me?.nodeId === n.nodeId,
   }))
 })

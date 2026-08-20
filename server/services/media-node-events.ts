@@ -7,7 +7,7 @@
  */
 import type { Server as SocketIOServer, Socket } from 'socket.io'
 import { env } from '../utils/env'
-import { register, disconnect, adjustStreamCount, getNode, emitToNode } from './media-node-registry'
+import { register, disconnect, adjustStreamCount, getNode, emitToNode, rtmpAuthority } from './media-node-registry'
 import { authorizePublish } from './access-control'
 import { PublishSessionsRepository } from '../repositories/publish-sessions.repository'
 import { RecordingsRepository } from '../repositories/recordings.repository'
@@ -27,12 +27,27 @@ interface RegisterPayload {
   identifier: string
   /** pre-rename wire name still sent by older node binaries */
   origin?: string
-  publicRtmpAuthority?: string
   srsFlvBase?: string
-  /** UDP port of the STUN probe responder (0/missing = old firmware) */
-  probePort?: number
+  publicOrigin?: string
+  publicRtmpPort?: number
+  publicProbeUdpPort?: number
+  publicSrsUdpPort?: number
+  /** LEGACY pre-split field (host[:port]) still sent by older binaries */
+  publicRtmpAuthority?: string
   hostname: string
   version: string
+}
+
+/** Old binaries send PUBLIC_RTMP_AUTHORITY (host[:port]) instead of the
+ *  split PUBLIC_MEDIA_NODE_ORIGIN/PUBLIC_MEDIA_NODE_RTMP_PORT pair — normalize for register(). */
+function splitLegacyAuthority(payload: RegisterPayload): {
+  publicOrigin?: string
+  publicRtmpPort?: number
+} {
+  if (payload.publicOrigin || !payload.publicRtmpAuthority) return {}
+  const [host, portStr] = payload.publicRtmpAuthority.split(':')
+  if (!host) return {}
+  return { publicOrigin: host, publicRtmpPort: Number(portStr) || 1935 }
 }
 
 interface PublishStartPayload {
@@ -118,9 +133,9 @@ export function wireMediaNodeNamespace(io: SocketIOServer): void {
         // identifier is the current field; origin is the pre-rename wire name
         // (mixed-version fleets during rollout). Hostname as last resort.
         identifier: payload.identifier || payload.origin || payload.hostname,
-        publicRtmpAuthority: payload.publicRtmpAuthority ?? '',
         srsFlvBase: payload.srsFlvBase,
-        probePort: payload.probePort ?? 0,
+        // legacy PUBLIC_RTMP_AUTHORITY (host[:port]) splits into origin+port
+        ...splitLegacyAuthority(payload),
         hostname: payload.hostname,
         version: payload.version,
       })
@@ -263,8 +278,9 @@ async function handlePublishStart(
     const lockUser = UsersRepository.findByEmail(payload.streamName)
     if (lockUser?.nodeId && payload.nodeId && lockUser.nodeId !== payload.nodeId) {
       const pinned = getNode(lockUser.nodeId)
-      const where = pinned?.publicRtmpAuthority
-        ? ` — use ${obsServerUrl(pinned.publicRtmpAuthority)} (or change your selection on the Nodes page)`
+      const pinnedAuthority = pinned ? rtmpAuthority(pinned) : ''
+      const where = pinnedAuthority
+        ? ` — use ${obsServerUrl(pinnedAuthority)} (or change your selection on the Nodes page)`
         : ' — check the Nodes page on the website for your node address'
       audit('warn', 'access', `publish on wrong node: ${payload.streamName} (${payload.nodeId}, locked to ${lockUser.nodeId})`, {
         actor: payload.streamName,
