@@ -131,7 +131,7 @@ const myNode = computed(() => (nodes.value ?? []).find((n) => n.isMine) ?? null)
     <div class="flex flex-wrap items-center gap-3">
       <span v-if="myNode" class="text-sm">
         Your node: <strong class="font-medium">{{ myNode.nodeId }}</strong>
-        <Button variant="link" class="h-auto p-0 text-xs" :disabled="selecting === 'auto'" @click="select(null)">switch to automatic</Button>
+        <Button variant="link" class="h-auto p-2 text-xs" :disabled="selecting === 'auto'" @click="select(null)">switch to automatic</Button>
       </span>
       <span v-else class="text-sm text-muted-foreground">
         No node selected — automatic (least-loaded) allocation applies.
