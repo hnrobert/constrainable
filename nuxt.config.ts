@@ -32,7 +32,6 @@ export default defineNuxtConfig({
         '@lucide/vue',
         '@vueuse/core',
         'vue-sonner',
-        'mpegts.js',
         'socket.io-client',
         'jose',
         'picomatch',

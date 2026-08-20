@@ -24,12 +24,8 @@ import { UsersRepository } from '../repositories/users.repository'
 
 export interface AssignmentView {
   assigned: string | null
-  /** the assigned node's browser-reachable base ("" = via the app's host) */
-  assignedPublicOrigin: string
   /** the assigned node's OBS ingest authority, host[:port] ("" = via app host) */
   assignedRtmpAuthority: string
-  /** probe targets for the browser (only nodes with a public origin) */
-  probe: { nodeId: string; publicOrigin: string }[]
 }
 
 /** What the client needs on load: its assignment + the probe list. */
@@ -39,11 +35,7 @@ export function assignmentView(userId: number): AssignmentView {
   const node = assigned ? getNode(assigned) : undefined
   return {
     assigned,
-    assignedPublicOrigin: node?.publicOrigin || '',
     assignedRtmpAuthority: node?.publicRtmpAuthority || '',
-    probe: listNodes()
-      .filter((n) => n.publicOrigin !== '')
-      .map((n) => ({ nodeId: n.nodeId, publicOrigin: n.publicOrigin })),
   }
 }
 

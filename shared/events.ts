@@ -77,7 +77,6 @@ export interface AuditSnapshot {
 /** One media node row for the admin nodes page (GET /api/media-nodes shape). */
 export interface MediaNodeSnapshot {
   nodeId: string
-  publicOrigin: string
   /** OBS ingest URL (null = single-server: users push via the app's host) */
   rtmpUrl: string | null
   version: string

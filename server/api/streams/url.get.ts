@@ -1,7 +1,8 @@
 /**
- * Resolve browser→SRS FLV/WHEP playback URLs for a live stream. Admin-only:
- * live monitoring is reserved for proctors (requireAdmin). The browser still
- * hits SRS directly.
+ * Resolve playback info for a live stream — WebRTC only: the WHEP signaling
+ * URL (same-origin, ADMIN-GATED — media can never start without an
+ * authenticated session) + ICE servers for the browser's peer connection.
+ * Media itself flows directly browser ↔ the hosting node's SRS over UDP.
  */
 import { createError } from 'h3'
 import { buildPlaybackUrls } from '../../utils/srs-url'

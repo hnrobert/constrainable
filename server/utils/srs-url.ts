@@ -1,7 +1,6 @@
 import { env } from './env'
 import type { IceServer } from '#shared/rtmp'
 import { getHostingNode } from '../services/media-node-registry'
-import { signMediaUrl } from './signed-url'
 
 /**
  * The server-to-SRS pull address for the recorder and the monitor probe, as an
@@ -29,7 +28,6 @@ export function buildRtmpUrl(app: string, stream: string, vhost?: string): strin
 }
 
 export interface PlaybackUrls {
-  flv: string
   whep: string
   /** ICE servers for the browser's WebRTC (WHEP) connection — env-driven,
    *  empty when SRS's public candidate is directly reachable (ICE-lite) */
@@ -37,29 +35,13 @@ export interface PlaybackUrls {
 }
 
 /**
- * Playback URLs for a live stream.
- *
- * FLV — two paths depending on the hosting node:
- *  - Multi-node (node advertises PUBLIC_NODE_ORIGIN): a SIGNED ABSOLUTE URL on the
- *    node's own play endpoint (`http://<domain>:<port>/live/<s>.flv?exp&sig`). The
- *    browser pulls video DIRECTLY from the node — playback bandwidth never
- *    transits the control plane. Each pull is authorized by the node via the
- *    `play:auth` Socket.IO ack (the app verifies the signature it minted).
- *  - Single-server default (no PUBLIC_NODE_ORIGIN): the same-origin proxy at
- *    /api/streams/live/<stream> — the app pulls from the internal SRS.
- *
- * WHEP (WebRTC): only the SDP signaling is proxied same-origin
- * (/api/streams/whep/<stream>); the media flows browser↔SRS peer-to-peer.
+ * Playback for a live stream is WebRTC ONLY: the SDP signaling is proxied
+ * same-origin (/api/streams/whep/<stream>, admin-gated — media can never
+ * start without an authenticated session); the MEDIA itself flows directly
+ * browser↔the hosting node's SRS over UDP. No FLV path exists for browsers.
  */
 export function buildPlaybackUrls(streamName: string): PlaybackUrls {
-  // encodeURI, NOT encodeURIComponent: stream names are account emails — the
-  // `@` must stay verbatim because SRS hangs/mis-serves the %40 form (same
-  // reason as the live proxy below).
-  const path = encodeURI(`/live/${streamName}.flv`)
-  const node = getHostingNode(streamName)
-  const flv = node?.publicOrigin ? signMediaUrl(node.publicOrigin, path) : `/api/streams/live/${encodeURIComponent(streamName)}`
   return {
-    flv,
     whep: `/api/streams/whep/${encodeURIComponent(streamName)}`,
     iceServers: env.iceServers,
   }

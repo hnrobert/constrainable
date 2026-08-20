@@ -6,7 +6,6 @@
  * current page at once (heavy — that's the point). Pagination, per-row tile
  * count and sorting are owned by the page and passed down as precomputed props.
  */
-import type mpegtsTypes from 'mpegts.js'
 import type { SessionSnapshot } from '#shared/events'
 
 const props = defineProps<{
@@ -18,7 +17,7 @@ const emit = defineEmits<{ watch: [streamName: string] }>()
 const tileRefs = new Map<string, HTMLVideoElement | null>()
 const playing = ref<Set<string>>(new Set())
 const playAll = ref(false)
-const players = new Map<string, mpegtsTypes.Player>()
+const players = new Map<string, RTCPeerConnection>()
 
 async function startTile(name: string) {
   if (playing.value.has(name)) return
@@ -26,15 +25,27 @@ async function startTile(name: string) {
   if (!video) return
   playing.value.add(name)
   try {
-    const mpegts = (await import('mpegts.js')).default
-    const player = mpegts.createPlayer(
-      { type: 'flv', isLive: true, url: `/api/streams/live/${encodeURIComponent(name)}` },
-      { enableStashBuffer: false, stashInitialSize: 128 },
-    )
-    player.attachMediaElement(video)
-    player.load()
-    await Promise.resolve(player.play()).catch(() => {})
-    players.set(name, player)
+    const urls = await $fetch<{ whep: string; iceServers: IceServer[] }>('/api/streams/url', {
+      params: { streamName: name },
+    })
+    const pc = new RTCPeerConnection({ iceServers: urls.iceServers ?? [] })
+    pc.addTransceiver('video', { direction: 'recvonly' })
+    pc.addTransceiver('audio', { direction: 'recvonly' })
+    pc.ontrack = (e) => {
+      video.srcObject = e.streams[0] ?? null
+      video.play().catch(() => {})
+    }
+    const offer = await pc.createOffer()
+    await pc.setLocalDescription(offer)
+    const resp = await fetch(urls.whep, {
+      method: 'POST',
+      headers: { 'content-type': 'application/sdp' },
+      body: offer.sdp,
+    })
+    if (!resp.ok) throw new Error(`WHEP ${resp.status}`)
+    const answer = await resp.text()
+    await pc.setRemoteDescription({ type: 'answer', sdp: answer })
+    players.set(name, pc)
   } catch {
     stopTile(name)
   }
@@ -45,15 +56,15 @@ function stopTile(name: string) {
   const p = players.get(name)
   if (p) {
     try {
-      p.pause()
-      p.unload()
-      p.detachMediaElement()
-      p.destroy()
+      p.getSenders().forEach((s) => s.track?.stop())
+      p.close()
     } catch {
       /* ignore */
     }
     players.delete(name)
   }
+  const video = tileRefs.get(name)
+  if (video) video.srcObject = null
 }
 
 function onEnter(name: string) {

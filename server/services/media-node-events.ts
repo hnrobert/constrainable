@@ -17,7 +17,6 @@ import { UsersRepository } from '../repositories/users.repository'
 import { isSiteWideBanned, isBlocked, ban, liftStrictLimitsBan } from './stream-bans'
 import { verifierFromCipher, verifyResponse } from '../utils/authmod'
 import { obsServerUrl } from '#shared/rtmp'
-import { verifyMediaSignature } from '../utils/signed-url'
 import { audit } from './audit'
 import { emit } from '../utils/bus'
 import { emitNodesChanged } from './media-node-snapshot'
@@ -25,8 +24,7 @@ import type { PublishSession } from '../database/schema'
 import type { SessionSnapshot, SessionStatus, RecordingSnapshot } from '#shared/events'
 
 interface RegisterPayload {
-  origin: string
-  publicOrigin?: string
+  identifier: string
   publicRtmpAuthority?: string
   rtmpPort: number
   srtPort: number
@@ -115,8 +113,7 @@ export function wireMediaNodeNamespace(io: SocketIOServer): void {
 
     socket.on('node:register', (payload: RegisterPayload, ack?: (r: { nodeId: string }) => void) => {
       const nodeId = register(socket, {
-        origin: payload.origin,
-        publicOrigin: payload.publicOrigin,
+        identifier: payload.identifier,
         publicRtmpAuthority: payload.publicRtmpAuthority ?? '',
         rtmpPort: payload.rtmpPort,
         srtPort: payload.srtPort,
@@ -168,35 +165,6 @@ export function wireMediaNodeNamespace(io: SocketIOServer): void {
       emitNodesChanged()
     })
 
-    // --- direct playback authorization. Nodes with a PUBLIC_ORIGIN serve FLV
-    // to browsers DIRECTLY; every pull asks the control plane first. The
-    // browser's URL carries the HMAC signature this app minted (admin-gated
-    // /api/streams/url) — verify it server-side so the secret never leaves.
-    socket.on(
-      'play:auth',
-      (
-        p: { stream?: string; exp?: number; sig?: string },
-        ack?: (r: { allow: boolean; reason?: string }) => void,
-      ) => {
-        const stream = String(p?.stream ?? '').trim()
-        // encodeURI to match the minted URL's path byte-for-byte (@ stays
-        // verbatim — see buildPlaybackUrls)
-        const path = encodeURI(`/live/${stream}.flv`)
-        const ok =
-          stream !== '' &&
-          verifyMediaSignature(path, Number(p?.exp), String(p?.sig ?? '')) &&
-          !!PublishSessionsRepository.findActiveByStream(stream)
-        if (!ok) {
-          audit('warn', 'access', `direct play denied: ${stream || '(unnamed)'}`, {
-            streamName: stream,
-            detail: { nodeId: 'play:auth' },
-          })
-          ack?.({ allow: false, reason: 'invalid or expired playback token' })
-          return
-        }
-        ack?.({ allow: true })
-      },
-    )
 
     // --- RTMP auth (Adobe authmod) — the media-node's ONLY auth surface. The
     // same logic as the HTTP /api/srs/rtmp-auth endpoints (which remain for

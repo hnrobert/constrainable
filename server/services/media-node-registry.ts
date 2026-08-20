@@ -1,6 +1,6 @@
 /**
  * In-memory registry of connected media nodes (Go backends). Keyed by nodeId
- * (derived from NODE_IDENTIFIER). Tracks socket connections, origins, and active
+ * (derived from the node-reported identifier). Tracks sockets and active
  * stream counts for load-balanced ingest routing. All state is volatile —
  * nodes re-register on reconnect, and session rows in the DB are the durable
  * record of which node handled which stream.
@@ -12,9 +12,7 @@ import { PublishSessionsRepository } from '../repositories/publish-sessions.repo
 export interface MediaNodeInfo {
   nodeId: string
   socketId: string
-  origin: string
-  /** browser-reachable base ("" = via the app's host, single-server default) */
-  publicOrigin: string
+  identifier: string
   /** OBS ingest AUTHORITY (host[:port]) for this node's users ("" = via app host) */
   publicRtmpAuthority: string
   rtmpPort: number
@@ -27,7 +25,7 @@ export interface MediaNodeInfo {
    * This node's SRS HTTP-FLV base AS REACHABLE FROM THIS BACKEND — the address
    * the playback proxy pulls from. Reported by the node at registration
    * (SRS_FLV_BASE), so a shared Docker network advertises its service name
-   * (http://srs:38081 — the SRS SIDECAR, not the node itself; 38080 is the node's play entry) while a remote node advertises its public origin.
+   * (http://srs:38081 — the SRS SIDECAR, not the node itself).
    */
   srsFlvBase: string
 }
@@ -57,10 +55,10 @@ export function register(
   socket: Socket,
   info: Omit<
     MediaNodeInfo,
-    'nodeId' | 'socketId' | 'connectedAt' | 'activeStreams' | 'srsFlvBase' | 'publicOrigin'
-  > & { srsFlvBase?: string; publicOrigin?: string; publicRtmpAuthority?: string },
+    'nodeId' | 'socketId' | 'connectedAt' | 'activeStreams' | 'srsFlvBase'
+  > & { srsFlvBase?: string; publicRtmpAuthority?: string },
 ): string {
-  const nodeId = deriveNodeId(info.origin)
+  const nodeId = deriveNodeId(info.identifier)
   const existing = nodes.get(nodeId)
   const entry: MediaNodeInfo = {
     ...info,
@@ -68,9 +66,7 @@ export function register(
     socketId: socket.id,
     connectedAt: Date.now(),
     activeStreams: existing?.activeStreams ?? 0,
-    // fall back to the origin host for nodes that don't advertise an FLV base
-    srsFlvBase: info.srsFlvBase || `http://${info.origin.replace(/^https?:\/\//, '').split(':')[0]}:38081`,
-    publicOrigin: info.publicOrigin || '',
+    srsFlvBase: info.srsFlvBase || `http://${info.identifier}:38081`,
     publicRtmpAuthority: info.publicRtmpAuthority || '',
   }
   nodes.set(nodeId, entry)
@@ -78,7 +74,7 @@ export function register(
   everSeen.add(nodeId)
   socketToNode.set(socket.id, nodeId)
   console.log(
-    `[media-nodes] registered: ${nodeId} (${info.hostname}) origin=${info.origin} flv=${entry.srsFlvBase}`,
+    `[media-nodes] registered: ${nodeId} (${info.hostname}) flv=${entry.srsFlvBase}`,
   )
   return nodeId
 }

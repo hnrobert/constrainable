@@ -7,18 +7,12 @@
  */
 import { env } from '../utils/env'
 import { buildFlvPullUrl } from '../utils/srs-url'
-import { signMediaUrl } from '../utils/signed-url'
-import { resolveFlvBase, getHostingNode } from '../services/media-node-registry'
+import { resolveFlvBase } from '../services/media-node-registry'
 
 export async function captureLatestFrame(stream: string): Promise<Uint8Array> {
-  // Remote nodes: pull through the node's auth-gated play entry with a
-  // self-signed URL (this app verifies its own signature on play:auth) — the
-  // SRS sidecar never has to be exposed for snapshots. Local/single-server:
-  // the internal FLV base as before.
-  const hosted = getHostingNode(stream)
-  const pullUrl = hosted?.publicOrigin
-    ? signMediaUrl(hosted.publicOrigin, encodeURI(`/live/${stream}.flv`))
-    : buildFlvPullUrl(stream, resolveFlvBase(stream))
+  // Server-side pull over the internal network: the hosting node's SRS_FLV_BASE
+  // (Docker DNS / VPN-reachable), else the local SRS. Browsers never see FLV.
+  const pullUrl = buildFlvPullUrl(stream, resolveFlvBase(stream))
 
   const proc = Bun.spawn({
     cmd: [

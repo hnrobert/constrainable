@@ -20,7 +20,6 @@ function rtmpUrl(n: { publicRtmpAuthority: string }): string | null {
 export function nodesSnapshot(): MediaNodeSnapshot[] {
   return listNodes().map((n) => ({
     nodeId: n.nodeId,
-    publicOrigin: n.publicOrigin,
     rtmpUrl: rtmpUrl(n),
     version: n.version,
     activeStreams: n.activeStreams,
