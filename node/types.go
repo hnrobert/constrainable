@@ -5,8 +5,8 @@ package node
 
 // RegisterPayload is what a media node sends on (re)connect to identify itself.
 type RegisterPayload struct {
+	Identifier          string `json:"identifier"`          // NODE_IDENTIFIER — the stable identity (nodeId source)
 	Origin              string `json:"origin"`              // this node's identifier (SELF_ORIGIN)
-	PublicOrigin        string `json:"publicOrigin"`        // browser-reachable base = PUBLIC_NODE_ORIGIN ("" = via app host)
 	RTMPPort            int    `json:"rtmpPort"`            // RTMP ingest port
 	PublicRtmpAuthority string `json:"publicRtmpAuthority"` // OBS ingest authority host[:port], e.g. host or host:21935 ("": via app host)
 	SRTPort             int    `json:"srtPort"`             // SRT ingest port (scaffold)

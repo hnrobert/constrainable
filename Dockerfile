@@ -24,7 +24,7 @@ COPY --from=build /src/srs.conf.template /etc/media-node/srs.conf.template
 # ownership; without this the nonroot process couldn't write the config.
 COPY --from=build --chown=65532:65532 /src/srs.conf.template /srs-config/.placeholder
 
-EXPOSE 1935 38080
+EXPOSE 1935
 
 ENV RECORD_DIR=/records \
     SRS_CONFIG_PATH=/srs-config/srs.conf

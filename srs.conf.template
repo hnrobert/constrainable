@@ -22,7 +22,7 @@ http_server {
 
 rtc_server {
     enabled         on;
-    listen          8000;
+    listen          ${SRS_UDP_PORT};
     candidate       ${SRS_RTC_CANDIDATE};
 }
 

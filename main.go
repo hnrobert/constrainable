@@ -40,6 +40,7 @@ func startSRS(cfg *Config) *exec.Cmd {
 	conf := string(tpl)
 	conf = strings.ReplaceAll(conf, "${SRS_RTC_CANDIDATE}", cfg.SRSRTCCandidate)
 	conf = strings.ReplaceAll(conf, "${SRS_HTTP_PORT}", strconv.Itoa(cfg.SRSHTTPPort))
+	conf = strings.ReplaceAll(conf, "${SRS_UDP_PORT}", strconv.Itoa(cfg.SRSUDPPort))
 	if err := os.WriteFile(cfg.SRSConfigPath, []byte(conf), 0644); err != nil {
 		log.Fatalf("[srs] write config %s: %v", cfg.SRSConfigPath, err)
 	}
@@ -127,15 +128,15 @@ func main() {
 		log.Fatalf("config: %v", err)
 	}
 
-	log.Printf("media-node v%s | api=%s | id=%s | public=%s | hostname=%s",
-		version, cfg.APIOrigin, cfg.NodeIdentifier, cfg.PublicNodeOrigin, cfg.Hostname)
+	log.Printf("media-node v%s | api=%s | id=%s | hostname=%s",
+		version, cfg.APIOrigin, cfg.NodeIdentifier, cfg.Hostname)
 	srsHost := cfg.SRSAddr
 	if i := strings.LastIndex(srsHost, ":"); i >= 0 {
 		srsHost = srsHost[:i]
 	}
 	srsHTTPBase := fmt.Sprintf("http://%s:%d", srsHost, cfg.SRSHTTPPort)
-	log.Printf("rtmp :%d | play :%d | srs=%s | srs-http=%s | srs-api=%s | flv-base=%s",
-		cfg.RTMPPort, cfg.PlayPort, cfg.SRSAddr, srsHTTPBase, cfg.SRSApiBase, cfg.SRSFlvBase)
+	log.Printf("rtmp :%d | srs-udp :%d | srs=%s | srs-http=%s | srs-api=%s | flv-base=%s",
+		cfg.RTMPPort, cfg.SRSUDPPort, cfg.SRSAddr, srsHTTPBase, cfg.SRSApiBase, cfg.SRSFlvBase)
 
 	// Start colocated SRS (renders config template → starts → waits for API)
 	srsCmd := startSRS(cfg)
@@ -145,8 +146,8 @@ func main() {
 
 	// Socket.IO client — ALL communication with the Node control plane
 	socketClient := node.NewClient(cfg.APIOrigin, cfg.AuthToken, node.RegisterPayload{
+		Identifier:          cfg.NodeIdentifier,
 		Origin:              cfg.NodeIdentifier,
-		PublicOrigin:        cfg.PublicNodeOrigin,
 		PublicRtmpAuthority: cfg.PublicRtmpAuthority,
 		RTMPPort:            cfg.RTMPPort,
 		SRTPort:             cfg.SRTPort,
@@ -154,10 +155,6 @@ func main() {
 		Hostname:            cfg.Hostname,
 		Version:             version,
 	})
-
-	// Direct playback entry (browsers -> this node -> SRS sidecar); every
-	// pull is authorized by the control plane over the socket, fail-closed.
-	_ = startPlayServer(fmt.Sprintf(":%d", cfg.PlayPort), NewPlayServer(socketClient, srsHTTPBase))
 
 	// Session manager
 	manager := media.NewManager(

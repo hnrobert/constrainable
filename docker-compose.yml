@@ -34,18 +34,10 @@ services:
       # Stable unique identity of this node (drives nodeId: user assignments,
       # session ownership, quotas). NOT an address.
       NODE_IDENTIFIER: ${NODE_IDENTIFIER:-$(hostname)}
-      # THE single public origin of this node (multi-node deployments; empty
-      # in single-server deployments). Full URL, scheme optional. Browser
-      # playback is path-based on it (${PUBLIC_NODE_ORIGIN}/live/<s>.flv) —
-      # route /live/ on that domain's proxy to this node's published play
-      # port. Also drives latency probing + the derived OBS address.
-      PUBLIC_NODE_ORIGIN: ${PUBLIC_NODE_ORIGIN:-}
-      # FULL OBS ingest origin for assigned users (e.g. rtmp://host/live,
-      # or :21935 when the tunnel remaps the port). Empty = derived
-      # rtmp://<PUBLIC_NODE_ORIGIN host>/live.
+      # OBS ingest authority host[:port]; empty = derived from
+      # NODE_IDENTIFIER. Also the default source of the WebRTC ICE candidate
+      # host (same machine as SRS).
       PUBLIC_RTMP_AUTHORITY: ${PUBLIC_RTMP_AUTHORITY:-}
-      # PUBLIC RTMP port for OBS URLs (1935 standard; change only when the
-      # tunnel remaps it, e.g. node exposed as host:21935)
       # Shared auth token (must match the backend; empty = no auth)
       MEDIA_NODE_AUTH_TOKEN: ${MEDIA_NODE_AUTH_TOKEN:-}
       # How the control plane pulls FLV from this node's SRS (empty = derived
@@ -59,9 +51,6 @@ services:
       - /etc/timezone:/etc/timezone:ro   # host tz name (debian-style, optional)
     ports:
       - "1935:1935" # RTMP ingest (OBS pushes here)
-      # Direct browser FLV pulls (proxy /live/ on PUBLIC_NODE_ORIGIN → this port). Every pull is
-      # authorized by the control plane over Socket.IO, then proxied from SRS.
-      - "38080:38080"
     networks:
       - constrainable-ingest
       # - ingest-shared   # external shared network (see header)
@@ -71,10 +60,11 @@ services:
     restart: unless-stopped
 
   # SRS sidecar: waits for the config the node renders onto the shared volume,
-  # then starts. DVR segments land in ./records. udp/8000 is published for
+  # then starts. DVR segments land in ./records. udp is published for
   # DIRECT WebRTC media (ICE): browsers send UDP straight to this port — it
-  # cannot be path-routed through an HTTP proxy, so PUBLIC_NODE_ORIGIN's host
-  # must resolve directly to this machine (DNS-only, not a CDN proxy edge).
+  # cannot be path-routed through an HTTP proxy, so the host in
+  # SRS_RTC_CANDIDATE / PUBLIC_RTMP_AUTHORITY must resolve directly to this
+  # machine (DNS-only, not a CDN proxy edge).
   # SRS: DVR filenames + logs follow the HOST timezone via the read-only
   # /etc/localtime mount (macOS Docker Desktop: add `TZ: ${TZ:-Asia/Shanghai}`
   # under an `environment:` block — host /etc isn't shared there).
@@ -91,18 +81,21 @@ services:
       - /etc/localtime:/etc/localtime:ro # host tz (linux; symlink resolves inside)
       - /etc/timezone:/etc/timezone:ro   # host tz name (debian-style, optional)
     ports:
-      - "${SRS_UDP_PORT:-8000}:8000/udp" # WebRTC media (direct ICE, browsers)
+      # WebRTC media (direct ICE, browsers). Host port must equal the
+      # container's rtc listen (SRS_UDP_PORT, default 38000) — the SDP
+      # candidate carries this port number.
+      - "${SRS_UDP_PORT:-38000}:${SRS_UDP_PORT:-38000}/udp"
     networks:
       - constrainable-ingest
     depends_on:
       - media-node
     restart: unless-stopped
     # SRS's HTTP ports (FLV :38081 / API :1985) are deliberately NOT
-    # published: browsers reach the NODE's play entry (:38080 on media-node)
-    # so every pull passes the auth gate; the control plane pulls FLV via
-    # SRS_FLV_BASE over the deployment network. Only udp/8000 is public —
-    # WebRTC media carries its own DTLS-SRTP encryption and is gated by the
-    # WHEP signaling the app proxies.
+    # published: browsers only ever speak WebRTC to SRS (gated by the
+    # admin-authenticated WHEP signaling the app proxies); the control plane
+    # pulls FLV server-side via SRS_FLV_BASE over the deployment network.
+    # Only the UDP media port is public — WebRTC media carries its own
+    # DTLS-SRTP encryption.
 
 volumes:
   srs-conf:

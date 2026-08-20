@@ -17,13 +17,6 @@ type Config struct {
 	AuthToken      string // shared secret with Node (socket auth)
 	NodeIdentifier string // stable unique identity (drives nodeId: user
 	// assignments, session ownership, quotas). NOT an address.
-	PublicNodeOrigin string // PUBLIC_NODE_ORIGIN — THE single public origin
-	// of this node (full URL, scheme optional — http:// assumed for bare
-	// domains). Browser playback rides it PATH-BASED:
-	// ${PUBLIC_NODE_ORIGIN}/live/<s>.flv, with the domain's reverse proxy
-	// routing /live/ to this node's play entry (auth still happens here).
-	// Also drives latency probing and the derived OBS address. Empty =
-	// single-server (playback via the app's proxy).
 	PublicRtmpAuthority string // PUBLIC_RTMP_AUTHORITY — the OBS ingest
 	// AUTHORITY (host[:port], URL terms) for users assigned to this node,
 	// e.g. ingest.example.com or ingest.example.com:21935 when the tunnel
@@ -32,9 +25,9 @@ type Config struct {
 	Hostname string // human-readable name
 
 	// Listeners
-	RTMPPort int // RTMP ingest (OBS pushes here)
-	PlayPort int // HTTP-FLV playback entry (browsers pull directly; each pull
-	// is authorized by the control plane over the socket)
+	RTMPPort   int // RTMP ingest (OBS pushes here)
+	SRSUDPPort int // SRS rtc_server UDP listen — browsers' WebRTC media port
+	// (must equal the published host port: the SDP candidate carries it)
 	SRTPort int // SRT ingest (scaffold; not yet implemented)
 
 	// SRS (sidecar container named `srs` on the deployment network; or a
@@ -66,10 +59,9 @@ func LoadConfig() (*Config, error) {
 		APIOrigin:           envOr("API_ORIGIN", "http://localhost:31954"),
 		AuthToken:           os.Getenv("MEDIA_NODE_AUTH_TOKEN"),
 		NodeIdentifier:      envOr("NODE_IDENTIFIER", "media-node"),
-		PublicNodeOrigin:    strings.TrimRight(envOr("PUBLIC_NODE_ORIGIN", ""), "/"),
 		PublicRtmpAuthority: envOr("PUBLIC_RTMP_AUTHORITY", ""),
 		RTMPPort:            envOrInt("RTMP_PORT", 1935),
-		PlayPort:            envOrInt("PLAY_PORT", 38080),
+		SRSUDPPort:          envOrInt("SRS_UDP_PORT", 38000),
 		SRTPort:             envOrInt("SRT_PORT", 9000),
 		SRSAddr:             envOr("SRS_ADDR", "srs:1935"),                   // docker sidecar service name
 		SRSApiBase:          envOr("SRS_API_BASE", "http://srs:1985/api/v1"), // docker sidecar service name
@@ -92,17 +84,6 @@ func LoadConfig() (*Config, error) {
 	c.APIOrigin = strings.TrimRight(c.APIOrigin, "/")
 	c.SRSApiBase = strings.TrimRight(c.SRSApiBase, "/")
 
-	// Normalize the public origin in place (scheme added for bare domains,
-	// trailing slash stripped) — it is advertised VERBATIM on the wire and
-	// drives latency probing + direct-playback signed URLs. Playback is
-	// PATH-BASED on it (/live/*); the domain front routes /live/ here.
-	if c.PublicNodeOrigin != "" {
-		if !strings.Contains(c.PublicNodeOrigin, "://") {
-			c.PublicNodeOrigin = "http://" + c.PublicNodeOrigin
-		}
-		c.PublicNodeOrigin = strings.TrimRight(c.PublicNodeOrigin, "/")
-	}
-
 	// OBS ingest authority for assigned users: PUBLIC_RTMP_AUTHORITY
 	// (reduced to host[:port] when a full URL is given), else derived from
 	// the public origin's host. The app renders rtmp://<authority>/live.
@@ -115,15 +96,14 @@ func LoadConfig() (*Config, error) {
 			a = a[:i]
 		}
 		c.PublicRtmpAuthority = a
-	} else if c.PublicNodeOrigin != "" {
-		c.PublicRtmpAuthority = originHost(c.PublicNodeOrigin)
 	}
 
-	// WebRTC candidate: browsers connect DIRECTLY over UDP to this host —
-	// derive from the public origin when not set explicitly.
+	// WebRTC candidate: browsers connect DIRECTLY over UDP to this host.
+	// Derive from the OBS ingest authority's host (same machine as SRS);
+	// loopback when nothing public is configured (single-server default).
 	if c.SRSRTCCandidate == "" {
-		if c.PublicNodeOrigin != "" {
-			c.SRSRTCCandidate = originHost(c.PublicNodeOrigin)
+		if c.PublicRtmpAuthority != "" {
+			c.SRSRTCCandidate = originHost(c.PublicRtmpAuthority)
 		} else {
 			c.SRSRTCCandidate = "127.0.0.1" // single-server default
 		}
