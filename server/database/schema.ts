@@ -251,6 +251,8 @@ export const publishSessions = sqliteTable(
     streamName: text('stream_name').notNull(),
     /** null = local/dev session (app manages its own SRS); else the media node id */
     nodeId: text('node_id'),
+    /** last publish:metrics arrival — remote-session liveness for the reconciler */
+    lastMetricAt: integer('last_metric_at', { mode: 'timestamp' }),
     srsClientId: text('srs_client_id'),
     status: text('status', {
       enum: ['pending', 'allowed', 'rejected', 'compliant', 'violating', 'killed', 'ended'],

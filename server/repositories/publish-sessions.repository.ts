@@ -81,7 +81,7 @@ export const PublishSessionsRepository = {
     m: { width: number | null; height: number | null; fps: number | null; bitrateKbps: number | null },
   ): void {
     db.update(publishSessions)
-      .set({ width: m.width, height: m.height, fps: m.fps, bitrateKbps: m.bitrateKbps })
+      .set({ width: m.width, height: m.height, fps: m.fps, bitrateKbps: m.bitrateKbps, lastMetricAt: new Date() })
       .where(eq(publishSessions.id, id))
       .run()
   },

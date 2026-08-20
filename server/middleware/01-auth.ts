@@ -1,11 +1,16 @@
 /**
  * Single authentication gate. On every request it:
- *   1. Parses the JWT `sid` cookie → event.context.auth (or null).
- *   2. Lets the allowlist through unauthenticated (SRS hooks, the auth
+ *   1. Parses the JWT `sid` cookie → the caller's identity (uid).
+ *   2. Resolves the CURRENT role from the DB (the cookie only proves identity
+ *      — a role baked into the token would make panel promotions/demotions
+ *      lag until re-login: a freshly promoted admin was still `user`, and a
+ *      demoted admin kept admin until expiry). A cookie whose user no longer
+ *      exists is treated as logged out.
+ *   3. Lets the allowlist through unauthenticated (SRS hooks, the auth
  *      endpoints, the public-key + public-events endpoints, health, the public
  *      pages `/` `/login` `/invite`, and static/Nuxt internals).
- *   3. Lets any authenticated session through (admin OR regular user).
- *   4. Otherwise: 401 JSON for /api/*, or 302 → /login for page requests.
+ *   4. Lets any authenticated session through (admin OR regular user).
+ *   5. Otherwise: 401 JSON for /api/*, or 302 → /login for page requests.
  *
  * Admin-gating is NOT done here — it lives per-handler via requireAdmin() — so
  * regular users can reach their authorized catalog & dashboard. Pure-HTTP
@@ -14,6 +19,7 @@
  */
 import { createError, getCookie, sendRedirect } from 'h3'
 import { readSessionCookie } from '../utils/session'
+import { UsersRepository } from '../repositories/users.repository'
 
 // Exact paths that never require a session.
 const ALLOW_EXACT = new Set(['/', '/login', '/invite', '/favicon.ico'])
@@ -35,10 +41,13 @@ const ALLOW_PREFIX = [
 ]
 
 export default defineEventHandler(async (event) => {
-  // 1. always populate auth context
+  // 1. cookie → identity; DB → the authoritative CURRENT role (one PK select)
   const cookie = getCookie(event, 'sid')
   const payload = cookie ? await readSessionCookie(cookie) : null
-  if (payload) event.context.auth = { userId: payload.uid, role: payload.role }
+  if (payload) {
+    const user = UsersRepository.findById(payload.uid)
+    event.context.auth = user ? { userId: user.id, role: user.role } : null
+  }
 
   const path = (event.path ?? '').split('?')[0] ?? ''
 
@@ -46,7 +55,7 @@ export default defineEventHandler(async (event) => {
   if (ALLOW_EXACT.has(path) || ALLOW_PREFIX.some((p) => path.startsWith(p))) return
 
   // 3. any authenticated session → through
-  if (payload) return
+  if (event.context.auth) return
 
   // 4. enforce
   if (path.startsWith('/api/')) {
