@@ -1,10 +1,13 @@
 <script setup lang="ts">
 /**
- * Grid (tile) view of live sessions. Each tile shows the stream's LATEST FRAME
- * (snapshot JPEG) on mount; hovering a tile lazily starts a live FLV player in
- * it, leaving tears it down. "Play all" mounts players on every tile of the
- * current page at once (heavy — that's the point). Pagination, per-row tile
- * count and sorting are owned by the page and passed down as precomputed props.
+ * Grid (tile) view of live sessions. Hovering a tile lazily starts a live
+ * WebRTC player in it; leaving tears it down. "Play all" mounts players on
+ * every tile of the current page at once (heavy — that's the point).
+ * Posters are captured CLIENT-SIDE from the played video (canvas snapshot,
+ * cached per stream) — there is no server-side frame endpoint; before a
+ * stream has been played once the tile shows just its status badge.
+ * Pagination, per-row tile count and sorting are owned by the page and passed
+ * down as precomputed props.
  */
 import type { SessionSnapshot } from '#shared/events'
 
@@ -21,6 +24,19 @@ const playing = ref<Set<string>>(new Set())
  *  before that the snapshot poster stays visible instead of a black box
  *  (SRS's lazy rtmp→rtc bridge + keyframe wait can delay frames by seconds) */
 const framed = ref<Set<string>>(new Set())
+/** last captured frame per stream (JPEG data URL) — the tile poster */
+const posters = ref(new Map<string, string>())
+
+/** Draw the tile's current video frame to a canvas → cached JPEG poster. */
+function capturePoster(name: string): void {
+  const video = tileRefs.get(name)
+  if (!video || video.videoWidth === 0) return
+  const canvas = document.createElement('canvas')
+  canvas.width = video.videoWidth
+  canvas.height = video.videoHeight
+  canvas.getContext('2d')?.drawImage(video, 0, 0)
+  posters.value.set(name, canvas.toDataURL('image/jpeg', 0.72))
+}
 const playAll = ref(false)
 const players = new Map<string, RTCPeerConnection>()
 
@@ -45,7 +61,10 @@ async function startTile(name: string) {
       video.play().catch(() => {})
     }
     video.addEventListener('resize', () => {
-      if (video.videoWidth > 0) framed.value.add(name)
+      if (video.videoWidth > 0) {
+        framed.value.add(name)
+        capturePoster(name)
+      }
     }, { once: true })
     const offer = await pc.createOffer()
     await pc.setLocalDescription(offer)
@@ -64,6 +83,7 @@ async function startTile(name: string) {
 }
 
 function stopTile(name: string) {
+  capturePoster(name) // keep the last real frame as the poster
   playing.value.delete(name)
   framed.value.delete(name)
   const p = players.get(name)
@@ -114,10 +134,6 @@ onBeforeUnmount(() => {
   for (const name of [...players.keys()]) stopTile(name)
 })
 
-function snapshotUrl(name: string): string {
-  return `/api/streams/live/${encodeURIComponent(name)}/snapshot?ts=${Date.now()}`
-}
-
 const statusVariant: Record<string, 'secondary' | 'warning' | 'success' | 'destructive'> = {
   pending: 'secondary',
   allowed: 'warning',
@@ -146,11 +162,10 @@ const statusVariant: Record<string, 'secondary' | 'warning' | 'success' | 'destr
       >
         <div class="relative aspect-video bg-black">
           <img
-            :src="snapshotUrl(s.streamName)"
+            v-if="posters.get(s.streamName)"
+            :src="posters.get(s.streamName)"
             :alt="s.streamName"
             class="absolute inset-0 size-full object-contain"
-            loading="lazy"
-            @error="($event.target as HTMLImageElement).style.opacity = '0'"
           />
           <video
             :ref="(el) => tileRefs.set(s.streamName, el as HTMLVideoElement | null)"

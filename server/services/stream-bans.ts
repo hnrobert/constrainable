@@ -48,22 +48,23 @@ export function isSiteWideBanned(email: string): boolean {
 }
 
 /**
- * Is the publisher blocked by a MANUAL ban? Auto strict-limits bans
- * (bannedBy 'system:strict-limits') do NOT block re-entry: enforcement is
- * the declared-spec gate at every connect, so a user who fixes their encoder
- * settings can stream again immediately — and one who doesn't is kicked
- * again within a second of publishing. Manual admin bans block forever.
+ * Is the publisher blocked by a ban? Strict-limits spec violations are NOT
+ * bans — they are rejected per-publish at the node (like a wrong password),
+ * so nothing auto-writes to this table; every row here is an admin decision
+ * and blocks until explicitly lifted.
  */
 export function isBlocked(email: string, eventId: number | null | undefined): boolean {
-  return StreamBansRepository.listBlocking(email.trim().toLowerCase(), eventId).some(
-    (b) => b.bannedBy !== 'system:strict-limits',
-  )
+  return StreamBansRepository.listBlocking(email.trim().toLowerCase(), eventId).length > 0
 }
 
-/** Lift the auto strict-limits ban once the publisher's spec complies. */
-export function liftStrictLimitsBan(email: string, eventId: number | null): void {
-  if (eventId == null) return
-  StreamBansRepository.removeStrictLimits(email.trim().toLowerCase(), eventId)
+/**
+ * Boot cleanup: older builds auto-banned on strict-limits spec violations.
+ * That data is not state (each publish is re-judged fresh), so any such row
+ * left in the DB is removed at startup. No-op afterwards.
+ */
+export function purgeLegacyStrictLimitsBans(): void {
+  const removed = StreamBansRepository.purgeStrictLimits()
+  if (removed > 0) console.log(`[bans] purged ${removed} legacy strict-limits auto-ban(s)`)
 }
 
 export function ban(input: {

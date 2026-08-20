@@ -14,7 +14,7 @@ import { RecordingsRepository } from '../repositories/recordings.repository'
 import { getConfig, getLimitsFor } from '../utils/config-store'
 import { EventsRepository } from '../repositories/events.repository'
 import { UsersRepository } from '../repositories/users.repository'
-import { isSiteWideBanned, isBlocked, ban, liftStrictLimitsBan } from './stream-bans'
+import { isSiteWideBanned, isBlocked } from './stream-bans'
 import { verifierFromCipher, verifyResponse } from '../utils/authmod'
 import { obsServerUrl } from '#shared/rtmp'
 import { audit } from './audit'
@@ -171,8 +171,8 @@ export function wireMediaNodeNamespace(io: SocketIOServer): void {
       handleMetrics(payload)
     })
 
-    socket.on('publish:spec', (payload: SpecPayload) => {
-      handleSpec(payload)
+    socket.on('publish:spec', (payload: SpecPayload, ack?: (r: { allow: boolean; reason?: string }) => void) => {
+      handleSpec(payload, ack)
     })
 
     socket.on('publish:end', (payload: EndPayload) => {
@@ -336,8 +336,7 @@ async function handlePublishStart(
       eventId: auth.eventId ?? null,
       // Limits always travel with the grant: the node checks the DECLARED
       // spec against them locally when strict (metadata-time, OBS-terminal),
-      // and runs the MEASURED 5s monitor against them when measured. The
-      // app-side publish:spec handler still records/bans either way.
+      // and runs the MEASURED 5s monitor against them when measured.
       limits: {
         maxWidth: limits.maxWidth,
         maxHeight: limits.maxHeight,
@@ -437,11 +436,14 @@ function handleRecordingReady(payload: RecordingReadyPayload): void {
  * measured counters remain the ongoing authority (declared values can be
  * forged by a custom publisher).
  */
-function handleSpec(payload: SpecPayload): void {
+function handleSpec(payload: SpecPayload, ack?: (r: { allow: boolean; reason?: string }) => void): void {
   const row = PublishSessionsRepository.findById(
     PublishSessionsRepository.findActiveByStream(payload.streamName)?.id ?? -1,
   )
-  if (!row) return
+  if (!row) {
+    ack?.({ allow: false, reason: 'no active session' })
+    return
+  }
   const bitrateKbps = Math.round((payload.videoKbps || 0) + (payload.audioKbps || 0))
   PublishSessionsRepository.updateMetrics(row.id, {
     width: payload.width || row.width,
@@ -458,64 +460,49 @@ function handleSpec(payload: SpecPayload): void {
     }),
   })
 
-  // immediate limit gate on the declared values
+  // Immediate limit gate on the declared values. The verdict goes back as an
+  // ACK: the NODE rejects the connection exactly like a wrong password
+  // (OBS-terminal BadName, zero frames relayed). No ban is recorded —
+  // "wrong settings" is a client fix, not a violation to punish for; an
+  // admin can still ban manually from the live panel.
   const event = row.eventId ? EventsRepository.findById(row.eventId) : null
   const limits = getLimitsFor(event)
-  const reasons: string[] = []
-  if (limits.maxWidth > 0 && payload.width > limits.maxWidth) reasons.push('resolution exceeds limit')
-  if (limits.maxHeight > 0 && payload.height > limits.maxHeight) reasons.push('resolution exceeds limit')
-  if (limits.maxFps > 0 && payload.fps > limits.maxFps) reasons.push('fps exceeds limit')
-  if (limits.maxBitrateKbps > 0 && bitrateKbps > limits.maxBitrateKbps) reasons.push('bitrate exceeds limit')
-  if (reasons.length === 0) {
-    // compliant after a previous violation — clear the auto ban so the Bans
-    // panel doesn't show a stale entry (and reconnects are obviously clean)
-    if (row.eventId != null) liftStrictLimitsBan(row.streamName, row.eventId)
+  const strict = event?.strictLimits ?? false
+  const reasons = new Set<string>()
+  if (limits.maxWidth > 0 && payload.width > limits.maxWidth) reasons.add('resolution exceeds limit')
+  if (limits.maxHeight > 0 && payload.height > limits.maxHeight) reasons.add('resolution exceeds limit')
+  if (limits.maxFps > 0 && payload.fps > limits.maxFps) reasons.add('fps exceeds limit')
+  if (limits.maxBitrateKbps > 0 && bitrateKbps > limits.maxBitrateKbps) reasons.add('bitrate exceeds limit')
+
+  if (reasons.size === 0) {
+    ack?.({ allow: true })
     return
   }
 
+  const reasonList = [...reasons]
   PublishSessionsRepository.updateStatus(row.id, 'violating')
   emit('session:violation', {
     ...snapshotFromRow(row, { status: 'violating' }),
-    reasons,
+    reasons: reasonList,
   })
-  if (event?.strictLimits) punishViolation(row, reasons)
-}
-
-/** strict-limits punishment: event-scoped ban + kill on the hosting node. */
-function punishViolation(row: { id: number; eventId: number | null; streamName: string; nodeId: string | null }, reasons: string[]): void {
-  const reasonText = reasons.join('; ')
-  ban({
-    email: row.streamName,
-    eventId: row.eventId,
-    reason: `strict limits violation: ${reasonText}`,
-    bannedBy: 'system:strict-limits',
-  })
-  audit('warn', 'publish', `strict-limits ban: ${row.streamName} (${reasonText})`, {
+  audit('warn', 'publish', `spec rejected: ${row.streamName} (${reasonList.join('; ')})`, {
     actor: row.streamName,
     eventId: row.eventId ?? null,
     streamName: row.streamName,
-    detail: { sessionId: row.id, eventId: row.eventId, reasons },
+    detail: { sessionId: row.id, strict, reasons: reasonList },
   })
-  const io = getSocketIO()
-  if (io && row.nodeId) {
-    emitToNode(io, row.nodeId, 'node:kick', {
-      streamName: row.streamName,
-      reason: `strict limits violation: ${reasonText}`,
-    })
-  }
+  ack?.({ allow: false, reason: reasonList.join('; ') + '. Lower your OBS resolution/FPS/bitrate and reconnect.' })
 }
+
 
 function handleViolation(payload: ViolationPayload): void {
   const row = PublishSessionsRepository.findById(payload.sessionId)
   if (!row) return
   PublishSessionsRepository.updateStatus(payload.sessionId, 'violating')
 
-  // STRICT limits: the event is configured to treat violations like a ban —
-  // ban the publisher from THIS event (identical enforcement to a manual
-  // ban: every reconnect is refused at the policy stage) and kill the
-  // stream on its hosting node.
-  const event = row.eventId ? EventsRepository.findById(row.eventId) : null
-  if (event?.strictLimits) punishViolation(row, payload.reasons)
+  // MEASURED-limit violation (the node's 5s monitor): flag the session and
+  // surface it on the dashboard. No ban — enforcement data is per-publish,
+  // not a stored verdict; an admin can still ban manually from the panel.
   audit('warn', 'publish', `media-node violation: ${row.streamName} (${payload.reasons.join('; ')})`, {
     actor: row.streamName,
     eventId: row.eventId ?? null,

@@ -18,14 +18,25 @@ import { createError, getRouterParam } from 'h3'
 import { env } from '../../../utils/env'
 import { resolveFlvBase, getHostingNode, getSocket } from '../../../services/media-node-registry'
 import { getSocketIO } from '../../../utils/socket-io'
+import { getAuth } from '../../../utils/auth'
+import { UsersRepository } from '../../../repositories/users.repository'
 
 const NODE_WHEP_TIMEOUT_MS = 8000
 
 export default defineEventHandler(async (event) => {
-  requireAdmin(event)
+  // admin: any stream; regular user: only their own (account email = stream
+  // name — the /live self-view rides on this)
+  const auth = getAuth(event)
+  if (!auth) throw createError({ statusCode: 403, statusMessage: 'login required' })
   const stream = decodeURIComponent(String(getRouterParam(event, 'stream') ?? '')).trim()
   if (!stream || stream.includes('/')) {
     throw createError({ statusCode: 400, statusMessage: 'stream is required' })
+  }
+  if (auth.role !== 'admin') {
+    const ownEmail = UsersRepository.findById(auth.userId)?.email
+    if (stream !== ownEmail) {
+      throw createError({ statusCode: 403, statusMessage: 'you can only watch your own stream' })
+    }
   }
   const offer = await readRawBody(event)
   if (!offer) {

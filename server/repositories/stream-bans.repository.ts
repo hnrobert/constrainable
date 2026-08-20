@@ -3,7 +3,7 @@
  * event bans are scoped. Unique on (email, eventId) — note SQLite treats NULLs
  * as distinct, so site-wide uniqueness is enforced in the service layer.
  */
-import { desc, eq, isNull, and, or } from 'drizzle-orm'
+import { desc, eq, isNull, and, or, inArray } from 'drizzle-orm'
 import { db } from '../database/db'
 import { streamBans, type StreamBan, type NewStreamBan } from '../database/schema'
 
@@ -43,17 +43,22 @@ export const StreamBansRepository = {
   findBlocking(email: string, eventId: number | null | undefined): StreamBan | undefined {
     return this.listBlocking(email, eventId)[0]
   },
-  /** Delete the event-scoped strict-limits ban for (email, event) if present. */
-  removeStrictLimits(email: string, eventId: number): void {
-    db.delete(streamBans)
-      .where(
-        and(
-          eq(streamBans.email, email),
-          eq(streamBans.eventId, eventId),
-          eq(streamBans.bannedBy, 'system:strict-limits'),
-        ),
-      )
-      .run()
+  /**
+   * Delete every auto strict-limits ban (all emails, all scopes). One-shot
+   * boot cleanup: that enforcement path no longer writes bans — spec
+   * violations are rejected per-publish at the node — so rows written by
+   * older builds are stale data, not state. Returns the removed count.
+   */
+  purgeStrictLimits(): number {
+    const stale = db
+      .select({ id: streamBans.id })
+      .from(streamBans)
+      .where(eq(streamBans.bannedBy, 'system:strict-limits'))
+      .all()
+    if (stale.length > 0) {
+      db.delete(streamBans).where(inArray(streamBans.id, stale.map((r) => r.id))).run()
+    }
+    return stale.length
   },
   insert(values: NewStreamBan): StreamBan {
     return db.insert(streamBans).values(values).returning().get()
