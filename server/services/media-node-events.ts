@@ -7,7 +7,7 @@
  */
 import type { Server as SocketIOServer, Socket } from 'socket.io'
 import { env } from '../utils/env'
-import { register, disconnect, adjustStreamCount, getNode, emitToNode, rtmpAuthority } from './media-node-registry'
+import { register, disconnect, adjustStreamCount, getNode, emitToNode, rtmpAuthority, listNodes } from './media-node-registry'
 import { authorizePublish } from './access-control'
 import { PublishSessionsRepository } from '../repositories/publish-sessions.repository'
 import { RecordingsRepository } from '../repositories/recordings.repository'
@@ -229,6 +229,15 @@ export function wireMediaNodeNamespace(io: SocketIOServer): void {
         })
         // known + !allow = a real account with the wrong password → the node
         // refuses the connection outright (librtmp-fatal `authfailed`)
+        if (!ok) {
+          audit('warn', 'auth', `authmod password rejected: ${email}`, {
+            actor: email,
+            detail: {
+              email,
+              nodeId: listNodes().find((n) => n.socketId === socket.id)?.nodeId ?? null,
+            },
+          })
+        }
         ack?.({ allow: ok, known: true })
       },
     )

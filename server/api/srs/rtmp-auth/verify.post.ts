@@ -15,6 +15,7 @@ import { createError, getHeader } from 'h3'
 import { env } from '../../../utils/env'
 import { UsersRepository } from '../../../repositories/users.repository'
 import { verifierFromCipher, verifyResponse } from '../../../utils/authmod'
+import { audit } from '../../../services/audit'
 
 export default defineEventHandler(async (event) => {
   if (env.mediaNodeAuthToken !== '' && getHeader(event, 'x-rtmp-auth') !== env.mediaNodeAuthToken) {
@@ -37,5 +38,11 @@ export default defineEventHandler(async (event) => {
   })
   // known + !allow = a REAL account with the WRONG password → the gateway
   // refuses the connection outright (librtmp-fatal `authfailed`).
+  if (!ok) {
+    audit('warn', 'auth', `authmod password rejected: ${email}`, {
+      actor: email,
+      detail: { email, source: 'http' },
+    })
+  }
   return { allow: ok, known: true }
 })
