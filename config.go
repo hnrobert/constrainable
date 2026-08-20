@@ -17,18 +17,23 @@ type Config struct {
 	AuthToken      string // shared secret with Node (socket auth)
 	NodeIdentifier string // stable unique identity (drives nodeId: user
 	// assignments, session ownership, quotas). NOT an address.
-	PublicOrigin       string // PUBLIC_MEDIA_NODE_ORIGIN — public hostname/IP of this node ("" = users push via the app's host)
-	PublicRTMPPort     int    // PUBLIC_MEDIA_NODE_RTMP_PORT — publicly mapped RTMP ingest port
-	PublicProbeUDPPort int    // PUBLIC_MEDIA_NODE_PROBE_UDP_PORT — publicly mapped STUN probe responder port
-	PublicSrsUDPPort   int    // PUBLIC_MEDIA_NODE_SRS_UDP_PORT — publicly mapped SRS WebRTC UDP (media) port
+	// ADVERTISED identity ONLY (sent to the app in node:register; the app
+	// renders it into OBS URLs / ICE / probe targets for BROWSERS). These
+	// NEVER touch a listener bind or the SRS config render — the container's
+	// internal ports are the Listeners below and stay fixed regardless.
+	PublicOrigin       string // PUBLIC_MEDIA_NODE_ORIGIN — public hostname/IP ("" = users push via the app's host)
+	PublicRTMPPort     int    // PUBLIC_MEDIA_NODE_RTMP_PORT — publicly mapped RTMP host port
+	PublicProbeUDPPort int    // PUBLIC_MEDIA_NODE_PROBE_UDP_PORT — publicly mapped probe host port
+	PublicSrsUDPPort   int    // PUBLIC_MEDIA_NODE_SRS_UDP_PORT — publicly mapped WebRTC media host port
 	Hostname           string // human-readable name
 
 	// Listeners
-	RTMPPort     int // RTMP ingest (OBS pushes here)
-	ProbeUDPPort int // STUN responder for browser latency probes (UDP)
-	SRSUDPPort   int // SRS rtc_server UDP listen — browsers' WebRTC media port
-	// (must equal the published host port: the SDP candidate carries it)
-	SRTPort int // SRT ingest (scaffold; not yet implemented)
+	// INTERNAL listeners (binds + SRS config render). Independent of the
+	// PUBLIC_* advertised values: set PUBLIC_MEDIA_NODE_* to match whatever
+	// the host maps, and the container keeps listening on these.
+	RTMPPort     int // RTMP ingest bind (OBS pushes here)
+	ProbeUDPPort int // STUN probe responder bind (UDP)
+	SRSUDPPort   int // SRS rtc_server listen rendered into the config (UDP)
 
 	// SRS (sidecar container named `srs` on the deployment network; or a
 	// child process when SRS_BIN is set — then use localhost:1935/1985)
@@ -60,7 +65,7 @@ func LoadConfig() (*Config, error) {
 		AuthToken:          os.Getenv("MEDIA_NODE_AUTH_TOKEN"),
 		NodeIdentifier:     envOr("NODE_IDENTIFIER", "media-node"),
 		PublicOrigin:       envOr("PUBLIC_MEDIA_NODE_ORIGIN", ""),
-		PublicRTMPPort:     envOrInt("PUBLIC_MEDIA_NODE_RTMP_PORT", 1935),
+		PublicRTMPPort:     envOrInt("PUBLIC_MEDIA_NODE_RTMP_PORT", envOrInt("RTMP_PORT", 1935)),
 		PublicProbeUDPPort: envOrInt("PUBLIC_MEDIA_NODE_PROBE_UDP_PORT", envOrInt("PROBE_UDP_PORT", 38111)),
 		PublicSrsUDPPort:   envOrInt("PUBLIC_MEDIA_NODE_SRS_UDP_PORT", envOrInt("SRS_UDP_PORT", 38000)),
 		RTMPPort:           envOrInt("RTMP_PORT", 1935),

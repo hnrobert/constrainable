@@ -5,16 +5,15 @@ package node
 
 // RegisterPayload is what a media node sends on (re)connect to identify itself.
 type RegisterPayload struct {
-	Identifier          string `json:"identifier"`          // NODE_IDENTIFIER — the stable identity (nodeId source)
-	RTMPPort            int    `json:"rtmpPort"`            // RTMP ingest port
+	Identifier         string `json:"identifier"`         // NODE_IDENTIFIER — the stable identity (nodeId source)
+	RTMPPort           int    `json:"rtmpPort"`           // RTMP ingest port
 	PublicOrigin       string `json:"publicOrigin"`       // public hostname/IP ("" = users push via the app's host)
-	PublicRTMPPort     int    `json:"publicRtmpPort"`      // publicly mapped RTMP ingest port
-	PublicProbeUDPPort int    `json:"publicProbeUdpPort"`  // publicly mapped STUN probe responder port
-	PublicSrsUDPPort   int    `json:"publicSrsUdpPort"`    // publicly mapped SRS WebRTC UDP (media) port
-	SRTPort             int    `json:"srtPort"`             // SRT ingest port (scaffold)
-	SRSFlvBase          string `json:"srsFlvBase"`          // how the control plane pulls FLV from this node's SRS
-	Hostname            string `json:"hostname"`            // human-readable name
-	Version             string `json:"version"`             // media-node binary version
+	PublicRTMPPort     int    `json:"publicRtmpPort"`     // publicly mapped RTMP ingest port
+	PublicProbeUDPPort int    `json:"publicProbeUdpPort"` // publicly mapped STUN probe responder port
+	PublicSrsUDPPort   int    `json:"publicSrsUdpPort"`   // publicly mapped SRS WebRTC UDP (media) port
+	SRSFlvBase         string `json:"srsFlvBase"`         // how the control plane pulls FLV from this node's SRS
+	Hostname           string `json:"hostname"`           // human-readable name
+	Version            string `json:"version"`            // media-node binary version
 }
 
 // RegisteredAck is Node's response to a successful registration.

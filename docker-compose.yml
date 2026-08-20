@@ -52,10 +52,10 @@ services:
       - /etc/timezone:/etc/timezone:ro   # host tz name (debian-style, optional)
     ports:
       # RTMP ingest (OBS pushes here): public port maps to the fixed 1935
-      - "${PUBLIC_MEDIA_NODE_RTMP_PORT:-1935}:1935"
+      - "1935:1935"
       # Browser ICE latency probe (STUN responder, node/probe.go): the app's
       # probe SDP carries the PUBLIC port; the responder listens on PROBE_UDP_PORT
-      - "${PUBLIC_MEDIA_NODE_PROBE_UDP_PORT:-38111}:${PROBE_UDP_PORT:-38111}/udp"
+      - "38111:38111/udp"
     networks:
       - constrainable-ingest
       # - ingest-shared   # external shared network (see header)
