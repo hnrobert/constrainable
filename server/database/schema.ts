@@ -31,6 +31,12 @@ export const users = sqliteTable('users', {
   role: text('role', { enum: ['admin', 'user'] }).notNull().default('user'),
   /** media node this user is pinned to for ingest (null = not yet assigned). */
   nodeId: text('node_id'),
+  /**
+   * The user's OWN dashboard note (a personal reminder shown on their
+   * dashboard home). Private to the user — admins neither see nor edit it via
+   * the user management UI. null/'' = no note card.
+   */
+  dashboardNotice: text('dashboard_notice'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(now),
 })
 

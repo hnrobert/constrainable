@@ -121,6 +121,10 @@ export function wireMediaNodeNamespace(io: SocketIOServer): void {
         events: [],
       })
       ack?.({ nodeId })
+      // The node registers WITHOUT an ack callback (fire-and-forget frame) —
+      // it learns its assigned nodeId from this event. Without it c.nodeID
+      // stays "" and every publish:start arrives with an empty nodeId.
+      socket.emit('node:registered', { nodeId })
       emitNodesChanged()
     })
 
@@ -271,7 +275,7 @@ async function handlePublishStart(
     // ONLY publish through THAT node — a publish arriving from any other
     // node is refused with the address they should be using.
     const lockUser = UsersRepository.findByEmail(payload.streamName)
-    if (lockUser?.nodeId && lockUser.nodeId !== payload.nodeId) {
+    if (lockUser?.nodeId && payload.nodeId && lockUser.nodeId !== payload.nodeId) {
       const pinned = getNode(lockUser.nodeId)
       const where = pinned?.publicRtmpAuthority
         ? ` — use ${obsServerUrl(pinned.publicRtmpAuthority)} (or change your selection on the Nodes page)`

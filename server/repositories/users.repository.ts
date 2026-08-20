@@ -41,6 +41,10 @@ export const UsersRepository = {
   updateNode(id: number, nodeId: string | null): void {
     db.update(users).set({ nodeId }).where(eq(users.id, id)).run()
   },
+  /** Replace the user's own dashboard note (null clears it). */
+  updateDashboardNotice(id: number, notice: string | null): void {
+    db.update(users).set({ dashboardNotice: notice }).where(eq(users.id, id)).run()
+  },
   /** Replace the password hash (used by legacy re-hash on login + future resets). */
   updatePassword(id: number, passwordHash: string): void {
     db.update(users).set({ passwordHash }).where(eq(users.id, id)).run()

@@ -214,6 +214,25 @@ function discardAndLeave(): void {
       </Card>
 
       <Card>
+        <CardHeader><CardTitle>Dashboard Notice</CardTitle></CardHeader>
+        <CardContent class="space-y-3">
+          <FieldRow label="Notice shown on every dashboard home">
+            <Textarea
+              v-model="form.dashboard.notice"
+              rows="4"
+              class="w-full"
+              placeholder="e.g. Maintenance window Saturday 02:00–03:00 —&#10;recording may pause briefly."
+            />
+            <template #hint>
+              Shown to every signed-in user on their dashboard home, alongside their own private
+              note. Markdown supported (formulas, mermaid). Leave empty to hide the card.
+              Hot-reloads on save.
+            </template>
+          </FieldRow>
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardHeader><CardTitle>Registration Notice</CardTitle></CardHeader>
         <CardContent class="space-y-3">
           <FieldRow label="Notice shown on the registration form">

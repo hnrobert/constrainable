@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Pencil, Plus, Trash2, Megaphone } from 'lucide-vue-next'
 import type { EventView, EventStatus } from '#shared/event-view'
 import type { DataTableColumn } from '~/components/DataTable.vue'
 
@@ -6,10 +7,62 @@ definePageMeta({ layout: 'default' })
 
 const { user } = useAuth()
 const isAdmin = computed(() => user.value?.role === 'admin')
+const toast = useToast()
 
 // /api/events is authorization-filtered server-side: admins see all, regular
 // users see only the events they may view.
 const { data: events } = useFetch<EventView[]>('/api/events')
+
+/* ------------------------------- notices -------------------------------- */
+// Two dashboard-home notices: the admin-configured site notice (config
+// dashboard.notice, identical for everyone) and the user's own private note
+// (users.dashboard_notice — only the user sees and edits it).
+interface MeState {
+  dashboardNotice: string | null
+  siteNotice: string
+}
+const { data: me } = useFetch<MeState>('/api/me')
+const siteNotice = computed(() => me.value?.siteNotice ?? '')
+
+// personal note: view state + inline edit state (declared before the watch
+// that reads `editing` in its immediate callback)
+const personalNote = ref('')
+const editing = ref(false)
+const draft = ref('')
+const savingNote = ref(false)
+watch(
+  () => me.value?.dashboardNotice,
+  (v) => {
+    if (!editing.value) personalNote.value = v ?? ''
+  },
+  // flush:'sync' — the default pre-flush queue doesn't drain during SSR before
+  // the render pass (same pitfall as config.vue / settings.vue), so the note
+  // card would be missing from server HTML.
+  { immediate: true, flush: 'sync' },
+)
+
+function startEdit(): void {
+  draft.value = personalNote.value
+  editing.value = true
+}
+
+async function saveNote(next: string | null): Promise<void> {
+  savingNote.value = true
+  try {
+    const r = await $fetch<{ dashboardNotice: string | null }>('/api/me', {
+      method: 'PATCH',
+      body: { dashboardNotice: next },
+    })
+    personalNote.value = r.dashboardNotice ?? ''
+    if (me.value) me.value.dashboardNotice = r.dashboardNotice
+    editing.value = false
+    toast.success(next ? 'Note saved' : 'Note cleared')
+  } catch (e: any) {
+    toast.error('Save failed: ' + (e?.data?.statusMessage || e?.message || ''))
+  } finally {
+    savingNote.value = false
+  }
+}
 
 const statusLabel: Record<EventStatus, string> = {
   draft: 'Draft',
@@ -50,6 +103,68 @@ const columns: DataTableColumn[] = [
         <template v-if="isAdmin">You have admin access — full event and system management.</template>
         <template v-else>You can view the schedule and details for events you have access to.</template>
       </p>
+    </div>
+
+    <!-- admin-configured site notice (Config → Dashboard Notice) -->
+    <Card v-if="siteNotice" class="border-primary/40">
+      <CardHeader>
+        <CardTitle class="flex items-center gap-2"><Megaphone :size="16" /> Notice</CardTitle>
+        <CardDescription>From the site administrators</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <RichText :source="siteNotice" />
+      </CardContent>
+    </Card>
+
+    <!-- personal note — private to this user, editable inline -->
+    <Card v-if="editing">
+      <CardHeader>
+        <CardTitle>Your note</CardTitle>
+        <CardDescription>Private — visible only to you on this dashboard</CardDescription>
+      </CardHeader>
+      <CardContent class="space-y-3">
+        <Textarea
+          v-model="draft"
+          rows="4"
+          placeholder="Your personal reminder (Markdown, formulas and mermaid supported)…"
+        />
+        <div class="flex justify-end gap-2">
+          <Button variant="outline" size="sm" @click="editing = false">Cancel</Button>
+          <Button size="sm" :disabled="savingNote" @click="saveNote(draft.trim() || null)">
+            {{ savingNote ? 'Saving…' : 'Save' }}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+    <Card v-else-if="personalNote">
+      <CardHeader>
+        <CardTitle>Your note</CardTitle>
+        <CardDescription>Private — visible only to you on this dashboard</CardDescription>
+        <CardAction>
+          <div class="flex gap-1">
+            <Button variant="ghost" size="icon-sm" aria-label="Edit note" @click="startEdit">
+              <Pencil :size="14" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Clear note"
+              :disabled="savingNote"
+              @click="saveNote(null)"
+            >
+              <Trash2 :size="14" />
+            </Button>
+          </div>
+        </CardAction>
+      </CardHeader>
+      <CardContent>
+        <RichText :source="personalNote" />
+      </CardContent>
+    </Card>
+    <div v-else>
+      <Button variant="outline" size="sm" @click="startEdit">
+        <Plus :size="14" /> Add a personal note
+      </Button>
     </div>
 
     <Card v-if="isAdmin">

@@ -75,6 +75,15 @@ const registrationSchema = z.object({
   notice: z.string().default(''),
 })
 
+const dashboardSchema = z.object({
+  /**
+   * Admin-authored notice shown on EVERY user's dashboard home, alongside
+   * each user's own private note ('' = card hidden). Markdown supported —
+   * rendered by RichText (html:false, so no raw HTML).
+   */
+  notice: z.string().default(''),
+})
+
 export const appConfigSchema = z.object({
   srs: srsSchema.default(srsSchema.parse({})),
   probe: probeSchema.default(probeSchema.parse({})),
@@ -82,6 +91,7 @@ export const appConfigSchema = z.object({
   record: recordSchema.default(recordSchema.parse({})),
   concurrency: concurrencySchema.default(concurrencySchema.parse({})),
   registration: registrationSchema.default(registrationSchema.parse({})),
+  dashboard: dashboardSchema.default(dashboardSchema.parse({})),
 })
 
 export type AppConfig = z.infer<typeof appConfigSchema>
