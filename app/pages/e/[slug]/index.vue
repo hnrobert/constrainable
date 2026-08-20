@@ -109,6 +109,7 @@ function fmt(ts: number | null): string {
               <div class="flex items-center gap-2">
                 <code class="font-mono text-sm">{{ server }}</code>
                 <Button variant="link" class="h-auto p-0 text-xs" @click="copy(server, 'Copied server address')">Copy</Button>
+                <NuxtLink to="/nodes" class="ml-2 text-xs underline decoration-dotted underline-offset-4">change ingest node</NuxtLink>
               </div>
               <p class="text-xs text-muted-foreground">
                 Derived from the ingest server assigned to you — it can differ from other

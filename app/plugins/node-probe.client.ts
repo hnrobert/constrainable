@@ -10,6 +10,7 @@
  * origins in single-server deployments) are expected and non-events.
  */
 import { useAuth } from '#imports'
+import { probeAll } from '~/composables/useNodeLatency'
 
 const PROBE_TIMEOUT_MS = 5_000
 
@@ -29,34 +30,11 @@ export default defineNuxtPlugin(async (nuxtApp) => {
 
   // Nothing to probe (single-server: nodes have no public origin) — but a
   // first visit still needs an assignment, so report the empty snapshot.
-  const latencies: { nodeId: string; latencyMs: number }[] = []
-  await Promise.all(
-    (view.probe ?? []).map(async (t) => {
-      // https pages cannot fetch http origins (mixed content) — skip instead
-      // of letting the browser log a blocked-request error on every visit
-      if (location.protocol === 'https:' && t.publicOrigin.startsWith('http://')) return
-      const ms = await probeOnce(t.publicOrigin)
-      if (ms != null) latencies.push({ nodeId: t.nodeId, latencyMs: ms })
-    }),
-  )
+  const measured = await probeAll(view.probe ?? [])
+  const latencies = Object.entries(measured).map(([nodeId, latencyMs]) => ({ nodeId, latencyMs }))
 
   await $fetch('/api/nodes/measure', {
     method: 'POST',
     body: { latencies },
   }).catch(() => null)
 })
-
-/** One no-cors round trip; resolves the measured ms (null on failure/timeout). */
-async function probeOnce(publicOrigin: string): Promise<number | null> {
-  const started = performance.now()
-  try {
-    await fetch(`${publicOrigin}/crossdomain.xml`, {
-      mode: 'no-cors',
-      cache: 'no-store',
-      signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
-    })
-    return Math.round(performance.now() - started)
-  } catch {
-    return null
-  }
-}

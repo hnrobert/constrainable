@@ -11,14 +11,34 @@
  * when the app theme toggles (mermaid bakes its colors at render time).
  */
 import MarkdownIt from 'markdown-it'
-import katexPlugin from '@vscode/markdown-it-katex'
+import * as markdownItKatex from '@vscode/markdown-it-katex'
 import 'katex/dist/katex.min.css'
 
 const props = defineProps<{
   source: string
 }>()
 
-const md = new MarkdownIt({ html: false, breaks: true, linkify: true }).use(katexPlugin)
+/**
+ * The katex plugin ships TS-compiled CJS (`exports.default = fn` + __esModule),
+ * so the resolved shape depends on WHO loads it: bundlers unwrap to the
+ * function and so does bun's native interop, but Node's native import yields
+ * `{ default: fn }` — and markdown-it's use() calls `plugin.apply(...)`, which
+ * crashes SSR with "e.apply is not a function" the moment any rich text
+ * renders. Unwrap nested `.default`s until we hold the callable, so every
+ * load path (vite bundle / bun / node) works.
+ */
+function resolveKatexPlugin(ns: unknown): (md: InstanceType<typeof MarkdownIt>) => void {
+  let p: unknown = ns
+  for (let i = 0; typeof p !== 'function' && p && i < 3; i++) {
+    p = (p as { default?: unknown }).default
+  }
+  if (typeof p !== 'function') throw new Error('@vscode/markdown-it-katex failed to resolve')
+  return p as (md: InstanceType<typeof MarkdownIt>) => void
+}
+
+const md = new MarkdownIt({ html: false, breaks: true, linkify: true }).use(
+  resolveKatexPlugin(markdownItKatex),
+)
 
 // Markdown links open in a new tab (guide links shouldn't navigate the app away).
 const defaultLinkOpen =

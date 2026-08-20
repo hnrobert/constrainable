@@ -7,7 +7,7 @@
  */
 import type { Server as SocketIOServer, Socket } from 'socket.io'
 import { env } from '../utils/env'
-import { register, disconnect, adjustStreamCount } from './media-node-registry'
+import { register, disconnect, adjustStreamCount, getNode } from './media-node-registry'
 import { authorizePublish } from './access-control'
 import { PublishSessionsRepository } from '../repositories/publish-sessions.repository'
 import { RecordingsRepository } from '../repositories/recordings.repository'
@@ -16,6 +16,7 @@ import { EventsRepository } from '../repositories/events.repository'
 import { UsersRepository } from '../repositories/users.repository'
 import { isSiteWideBanned, isBlocked } from './stream-bans'
 import { verifierFromCipher, verifyResponse } from '../utils/authmod'
+import { obsServerUrl } from '#shared/rtmp'
 import { verifyMediaSignature } from '../utils/signed-url'
 import { audit } from './audit'
 import { emit } from '../utils/bus'
@@ -264,6 +265,22 @@ async function handlePublishStart(
         detail: { reason: auth.reason, nodeId: payload.nodeId },
       })
       return { allow: false, reason: auth.reason }
+    }
+
+    // Node lock: a user who explicitly selected (or was assigned) a node may
+    // ONLY publish through THAT node — a publish arriving from any other
+    // node is refused with the address they should be using.
+    const lockUser = UsersRepository.findByEmail(payload.streamName)
+    if (lockUser?.nodeId && lockUser.nodeId !== payload.nodeId) {
+      const pinned = getNode(lockUser.nodeId)
+      const where = pinned?.publicRtmpAuthority
+        ? ` — use ${obsServerUrl(pinned.publicRtmpAuthority)} (or change your selection on the Nodes page)`
+        : ' — check the Nodes page on the website for your node address'
+      audit('warn', 'access', `publish on wrong node: ${payload.streamName} (${payload.nodeId}, locked to ${lockUser.nodeId})`, {
+        streamName: payload.streamName,
+        detail: { nodeId: payload.nodeId, lockedTo: lockUser.nodeId },
+      })
+      return { allow: false, reason: `streaming is locked to your selected node${where}` }
     }
 
     // Determine event limits + recording flag
