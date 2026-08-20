@@ -74,8 +74,9 @@ function hasDetail(row: AuditView): boolean {
     <div class="space-y-1">
       <h1 class="text-2xl font-semibold">My audit</h1>
       <p class="text-muted-foreground">
-        Your own operations — sign-ins, publishing, node picks and other activity tied to your
-        account (newest first, max 200).
+        Everything tied to your account — your sign-ins and node picks, plus your complete
+        streaming trail: publishes, and WHY one was rejected, flagged, banned or disconnected
+        (newest first, max 200).
       </p>
     </div>
 

@@ -87,6 +87,7 @@ async function closeGhost(s: PublishSession, reason: string): Promise<void> {
     endedAt: endedAt.getTime(),
   } satisfies SessionSnapshot)
   audit('warn', 'publish', `reconciled stale session: ${s.streamName} (#${s.id}) — ${reason}`, {
+    actor: s.streamName,
     streamName: s.streamName,
     detail: { sessionId: s.id, reason },
   })

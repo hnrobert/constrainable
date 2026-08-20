@@ -73,7 +73,9 @@ export function ban(input: {
     bannedBy: input.bannedBy ?? null,
   })
   audit('warn', 'admin', `stream ban (${eventId == null ? 'site-wide' : `event ${eventId}`}): ${email}`, {
-    detail: { email, eventId, reason: input.reason ?? null },
+    actor: email,
+    streamName: email,
+    detail: { email, eventId, reason: input.reason ?? null, bannedBy: input.bannedBy ?? null },
   })
   return toView(row)
 }
@@ -83,6 +85,8 @@ export function unban(id: number, actor?: string | null): void {
   StreamBansRepository.remove(id)
   if (row) {
     audit('info', 'admin', `stream ban lifted: ${row.email}`, {
+      actor: row.email,
+      streamName: row.email,
       detail: { email: row.email, eventId: row.eventId ?? null, by: actor ?? null },
     })
   }

@@ -57,7 +57,11 @@ export default defineEventHandler(async (event) => {
     disconnected ? 'warn' : 'error',
     'publish',
     `admin banned+disconnected ${email} (${disconnected ? 'ok' : 'disconnect failed'})`,
-    { detail: { email, clientId, banId: row.id } },
+    {
+      actor: email,
+      streamName: email,
+      detail: { email, clientId, banId: row.id },
+    },
   )
   if (!disconnected) {
     // ban stands even if the disconnect raced (stream already gone)

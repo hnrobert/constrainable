@@ -24,8 +24,15 @@ export interface AuditFilters {
   level?: AuditLevel | null
   category?: AuditCategory | null
   eventId?: number | null
-  /** only entries performed by this account (email) — drives "My audit" */
+  /** only entries performed by this account (email) */
   actor?: string | null
+  /**
+   * Entries this account is INVOLVED in: actor OR streamName matches the email.
+   * Drives "My audit" — the user's trail includes not only their own actions
+   * (logins, node picks) but everything about their publishing: rejects,
+   * violations, bans, forced disconnects.
+   */
+  involvedEmail?: string | null
   /** case-insensitive match on message or stream name */
   q?: string | null
   /** max rows to return (server clamps to [1, AUDIT_MAX_LIMIT]) */

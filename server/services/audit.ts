@@ -84,6 +84,7 @@ export function listAudit(filters: AuditFilters = {}): AuditView[] {
     category: filters.category ?? null,
     eventId: filters.eventId ?? null,
     actor: filters.actor ?? null,
+    involvedEmail: filters.involvedEmail ?? null,
     q: filters.q ?? null,
     limit,
   })

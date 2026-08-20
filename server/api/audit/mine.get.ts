@@ -1,9 +1,10 @@
 /**
- * The caller's OWN audit trail: entries whose actor is their account email
- * (logins, publishes, node picks, … — everything written with an actor since
- * that column exists). Any logged-in session; the admin view stays at
- * GET /api/audit. Query params: ?level=&category=&q=&limit= (eventId is not
- * offered — scoping is fixed to the caller).
+ * The caller's OWN audit trail: entries where their account email is the
+ * actor OR the streamName — their actions (logins, node picks) AND everything
+ * about their publishing (rejects, violations, bans, forced disconnects), so a
+ * regular user can see exactly WHY a stream failed. Any logged-in session; the
+ * all-events admin view stays at GET /api/audit. Query params:
+ * ?level=&category=&q=&limit=.
  */
 import { createError } from 'h3'
 import { UsersRepository } from '../../repositories/users.repository'
@@ -23,7 +24,7 @@ export default defineEventHandler((event) => {
 
   const q = getQuery(event)
   return listAudit({
-    actor: user.email,
+    involvedEmail: user.email,
     level: pick(q.level ? String(q.level) : null, AUDIT_LEVELS),
     category: pick(q.category ? String(q.category) : null, AUDIT_CATEGORIES),
     q: q.q ? String(q.q) : null,

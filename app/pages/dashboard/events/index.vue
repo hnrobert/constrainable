@@ -27,7 +27,17 @@ const statusLabel: Record<EventStatus, string> = {
 }
 
 const columns: DataTableColumn[] = [
-  { key: 'name', header: 'Name', class: 'font-medium' },
+  // The classic fluid-ellipsis column: `w-full max-w-0 truncate` makes the auto
+  // table layout size this column to EXACTLY the space left by the others
+  // (max-w-0 caps its preferred width, w-full claims everything left), with
+  // overflow shown as an ellipsis. The table therefore always fits its card —
+  // no horizontal scrollbar however long the event name.
+  {
+    key: 'name',
+    header: 'Name',
+    class: 'w-full max-w-0 truncate font-medium',
+    headClass: 'w-full max-w-0',
+  },
   { key: 'slug', header: 'Event key', class: 'font-mono text-muted-foreground' },
   { key: 'status', header: 'Status' },
   { key: 'actions', header: '', headClass: 'w-0' },
