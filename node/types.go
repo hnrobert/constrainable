@@ -111,6 +111,19 @@ type PlayAuthAck struct {
 	Reason string `json:"reason,omitempty"`
 }
 
+// PublishSpec is OBS' DECLARED encoder configuration from onMetaData —
+// arrives right after publish accepts, before the first frame. Instant spec
+// for display + immediate limit gating; measured counters stay authoritative.
+type PublishSpec struct {
+	NodeID     string  `json:"nodeId"`
+	StreamName string  `json:"streamName"`
+	Width      int     `json:"width"`
+	Height     int     `json:"height"`
+	Fps        float64 `json:"fps"`
+	VideoKbps  float64 `json:"videoKbps"`
+	AudioKbps  float64 `json:"audioKbps"`
+}
+
 // NodeKick tells this node to disconnect a publisher.
 type NodeKick struct {
 	StreamName string `json:"streamName"`

@@ -26,9 +26,9 @@ package rtmp
 import (
 	crand "crypto/rand"
 
-	"media-node/node"
 	"fmt"
 	"log"
+	"media-node/node"
 	"net"
 	"strings"
 	"sync"
@@ -58,7 +58,50 @@ var SRSAddr = "localhost:1935"
 var (
 	OnPublishGate func(streamName, token, authedUser string) bool
 	OnUnpublish   func(streamName string)
+	// OnPublishSpec fires when OBS' onMetaData arrives (right after publish
+	// accepts, before the first frame): the DECLARED spec from the encoder
+	// settings. Instant — no waiting for SRS API counters.
+	OnPublishSpec func(streamName string, spec StreamSpec)
 )
+
+// StreamSpec is the declared encoder configuration from onMetaData.
+type StreamSpec struct {
+	Width     int
+	Height    int
+	Fps       float64
+	VideoKbps float64
+	AudioKbps float64
+}
+
+// ParseMetadata extracts the spec from an @setDataFrame/onMetaData payload.
+// vals layout: ["@setDataFrame", "onMetaData", {props}].
+func ParseMetadata(vals []interface{}) (StreamSpec, bool) {
+	if len(vals) < 3 {
+		return StreamSpec{}, false
+	}
+	props, ok := vals[2].(map[string]interface{})
+	if !ok {
+		return StreamSpec{}, false
+	}
+	num := func(k string) float64 {
+		switch v := props[k].(type) {
+		case float64:
+			return v
+		case int64:
+			return float64(v)
+		default:
+			return 0
+		}
+	}
+	sp := StreamSpec{
+		Width:     int(num("width")),
+		Height:    int(num("height")),
+		Fps:       num("framerate"),
+		VideoKbps: num("videodatarate"),
+		AudioKbps: num("audiodatarate"),
+	}
+	return sp, sp.Width > 0 && sp.Height > 0
+}
 
 // Active relays by stream name — KillStream (the node:kick path) closes both
 // halves. Registered after the gate allows; unregistered by the defer in
@@ -101,8 +144,6 @@ func RandHex(n int) string {
 	}
 	return fmt.Sprintf("%x", b)
 }
-
-
 
 func HandleOBS(conn net.Conn, app AppClient) {
 	remote := conn.RemoteAddr().String()
@@ -387,6 +428,13 @@ func HandleOBS(conn net.Conn, app AppClient) {
 			case "@setDataFrame": // onMetaData — forward to SRS as-is
 				if up != nil {
 					_ = up.WriteFrame(msg)
+				}
+				// OBS declares its encoder settings here, before the first
+				// frame — surface the spec to the control plane instantly
+				if OnPublishSpec != nil {
+					if sp, ok := ParseMetadata(vals); ok && published != "" {
+						OnPublishSpec(published, sp)
+					}
 				}
 
 			case "releaseStream", "FCPublish", "FCUnpublish", "deleteStream", "_checkbw":

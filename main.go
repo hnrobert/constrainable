@@ -212,6 +212,19 @@ func main() {
 	rtmp.OnUnpublish = func(streamName string) {
 		manager.End(streamName)
 	}
+	rtmp.OnPublishSpec = func(streamName string, spec rtmp.StreamSpec) {
+		_ = socketClient.Emit("publish:spec", node.PublishSpec{
+			NodeID:     socketClient.NodeID(),
+			StreamName: streamName,
+			Width:      spec.Width,
+			Height:     spec.Height,
+			Fps:        spec.Fps,
+			VideoKbps:  spec.VideoKbps,
+			AudioKbps:  spec.AudioKbps,
+		})
+		log.Printf("[spec] %s declared %dx%d@%.2f video=%.0fkbps audio=%.0fkbps",
+			streamName, spec.Width, spec.Height, spec.Fps, spec.VideoKbps, spec.AudioKbps)
+	}
 
 	socketClient.OnKick = func(kick node.NodeKick) {
 		log.Printf("[node] kick: %s", kick.StreamName)
