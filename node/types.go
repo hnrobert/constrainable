@@ -16,6 +16,14 @@ type RegisterPayload struct {
 	Version            string `json:"version"`            // media-node binary version
 }
 
+// WhepRelay is the control plane's request to relay one WHEP (WebRTC
+// playback) SDP exchange through this node to its colocated SRS — the node's
+// SRS HTTP API is never published, so the app cannot reach it directly.
+type WhepRelay struct {
+	StreamName string `json:"streamName"`
+	Offer      string `json:"offer"`
+}
+
 // RegisteredAck is Node's response to a successful registration.
 type RegisteredAck struct {
 	NodeID string `json:"nodeId"`

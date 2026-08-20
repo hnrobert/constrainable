@@ -166,6 +166,9 @@ func main() {
 		Version:            version,
 	})
 
+	// WHEP relay target: SRSApiBase (…/api/v1) minus the API path prefix
+	socketClient.SRSWhepBase = strings.TrimSuffix(cfg.SRSApiBase, "/api/v1")
+
 	// Session manager
 	manager := media.NewManager(
 		srsClient,

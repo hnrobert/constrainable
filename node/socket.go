@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -55,6 +56,10 @@ type Client struct {
 	// event handlers (set by the owner before Connect)
 	OnKick   func(NodeKick)
 	OnDelete func(RecordingDelete) error
+
+	// SRS whep base for signaling relays (e.g. http://srs:1985) — set by the
+	// owner from SRSApiBase before Connect; empty disables node:whep.
+	SRSWhepBase string
 	OnConfig func(ConfigLimits)
 
 	reconnectCh chan struct{}
@@ -319,6 +324,34 @@ func (c *Client) handleEvent(raw, reqID string) error {
 		return websocket.Message.Send(ws, reply)
 	}
 
+	// WHEP signaling relay: the control plane cannot reach this node's SRS
+	// HTTP API (deliberately never published), so browsers' playback offers
+	// are forwarded here. POST to the colocated SRS, ack with the answer SDP.
+	// Runs in a goroutine — the HTTP round trip must not stall the read loop;
+	// the ack frame is written when it completes.
+	if event == "node:whep" && reqID != "" {
+		var relay WhepRelay
+		if err := json.Unmarshal(parts[1], &relay); err != nil {
+			return err
+		}
+		go func() {
+			out := c.relayWhep(relay)
+			data, err := json.Marshal(out)
+			if err != nil {
+				return
+			}
+			c.mu.Lock()
+			ws := c.ws
+			c.mu.Unlock()
+			if ws == nil {
+				return
+			}
+			reply := fmt.Sprintf("45%s,%s[%s]", nsp, reqID, data)
+			_ = websocket.Message.Send(ws, reply)
+		}()
+		return nil
+	}
+
 	switch event {
 	case "node:registered":
 		var ack RegisteredAck
@@ -390,6 +423,28 @@ func (c *Client) handleAck(raw string) error {
 	default:
 	}
 	return nil
+}
+
+// relayWhep forwards a browser's WHEP offer to this node's colocated SRS and
+// returns the ack payload: {answer} on 201, {error} otherwise.
+func (c *Client) relayWhep(r WhepRelay) map[string]string {
+	if c.SRSWhepBase == "" {
+		return map[string]string{"error": "node has no SRS API base configured"}
+	}
+	q := url.Values{}
+	q.Set("app", "live")
+	q.Set("stream", r.StreamName)
+	target := strings.TrimRight(c.SRSWhepBase, "/") + "/rtc/v1/whep/?" + q.Encode()
+	resp, err := http.Post(target, "application/sdp", strings.NewReader(r.Offer))
+	if err != nil {
+		return map[string]string{"error": "srs unreachable: " + err.Error()}
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != 201 {
+		return map[string]string{"error": fmt.Sprintf("srs whep responded %d: %.200s", resp.StatusCode, string(body))}
+	}
+	return map[string]string{"answer": string(body)}
 }
 
 // Emit sends a fire-and-forget event (namespaced: 42<nsp>,["event",payload]).
