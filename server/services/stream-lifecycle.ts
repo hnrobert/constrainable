@@ -89,6 +89,7 @@ export async function handlePublish(
     // never belong on the LIVE panel — a retrying OBS would flood it with rows.
     // The rejection stays queryable in the audit log and sessions history.
     audit('warn', 'access', `publish rejected: ${ctx.stream} (${auth.reason})`, {
+      actor: ctx.stream,
       streamName: ctx.stream,
       detail: { reason: auth.reason, clientId: ctx.clientId },
     })
@@ -141,6 +142,7 @@ export async function handlePublish(
     snapshot(session, { width: null, height: null, fps: null, bitrateKbps: null, status: 'allowed', compliant: false }),
   )
   audit('info', 'publish', `publish started: ${ctx.stream}`, {
+    actor: ctx.stream,
     eventId: ctx.eventId ?? null,
     streamName: ctx.stream,
     detail: { clientId: ctx.clientId, app: ctx.app, studentLabel: ctx.studentLabel ?? null },
@@ -196,7 +198,7 @@ export async function handleUnpublish(ctx: {
       null,
     )
   }
-  audit('info', 'publish', `publish ended: ${ctx.stream}`, { streamName: ctx.stream })
+  audit('info', 'publish', `publish ended: ${ctx.stream}`, { actor: ctx.stream, streamName: ctx.stream })
 }
 
 /** Background probe + limit loop for one session. */
@@ -239,6 +241,7 @@ async function monitorSession(s: ActiveSession, studentLabel: string | null): Pr
           reasons,
         } as ViolationSnapshot)
         audit('warn', 'publish', `violation: ${s.streamName} (${reasons.join('; ')})`, {
+          actor: s.streamName,
           eventId: s.eventId,
           streamName: s.streamName,
           detail: { reasons, ...result },

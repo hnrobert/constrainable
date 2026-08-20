@@ -90,6 +90,7 @@ export default defineEventHandler(async (event) => {
       if (g) joinedGroup = g.name
     } catch (err) {
       audit('warn', 'auth', `invite consume failed at register: ${email}`, {
+        actor: email,
         detail: { invite, error: err instanceof Error ? err.message : String(err) },
       })
     }
@@ -98,6 +99,7 @@ export default defineEventHandler(async (event) => {
   const cookie = await createSessionCookie(user.id, user.role)
   setCookie(event, cookie.name, cookie.value, cookie.options)
   audit('info', 'auth', `register: ${email} (${role})`, {
+    actor: email,
     detail: { userId: user.id, role, first: isFirst, verified: !isFirst, joinedGroup },
   })
   return { id: user.id, email: user.email, role: user.role }

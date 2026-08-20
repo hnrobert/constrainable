@@ -323,6 +323,13 @@ export const auditLog = sqliteTable(
     category: text('category', {
       enum: ['auth', 'publish', 'access', 'config', 'recording', 'system', 'admin'],
     }).notNull(),
+    /**
+     * WHO performed the action: the acting account's email (publisher, login,
+     * …). null = system/background jobs or rows written before the column
+     * existed. Drives the per-user "My audit" view — keyed by email on
+     * purpose: an append-only log survives account deletion (no FK).
+     */
+    actor: text('actor'),
     eventId: integer('event_id'),
     streamName: text('stream_name'),
     message: text('message').notNull(),

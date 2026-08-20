@@ -24,6 +24,7 @@ export default defineEventHandler(async (event) => {
   if (!user) throw createError({ statusCode: 404, statusMessage: 'user not found' })
   UsersRepository.updateNode(auth.userId, nodeId)
   audit('info', 'publish', `self-selected node for ${user.email}: ${nodeId ?? '(auto)'}`, {
+    actor: user.email,
     streamName: user.email,
     detail: { userId: auth.userId, nodeId, self: true },
   })

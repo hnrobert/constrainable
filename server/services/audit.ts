@@ -9,6 +9,8 @@ import type { AuditFilters, AuditView } from '#shared/audit'
 import type { AuditEntry } from '../database/schema'
 
 export interface AuditInput {
+  /** the acting account's email (drives the per-user "My audit" view) */
+  actor?: string | null
   eventId?: number | null
   streamName?: string | null
   detail?: unknown
@@ -24,6 +26,7 @@ export function audit(
     level,
     category,
     message,
+    actor: opts.actor ?? null,
     eventId: opts.eventId ?? null,
     streamName: opts.streamName ?? null,
     detail: opts.detail != null ? JSON.stringify(opts.detail) : null,
@@ -34,6 +37,7 @@ export function audit(
     ts: row.ts.getTime(),
     level,
     category,
+    actor: row.actor ?? null,
     eventId: row.eventId ?? null,
     streamName: row.streamName ?? null,
     message,
@@ -59,6 +63,7 @@ function toAuditView(row: AuditEntry): AuditView {
     ts: row.ts.getTime(),
     level: row.level,
     category: row.category,
+    actor: row.actor ?? null,
     eventId: row.eventId ?? null,
     streamName: row.streamName ?? null,
     message: row.message,
@@ -78,6 +83,7 @@ export function listAudit(filters: AuditFilters = {}): AuditView[] {
     level: filters.level ?? null,
     category: filters.category ?? null,
     eventId: filters.eventId ?? null,
+    actor: filters.actor ?? null,
     q: filters.q ?? null,
     limit,
   })

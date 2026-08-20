@@ -21,6 +21,7 @@ export const AuditLogRepository = {
     level?: AuditEntry['level'] | null
     category?: AuditEntry['category'] | null
     eventId?: number | null
+    actor?: string | null
     q?: string | null
     limit: number
   }): AuditEntry[] {
@@ -28,6 +29,7 @@ export const AuditLogRepository = {
     if (filters.level) conds.push(eq(auditLog.level, filters.level))
     if (filters.category) conds.push(eq(auditLog.category, filters.category))
     if (filters.eventId) conds.push(eq(auditLog.eventId, filters.eventId))
+    if (filters.actor) conds.push(eq(auditLog.actor, filters.actor))
     if (filters.q) {
       const p = `%${filters.q}%`
       const textCond = or(like(auditLog.message, p), like(auditLog.streamName, p))

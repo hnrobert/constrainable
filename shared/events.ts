@@ -65,6 +65,8 @@ export interface AuditSnapshot {
   ts: number
   level: AuditLevel
   category: AuditCategory
+  /** who performed the action (account email); null = system/background */
+  actor?: string | null
   eventId: number | null
   streamName: string | null
   message: string

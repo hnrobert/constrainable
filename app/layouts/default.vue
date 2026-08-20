@@ -46,6 +46,7 @@ const generalNav: NavItem[] = [
   { label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard },
   { label: 'Events', to: '/dashboard/events', icon: CalendarDays },
   { label: 'My Live', to: '/live', icon: Radio },
+  { label: 'My Audit', to: '/dashboard/my-audit', icon: ScrollText },
 ]
 
 const adminNav: NavItem[] = [
@@ -55,7 +56,7 @@ const adminNav: NavItem[] = [
   { label: 'Groups', to: '/dashboard/groups', icon: UsersRound },
   { label: 'Config', to: '/dashboard/config', icon: Settings },
   { label: 'Mail', to: '/dashboard/mail', icon: Mail },
-  { label: 'Audit', to: '/dashboard/audit', icon: ScrollText },
+  { label: 'Admin Audit', to: '/dashboard/audit', icon: ScrollText },
 ]
 
 // '/dashboard' is a prefix of every dashboard route, so only highlight it on an

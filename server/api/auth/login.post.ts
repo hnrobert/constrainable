@@ -32,7 +32,7 @@ export default defineEventHandler(async (event) => {
   const user = UsersRepository.findByEmail(email)
   const ok = user ? await verifyPassword(plain, user.passwordHash) : false
   if (!user || !ok) {
-    audit('warn', 'auth', `failed login: ${email}`, {})
+    audit('warn', 'auth', `failed login: ${email}`, { actor: email })
     throw createError({ statusCode: 401, statusMessage: 'Invalid email or password' })
   }
 
@@ -51,6 +51,6 @@ export default defineEventHandler(async (event) => {
 
   const cookie = await createSessionCookie(user.id, user.role)
   setCookie(event, cookie.name, cookie.value, cookie.options)
-  audit('info', 'auth', `login: ${email}`, { detail: { userId: user.id } })
+  audit('info', 'auth', `login: ${email}`, { actor: email, detail: { userId: user.id } })
   return { id: user.id, email: user.email, role: user.role }
 })

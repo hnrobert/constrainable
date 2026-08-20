@@ -1,43 +1,36 @@
 <script setup lang="ts">
+/**
+ * My Audit — the signed-in user's own operation history: logins, publishes,
+ * node picks… every audit entry written with THEIR account email as actor.
+ * The all-events view is the admin-only "Admin Audit" page (/dashboard/audit).
+ */
 import type { AuditView } from '#shared/audit'
 import type { DataTableColumn } from '~/components/DataTable.vue'
 import { AUDIT_CATEGORIES, AUDIT_LEVELS } from '#shared/audit'
 
-// Events feed the filter dropdown and resolve eventId → name in the table.
-const { data: events } = useFetch<{ id: number; name: string }[]>('/api/events')
-const eventName = computed(() => {
-  const m = new Map<number, string>()
-  for (const e of events.value ?? []) m.set(e.id, e.name)
-  return m
-})
-
 // "All" filter options use a non-empty sentinel — reka-ui forbids an empty
-// SelectItem value (empty is reserved for clearing the selection). apply() maps
-// each sentinel back to '' so the API treats it as "no filter".
+// SelectItem value. apply() maps it back to '' so the API sees "no filter".
 const ALL = 'all'
 
-const filters = reactive<{ level: string; category: string; eventId: string; q: string }>({
+const filters = reactive<{ level: string; category: string; q: string }>({
   level: ALL,
   category: ALL,
-  eventId: ALL,
   q: '',
 })
 // applied filters drive the query; updated on search.
-const applied = ref({ level: '', category: '', eventId: '', q: '' })
-const { data, refresh, pending } = useFetch<AuditView[]>('/api/audit', { query: applied })
+const applied = ref({ level: '', category: '', q: '' })
+const { data, refresh, pending } = useFetch<AuditView[]>('/api/audit/mine', { query: applied })
 
 function apply(): void {
   applied.value = {
     level: filters.level === ALL ? '' : filters.level,
     category: filters.category === ALL ? '' : filters.category,
-    eventId: filters.eventId === ALL ? '' : filters.eventId,
     q: filters.q,
   }
 }
 function resetFilters(): void {
   filters.level = ALL
   filters.category = ALL
-  filters.eventId = ALL
   filters.q = ''
   apply()
 }
@@ -59,9 +52,6 @@ const columns: DataTableColumn[] = [
   { key: 'ts', header: 'Time', class: 'whitespace-nowrap text-xs text-muted-foreground' },
   { key: 'level', header: 'Level' },
   { key: 'category', header: 'Category', class: 'text-muted-foreground' },
-  { key: 'actor', header: 'Actor', class: 'text-muted-foreground' },
-  { key: 'eventId', header: 'Event', class: 'text-muted-foreground' },
-  { key: 'streamName', header: 'Stream', class: 'text-muted-foreground' },
   { key: 'message', header: 'Message' },
 ]
 
@@ -73,8 +63,11 @@ function hasDetail(row: AuditView): boolean {
 <template>
   <div class="space-y-6">
     <div class="space-y-1">
-      <h1 class="text-2xl font-semibold">Admin Audit</h1>
-      <p class="text-muted-foreground">Append-only record of every auth, publish, access, config, recording, and admin event, across all users. Each user sees only their own trail under “My Audit”.</p>
+      <h1 class="text-2xl font-semibold">My audit</h1>
+      <p class="text-muted-foreground">
+        Your own operations — sign-ins, publishing, node picks and other activity tied to your
+        account (newest first, max 200).
+      </p>
     </div>
 
     <Card>
@@ -100,19 +93,9 @@ function hasDetail(row: AuditView): boolean {
               </SelectContent>
             </Select>
           </div>
-          <div class="min-w-35 space-y-1.5">
-            <Label>Event</Label>
-            <Select v-model="filters.eventId">
-              <SelectTrigger class="w-full"><SelectValue placeholder="All" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem :value="ALL">All</SelectItem>
-                <SelectItem v-for="e in events" :key="e.id" :value="String(e.id)">{{ e.name }}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
           <div class="min-w-45 flex-1 space-y-1.5">
-            <Label>Search (message / stream)</Label>
-            <Input type="text" v-model="filters.q" placeholder="Message or stream name…" @keyup.enter="apply" />
+            <Label>Search (message)</Label>
+            <Input type="text" v-model="filters.q" placeholder="Message…" @keyup.enter="apply" />
           </div>
         </div>
         <div class="flex justify-end gap-2">
@@ -125,7 +108,7 @@ function hasDetail(row: AuditView): boolean {
     <Card>
       <CardHeader>
         <div class="flex items-center justify-between">
-          <CardTitle>Showing {{ data?.length ?? 0 }} (newest first, max 200)</CardTitle>
+          <CardTitle>Showing {{ data?.length ?? 0 }} entries</CardTitle>
           <Button variant="outline" size="sm" :disabled="pending" @click="refresh()">{{ pending ? 'Refreshing…' : 'Refresh' }}</Button>
         </div>
       </CardHeader>
@@ -135,17 +118,12 @@ function hasDetail(row: AuditView): boolean {
           :rows="data ?? []"
           :row-key="(row: AuditView) => row.id"
           :detail-when="hasDetail"
-          empty="No audit entries."
+          empty="No entries yet — your sign-ins and streaming activity will appear here."
         >
           <template #cell-ts="{ row }">{{ fmtDate(row.ts) }}</template>
           <template #cell-level="{ row }">
             <Badge :variant="levelVariant[row.level] ?? 'secondary'">{{ row.level }}</Badge>
           </template>
-          <template #cell-actor="{ row }">{{ row.actor ?? '—' }}</template>
-          <template #cell-eventId="{ row }">
-            {{ row.eventId ? (eventName.get(row.eventId) ?? `#${row.eventId}`) : '—' }}
-          </template>
-          <template #cell-streamName="{ row }">{{ row.streamName ?? '—' }}</template>
           <template #detail="{ row }">
             <pre class="m-0 max-h-48 overflow-auto whitespace-pre-wrap wrap-break-word border-t border-dashed bg-muted/40 px-3 py-2 text-xs">{{ prettyDetail(row.detail) }}</pre>
           </template>

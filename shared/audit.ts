@@ -11,6 +11,8 @@ export interface AuditView {
   ts: number
   level: AuditLevel
   category: AuditCategory
+  /** who performed the action (account email); null = system/background */
+  actor: string | null
   eventId: number | null
   streamName: string | null
   message: string
@@ -22,6 +24,8 @@ export interface AuditFilters {
   level?: AuditLevel | null
   category?: AuditCategory | null
   eventId?: number | null
+  /** only entries performed by this account (email) — drives "My audit" */
+  actor?: string | null
   /** case-insensitive match on message or stream name */
   q?: string | null
   /** max rows to return (server clamps to [1, AUDIT_MAX_LIMIT]) */
