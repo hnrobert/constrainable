@@ -15,8 +15,9 @@
 #     projects on a shared network)
 #   remote host                             → https://<api-domain> (needs HTTPS)
 #
-# Internal ports (RTMP/play/SRS) are binary defaults — deliberately NOT set
-# here. Only public-facing identity/routing lives in compose.
+# All SRS wiring (sidecar address, API, config rendering) is binary defaults
+# (srs:1935 / srs:1985 / sidecar mode). Only public-facing identity/routing
+# lives in compose.
 # Runs the prebuilt GHCR image — no local build. To build from source
 # instead, replace the image line with `build: .`.
 services:
@@ -40,10 +41,6 @@ services:
       PUBLIC_RTMP_AUTHORITY: ${PUBLIC_RTMP_AUTHORITY:-}
       # Shared auth token (must match the backend; empty = no auth)
       MEDIA_NODE_AUTH_TOKEN: ${MEDIA_NODE_AUTH_TOKEN:-}
-      # How the control plane pulls FLV from this node's SRS (empty = derived
-      # from NODE_IDENTIFIER + the internal SRS port). On a shared Docker
-      # network with the app, point it at the service name, e.g. http://srs:38081
-      SRS_FLV_BASE: ${SRS_FLV_BASE:-}
     volumes:
       - ./records:/records
       - srs-conf:/srs-config
@@ -93,7 +90,8 @@ services:
     # SRS's HTTP ports (FLV :38081 / API :1985) are deliberately NOT
     # published: browsers only ever speak WebRTC to SRS (gated by the
     # admin-authenticated WHEP signaling the app proxies); the control plane
-    # pulls FLV server-side via SRS_FLV_BASE over the deployment network.
+    # pulls FLV server-side (http://srs:<SRS_HTTP_PORT>) over the shared
+    # network — the node derives and advertises it from its compiled-in SRS default.
     # Only the UDP media port is public — WebRTC media carries its own
     # DTLS-SRTP encryption.
 

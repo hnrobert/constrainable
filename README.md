@@ -40,9 +40,9 @@ graph TB
 | `PLAY_PORT` | `38080` | Direct playback entry — browsers pull signed FLV URLs here; every pull is authorized by the control plane over Socket.IO (`play:auth`), then proxied from the SRS sidecar |
 | `SRT_PORT` | `9000` | SRT ingest port (scaffold; not yet implemented) |
 | `SRS_ADDR` | `srs:1935` | RTMP relay target (docker sidecar service name; `localhost:1935` for child-process SRS) |
-| `SRS_FLV_BASE` | derived from `NODE_IDENTIFIER` + `SRS_HTTP_PORT` | FLV base ADVERTISED to the control plane (how the app backend pulls playback) — set to the SRS sidecar's service name on a shared network, e.g. `http://srs:38081` |
+| `SRS_FLV_BASE` | derived from `SRS_ADDR` host + `SRS_HTTP_PORT` (→ `http://srs:38081` in compose) | FLV base ADVERTISED to the control plane for server-side frame pulls — override only when the app reaches this node's SRS by another address |
 | `SRS_API_BASE` | `http://srs:1985/api/v1` | SRS HTTP API base (docker sidecar service name; use `http://localhost:1985/api/v1` when SRS runs as a child process via `SRS_BIN`) |
-| `SRS_HTTP_PORT` | `38081` | SRS sidecar http_server port — INTERNAL only, never published (the node's play port proxies it); rendered into the config and used for the `SRS_FLV_BASE` default |
+| `SRS_HTTP_PORT` | `38081` | SRS sidecar http_server port — INTERNAL only, never published; rendered into the config and used for the `SRS_FLV_BASE` default |
 | `RECORD_DIR` | `./records` | Local MKV segment storage |
 | `FFMPEG_PATH` | `ffmpeg` | ffmpeg binary path |
 | `FFPROBE_PATH` | `ffprobe` | ffprobe binary path |
