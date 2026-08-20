@@ -77,10 +77,8 @@ type PublishGrant struct {
 var (
 	OnPublishGate func(streamName, token, authedUser string) PublishGrant
 	OnUnpublish   func(streamName string)
-	// OnPublishSpec fires when OBS' onMetaData arrives (right after publish
-	// accepts, before the first frame): the DECLARED spec from the encoder
-	// settings. Instant — no waiting for SRS API counters.
-	OnPublishSpec func(streamName string, spec StreamSpec)
+	// OnPublishSpec judges OBS' declared spec (onMetaData — the first message after publish accepts, before any frame). The verdict gates metadata forwarding: Allow=false → NetStream.Publish.BadName, connection closed OBS-terminally (same UX as a wrong password). The implementation asks the CONTROL PLANE per spec (ack) and may fall back to the grant's caps on transport failure — limits+strict come along as the fallback inputs.
+	OnPublishSpec func(streamName string, spec StreamSpec, limits *GateLimits, strict bool) (allow bool, rejectReason string)
 )
 
 // SpecViolations lists the declared-spec limit breaches ("" slice = clean).
@@ -247,34 +245,24 @@ func HandleOBS(conn net.Conn, app AppClient) {
 			}
 			// Script data (type 18) carries onMetaData — OBS (librtmp) sends
 			// it as a DATA message, NOT a command. It is the FIRST message
-			// after publish accepts, before any media frame, so under STRICT
-			// events the declared spec is checked HERE: a violation gets the
-			// same terminal BadName reject as an auth error and nothing is
-			// ever relayed (SRS never sees the stream).
+			// after publish accepts, before any media frame, so the declared
+			// spec is VERIFIED here: the backend judges it per spec (ack).
+			// Allow=false → NetStream.Publish.BadName, connection closed
+			// OBS-terminally — identical to a wrong password. Metadata and
+			// everything after never reach SRS.
 			if msg.Type == 18 && published != "" {
 				if vals := AmfDecodeAll(msg.Payload); len(vals) >= 3 {
-					if sp, ok := ParseMetadata(vals); ok {
-						if grantStrict && grantLimits != nil {
-							if reasons := SpecViolations(sp, grantLimits); len(reasons) > 0 {
-								reasonText := strings.Join(reasons, "; ")
-								log.Printf("%s spec violation on '%s': %s (declared %dx%d@%.2f %.0fkbps) — rejecting before any frame",
-									remote, published, reasonText, sp.Width, sp.Height, sp.Fps, sp.VideoKbps+sp.AudioKbps)
-								// report first (socket write order keeps spec
-								// ahead of the publish:end the close triggers,
-								// so the app records the violation + bans)
-								if OnPublishSpec != nil {
-									OnPublishSpec(published, sp)
-								}
-								_ = cw.WriteMessage(&Message{Type: 20, CSID: 5, StreamID: 1, Payload: CmdOnStatusError(
-									"NetStream.Publish.BadName",
-									"Stream rejected: "+reasonText+". Lower your OBS resolution/FPS/bitrate to the event's limits and reconnect.")})
-								up.Close()
-								_ = conn.Close()
-								return
-							}
-						}
-						if OnPublishSpec != nil {
-							OnPublishSpec(published, sp)
+					if sp, ok := ParseMetadata(vals); ok && OnPublishSpec != nil {
+						allow, rejectReason := OnPublishSpec(published, sp, grantLimits, grantStrict)
+						if !allow {
+							log.Printf("%s spec rejected on '%s': %s (declared %dx%d@%.2f %.0fkbps)",
+								remote, published, rejectReason, sp.Width, sp.Height, sp.Fps, sp.VideoKbps+sp.AudioKbps)
+							_ = cw.WriteMessage(&Message{Type: 20, CSID: 5, StreamID: 1, Payload: CmdOnStatusError(
+								"NetStream.Publish.BadName",
+								rejectReason)})
+							up.Close()
+							_ = conn.Close()
+							return
 						}
 					}
 				}
@@ -506,10 +494,18 @@ func HandleOBS(conn net.Conn, app AppClient) {
 					_ = up.WriteFrame(msg)
 				}
 				// OBS declares its encoder settings here, before the first
-				// frame — surface the spec to the control plane instantly
+				// frame — run the same spec gate as the type-18 branch (non-librtmp clients)
 				if OnPublishSpec != nil {
 					if sp, ok := ParseMetadata(vals); ok && published != "" {
-						OnPublishSpec(published, sp)
+						allow, rejectReason := OnPublishSpec(published, sp, grantLimits, grantStrict)
+						if !allow {
+							log.Printf("%s spec rejected on '%s': %s", remote, published, rejectReason)
+							_ = cw.WriteMessage(&Message{Type: 20, CSID: 5, StreamID: 1, Payload: CmdOnStatusError(
+								"NetStream.Publish.BadName", rejectReason)})
+							up.Close()
+							_ = conn.Close()
+							return
+						}
 					}
 				}
 

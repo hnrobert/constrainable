@@ -90,6 +90,14 @@ func (c *Client) PlayAuth(p PlayAuth) (PlayAuthAck, error) {
 	return ack, err
 }
 
+// VerifySpec asks the control plane to judge a declared spec (from the node:register
+// ack's limits + the app's live config). Transport failure falls back to the local verdict.
+func (c *Client) VerifySpec(p PublishSpec) (SpecVerdict, error) {
+	var ack SpecVerdict
+	err := c.EmitWithAck("publish:spec", p, &ack, 5*time.Second)
+	return ack, err
+}
+
 // Result types for socket-based auth (mirror the old HTTP contract).
 
 type SaltResult struct {
@@ -117,4 +125,4 @@ func randomHex(n int) string {
 }
 
 func cryptoRead(b []byte) (int, error) { return rand.Read(b) }
-func hexEncode(b []byte) string         { return hex.EncodeToString(b) }
+func hexEncode(b []byte) string        { return hex.EncodeToString(b) }

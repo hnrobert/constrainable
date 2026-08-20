@@ -60,7 +60,7 @@ type Client struct {
 	// SRS whep base for signaling relays (e.g. http://srs:1985) — set by the
 	// owner from SRSApiBase before Connect; empty disables node:whep.
 	SRSWhepBase string
-	OnConfig func(ConfigLimits)
+	OnConfig    func(ConfigLimits)
 
 	reconnectCh chan struct{}
 	done        chan struct{}

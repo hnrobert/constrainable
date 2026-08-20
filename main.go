@@ -238,8 +238,11 @@ func main() {
 	rtmp.OnUnpublish = func(streamName string) {
 		manager.End(streamName)
 	}
-	rtmp.OnPublishSpec = func(streamName string, spec rtmp.StreamSpec) {
-		_ = socketClient.Emit("publish:spec", node.PublishSpec{
+	rtmp.OnPublishSpec = func(streamName string, spec rtmp.StreamSpec, limits *rtmp.GateLimits, strict bool) (bool, string) {
+		// Ask the control plane for a verdict on this declared spec (fresh every
+		// time — the event's caps/strict may have changed). Transport failure
+		// falls back to the publish grant's caps.
+		verdict, err := socketClient.VerifySpec(node.PublishSpec{
 			NodeID:     socketClient.NodeID(),
 			StreamName: streamName,
 			Width:      spec.Width,
@@ -248,8 +251,21 @@ func main() {
 			VideoKbps:  spec.VideoKbps,
 			AudioKbps:  spec.AudioKbps,
 		})
-		log.Printf("[spec] %s declared %dx%d@%.2f video=%.0fkbps audio=%.0fkbps",
+		if err != nil {
+			log.Printf("[spec] %s: verify transport error (%v) — falling back to grant caps", streamName, err)
+			if strict && limits != nil {
+				if reasons := rtmp.SpecViolations(spec, limits); len(reasons) > 0 {
+					return false, "Stream rejected: " + strings.Join(reasons, "; ") + ". Lower your OBS resolution/FPS/bitrate to the event's limits and reconnect."
+				}
+			}
+			return true, ""
+		}
+		if !verdict.Allow {
+			return false, verdict.Reason
+		}
+		log.Printf("[spec] %s declared %dx%d@%.2f video=%.0fkbps audio=%.0fkbps — verified",
 			streamName, spec.Width, spec.Height, spec.Fps, spec.VideoKbps, spec.AudioKbps)
+		return true, ""
 	}
 
 	socketClient.OnKick = func(kick node.NodeKick) {

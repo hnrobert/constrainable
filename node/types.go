@@ -135,6 +135,15 @@ type PublishSpec struct {
 	AudioKbps  float64 `json:"audioKbps"`
 }
 
+// SpecVerdict is the control plane's decision on a declared spec: Allow
+// false → the RTMP handler rejects the publisher OBS-terminally (BadName),
+// exactly like a wrong password. No ban is implied — fixing the encoder
+// settings and reconnecting is the only remedy needed.
+type SpecVerdict struct {
+	Allow  bool   `json:"allow"`
+	Reason string `json:"reason,omitempty"`
+}
+
 // NodeKick tells this node to disconnect a publisher.
 type NodeKick struct {
 	StreamName string `json:"streamName"`
