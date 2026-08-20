@@ -14,7 +14,10 @@ services:
     image: ghcr.io/hnrobert/constrainable-app:latest
     container_name: constrainable-app
     environment:
-      TZ: ${TZ:-Asia/Shanghai}
+      # Timezone: on a LINUX host the read-only mounts below make the container
+      # follow the HOST's timezone — leave TZ unset. On macOS (Docker Desktop)
+      # host /etc isn't shared; uncomment TZ instead:
+      # TZ: ${TZ:-Asia/Shanghai}
       HOST: 0.0.0.0
       PORT: "31954"
       NODE_ENV: production
@@ -26,6 +29,8 @@ services:
     volumes:
       - ./data:/app/data
       - ./records:/app/records
+      - /etc/localtime:/etc/localtime:ro # host tz (linux; symlink resolves inside)
+      - /etc/timezone:/etc/timezone:ro   # host tz name (debian-style, optional)
     ports:
       - "31954:31954"
     networks:

@@ -4,6 +4,22 @@
         "buildx",
         "changeme",
         "constrainable",
-        "Nuxt"
+        "Dockerized",
+        "ffprobe",
+        "katex",
+        "libsql",
+        "localtime",
+        "mpegts",
+        "nuxi",
+        "Nuxt",
+        "nuxtjs",
+        "oklch",
+        "onwarn",
+        "preheader",
+        "prerendered",
+        "reka",
+        "rtmp",
+        "timezone",
+        "vueuse"
     ]
 }
