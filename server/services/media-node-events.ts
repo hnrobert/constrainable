@@ -25,6 +25,8 @@ import type { SessionSnapshot, SessionStatus, RecordingSnapshot } from '#shared/
 
 interface RegisterPayload {
   identifier: string
+  /** pre-rename wire name still sent by older node binaries */
+  origin?: string
   publicRtmpAuthority?: string
   rtmpPort: number
   srtPort: number
@@ -113,7 +115,9 @@ export function wireMediaNodeNamespace(io: SocketIOServer): void {
 
     socket.on('node:register', (payload: RegisterPayload, ack?: (r: { nodeId: string }) => void) => {
       const nodeId = register(socket, {
-        identifier: payload.identifier,
+        // identifier is the current field; origin is the pre-rename wire name
+        // (mixed-version fleets during rollout). Hostname as last resort.
+        identifier: payload.identifier || payload.origin || payload.hostname,
         publicRtmpAuthority: payload.publicRtmpAuthority ?? '',
         rtmpPort: payload.rtmpPort,
         srtPort: payload.srtPort,

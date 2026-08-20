@@ -58,7 +58,7 @@ export function register(
     'nodeId' | 'socketId' | 'connectedAt' | 'activeStreams' | 'srsFlvBase'
   > & { srsFlvBase?: string; publicRtmpAuthority?: string },
 ): string {
-  const nodeId = deriveNodeId(info.identifier)
+  const nodeId = deriveNodeId(info.identifier || info.hostname)
   const existing = nodes.get(nodeId)
   const entry: MediaNodeInfo = {
     ...info,
