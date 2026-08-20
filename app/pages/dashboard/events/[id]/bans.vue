@@ -1,4 +1,5 @@
 <script setup lang="ts">
+definePageMeta({ layout: 'default', adminOnly: true })
 /**
  * Bans tab — the event-scoped blacklist (小黑屋). Site-wide rows are shown for
  * context (they block this event too); lifting and adding both scopes happen

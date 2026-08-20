@@ -20,6 +20,7 @@ const PUBLIC = ['/', '/login', '/invite']
 // Dashboard sub-routes reserved for admins (regular users get redirected away).
 const ADMIN_ONLY = [
   '/dashboard/streams',
+  '/dashboard/nodes',
   '/dashboard/config',
   '/dashboard/mail',
   '/dashboard/audit',
@@ -38,7 +39,11 @@ export default defineNuxtRouteMiddleware((to) => {
   if (PUBLIC.includes(to.path)) return
 
   // Authenticated non-admin on an admin-only route → back to the dashboard home.
-  if (user.value && user.value.role !== 'admin' && ADMIN_ONLY.some((p) => to.path === p || to.path.startsWith(p + '/'))) {
+  if (
+    user.value &&
+    user.value.role !== 'admin' &&
+    (to.meta.adminOnly || ADMIN_ONLY.some((p) => to.path === p || to.path.startsWith(p + '/')))
+  ) {
     return navigateTo('/dashboard', { replace: true })
   }
 

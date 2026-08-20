@@ -1,4 +1,5 @@
 <script setup lang="ts">
+definePageMeta({ layout: 'default', adminOnly: true })
 /**
  * Insights tab — per-event statistics: headline cards (sessions, users, stream
  * time, compliance, violations, recordings) plus the 10 most recent sessions.

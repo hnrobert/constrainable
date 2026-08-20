@@ -199,13 +199,9 @@ onUnmounted(() => {
             </Button>
           </div>
 
-          <p v-if="mode === 'register'" class="text-xs leading-relaxed text-muted-foreground">
-            <template v-if="bootstrap">
-              No admin exists yet: the first registered user becomes the super admin (no email verification code required). Please use a personal email you can receive mail at.
-            </template>
-            <template v-else>
-              You must first request an email verification code; after registration you become a regular user (event schedule and details only).
-            </template>
+          <!-- bootstrap hint only — regular registrations need no extra explanation -->
+          <p v-if="mode === 'register' && bootstrap" class="text-xs leading-relaxed text-muted-foreground">
+            No admin exists yet: the first registered user becomes the super admin (no email verification code required). Please use a personal email you can receive mail at.
           </p>
 
           <p v-if="error" class="text-sm font-medium text-destructive">{{ error }}</p>

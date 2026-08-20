@@ -1,4 +1,5 @@
 <script setup lang="ts">
+definePageMeta({ layout: 'default', adminOnly: true })
 /**
  * Per-event recordings (lives under the event's own route). Same-user segments
  * are merged server-side into one chronological file — each row is one user's

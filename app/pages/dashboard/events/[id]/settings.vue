@@ -1,4 +1,5 @@
 <script setup lang="ts">
+definePageMeta({ layout: 'default', adminOnly: true })
 import type { EventView, EventStatus, EventVisibility } from '#shared/event-view'
 import type { GroupView } from '#shared/groups'
 import type { DataTableColumn } from '~/components/DataTable.vue'
