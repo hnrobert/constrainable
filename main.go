@@ -194,7 +194,7 @@ func main() {
 		func(sessionID int64, s *media.Session) {
 			_ = socketClient.Emit("publish:metrics", node.MetricsReport{
 				SessionID: sessionID, Width: s.Width, Height: s.Height,
-				Fps: s.Fps, VideoBitrateKbps: s.BitrateKbps, AudioKbps: s.DeclaredAudioKbps(),
+				Fps: s.Fps, VideoBitrateKbps: s.VideoBitrateKbps, AudioBitrateKbps: s.DeclaredAudioBitrateKbps(),
 			})
 		},
 		func(sessionID int64, reasons []string, s *media.Session) {
@@ -202,7 +202,7 @@ func main() {
 				SessionID: sessionID, Reasons: reasons,
 				Metrics: &node.MetricsReport{
 					SessionID: sessionID, Width: s.Width, Height: s.Height,
-					Fps: s.Fps, VideoBitrateKbps: s.BitrateKbps, AudioKbps: s.DeclaredAudioKbps(),
+					Fps: s.Fps, VideoBitrateKbps: s.VideoBitrateKbps, AudioBitrateKbps: s.DeclaredAudioBitrateKbps(),
 				},
 			})
 		},
@@ -261,18 +261,18 @@ func main() {
 	rtmp.OnPublishSpec = func(streamName string, spec rtmp.StreamSpec, limits *rtmp.GateLimits, strict bool) (bool, string) {
 		// Record the declared audio rate so the measured monitor can report
 		// and judge the VIDEO bitrate (OBS' "Video Bitrate" field semantics).
-		manager.SetDeclaredAudioKbps(streamName, int(spec.AudioKbps))
+		manager.SetDeclaredAudioBitrateKbps(streamName, int(spec.AudioBitrateKbps))
 		// Ask the control plane for a verdict on this declared spec (fresh every
 		// time — the event's caps/strict may have changed). Transport failure
 		// falls back to the publish grant's caps.
 		verdict, err := socketClient.VerifySpec(node.PublishSpec{
-			NodeID:     socketClient.NodeID(),
-			StreamName: streamName,
-			Width:      spec.Width,
-			Height:     spec.Height,
-			Fps:        spec.Fps,
-			VideoKbps:  spec.VideoKbps,
-			AudioKbps:  spec.AudioKbps,
+			NodeID:           socketClient.NodeID(),
+			StreamName:       streamName,
+			Width:            spec.Width,
+			Height:           spec.Height,
+			Fps:              spec.Fps,
+			VideoKbps:        spec.VideoKbps,
+			AudioBitrateKbps: spec.AudioBitrateKbps,
 		})
 		if err != nil {
 			log.Printf("[spec] %s: verify transport error (%v) — falling back to grant caps", streamName, err)
@@ -287,7 +287,7 @@ func main() {
 			return false, verdict.Reason
 		}
 		log.Printf("[spec] %s declared %dx%d@%.2f video=%.0fkbps audio=%.0fkbps — verified",
-			streamName, spec.Width, spec.Height, spec.Fps, spec.VideoKbps, spec.AudioKbps)
+			streamName, spec.Width, spec.Height, spec.Fps, spec.VideoKbps, spec.AudioBitrateKbps)
 		return true, ""
 	}
 

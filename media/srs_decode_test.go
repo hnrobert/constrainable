@@ -35,8 +35,8 @@ func TestSRSStreamInfoDecodesLivePayloads(t *testing.T) {
 	if s.Video != nil || s.Audio != nil {
 		t.Fatal("video/audio should be nil early in the stream")
 	}
-	if s.BitrateKbps() != 0 {
-		t.Fatalf("early bitrate: %d", s.BitrateKbps())
+	if s.TotalBitrateKbps() != 0 {
+		t.Fatalf("early bitrate: %d", s.TotalBitrateKbps())
 	}
 	if !s.Publish.Active || s.Publish.Cid != "yrv265o8" {
 		t.Fatalf("publish block: %+v", s.Publish)
@@ -52,7 +52,7 @@ func TestSRSStreamInfoDecodesLivePayloads(t *testing.T) {
 	if v.Video == nil || v.Video.Width != 1920 || v.Video.Height != 1080 || v.Video.Fps != 29.97 {
 		t.Fatalf("video: %+v", v.Video)
 	}
-	if v.BitrateKbps() != 2450 {
-		t.Fatalf("bitrate (recv_30s): %d", v.BitrateKbps())
+	if v.TotalBitrateKbps() != 2450 {
+		t.Fatalf("bitrate (recv_30s): %d", v.TotalBitrateKbps())
 	}
 }

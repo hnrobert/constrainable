@@ -140,7 +140,7 @@ func SpecViolations(sp StreamSpec, l *GateLimits) []string {
 		reasons = append(reasons, "bitrate exceeds limit")
 	}
 	// Audio has its own cap — OBS' "Audio Bitrate" field (Output → Audio).
-	if l.MaxAudioBitrateKbps > 0 && int(sp.AudioKbps) > l.MaxAudioBitrateKbps {
+	if l.MaxAudioBitrateKbps > 0 && int(sp.AudioBitrateKbps) > l.MaxAudioBitrateKbps {
 		reasons = append(reasons, "audio bitrate exceeds limit")
 	}
 	return reasons
@@ -148,11 +148,11 @@ func SpecViolations(sp StreamSpec, l *GateLimits) []string {
 
 // StreamSpec is the declared encoder configuration from onMetaData.
 type StreamSpec struct {
-	Width     int
-	Height    int
-	Fps       float64
-	VideoKbps float64
-	AudioKbps float64
+	Width            int
+	Height           int
+	Fps              float64
+	VideoKbps        float64
+	AudioBitrateKbps float64
 }
 
 // ParseMetadata extracts the spec from an @setDataFrame/onMetaData payload.
@@ -176,11 +176,11 @@ func ParseMetadata(vals []interface{}) (StreamSpec, bool) {
 		}
 	}
 	sp := StreamSpec{
-		Width:     int(num("width")),
-		Height:    int(num("height")),
-		Fps:       num("framerate"),
-		VideoKbps: num("videodatarate"),
-		AudioKbps: num("audiodatarate"),
+		Width:            int(num("width")),
+		Height:           int(num("height")),
+		Fps:              num("framerate"),
+		VideoKbps:        num("videodatarate"),
+		AudioBitrateKbps: num("audiodatarate"),
 	}
 	return sp, sp.Width > 0 && sp.Height > 0
 }

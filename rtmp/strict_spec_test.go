@@ -12,7 +12,7 @@ import (
 func TestSpecViolations(t *testing.T) {
 	lim := &GateLimits{MaxWidth: 1920, MaxHeight: 1080, MaxFps: 30, MaxVideoBitrateKbps: 4000}
 
-	if r := SpecViolations(StreamSpec{Width: 1920, Height: 1080, Fps: 30, VideoKbps: 2500, AudioKbps: 128}, lim); len(r) != 0 {
+	if r := SpecViolations(StreamSpec{Width: 1920, Height: 1080, Fps: 30, VideoKbps: 2500, AudioBitrateKbps: 128}, lim); len(r) != 0 {
 		t.Fatalf("clean spec flagged: %v", r)
 	}
 	if r := SpecViolations(StreamSpec{Width: 2560, Height: 1440, Fps: 30, VideoKbps: 2500}, lim); len(r) != 1 || r[0] != "resolution exceeds limit" {
@@ -23,7 +23,7 @@ func TestSpecViolations(t *testing.T) {
 	}
 	// bitrate = the VIDEO rate only (OBS' "Video Bitrate" field semantics) —
 	// the audio track must not count toward the cap
-	if r := SpecViolations(StreamSpec{Width: 1280, Height: 720, Fps: 30, VideoKbps: 3900, AudioKbps: 200}, lim); len(r) != 0 {
+	if r := SpecViolations(StreamSpec{Width: 1280, Height: 720, Fps: 30, VideoKbps: 3900, AudioBitrateKbps: 200}, lim); len(r) != 0 {
 		t.Fatalf("audio must not count toward the bitrate cap: %v", r)
 	}
 	if r := SpecViolations(StreamSpec{Width: 1280, Height: 720, Fps: 30, VideoKbps: 4100}, lim); len(r) != 1 || r[0] != "bitrate exceeds limit" {

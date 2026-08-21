@@ -93,7 +93,7 @@ type MetricsReport struct {
 	Height           int     `json:"height,omitempty"`
 	Fps              float64 `json:"fps,omitempty"`
 	VideoBitrateKbps int     `json:"videoBitrateKbps,omitempty"`
-	AudioKbps        int     `json:"audioKbps,omitempty"`
+	AudioBitrateKbps int     `json:"audioBitrateKbps,omitempty"`
 }
 
 // EndReport signals a stream ended and carries the final duration.
@@ -152,13 +152,13 @@ type PlayAuthAck struct {
 // arrives right after publish accepts, before the first frame. Instant spec
 // for display + immediate limit gating; measured counters stay authoritative.
 type PublishSpec struct {
-	NodeID     string  `json:"nodeId"`
-	StreamName string  `json:"streamName"`
-	Width      int     `json:"width"`
-	Height     int     `json:"height"`
-	Fps        float64 `json:"fps"`
-	VideoKbps  float64 `json:"videoKbps"`
-	AudioKbps  float64 `json:"audioKbps"`
+	NodeID           string  `json:"nodeId"`
+	StreamName       string  `json:"streamName"`
+	Width            int     `json:"width"`
+	Height           int     `json:"height"`
+	Fps              float64 `json:"fps"`
+	VideoKbps        float64 `json:"videoKbps"`
+	AudioBitrateKbps float64 `json:"audioBitrateKbps"`
 }
 
 // SpecVerdict is the control plane's decision on a declared spec: Allow

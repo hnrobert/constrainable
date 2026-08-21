@@ -22,20 +22,20 @@ type Session struct {
 	Record      bool
 	StartedAt   time.Time
 
-	mu          sync.Mutex
-	active      bool
-	compliant   bool
-	Width       int
-	Height      int
-	Fps         float64
-	BitrateKbps int
+	mu               sync.Mutex
+	active           bool
+	compliant        bool
+	Width            int
+	Height           int
+	Fps              float64
+	VideoBitrateKbps int
 
 	// declared audio bitrate from onMetaData, clamped to [0,320]. Bitrate
 	// limits mean the OBS "Video Bitrate" field, so the MEASURED value is
 	// estimated as total-received minus this — SRS reports no per-track
 	// split. The clamp keeps a forged huge declaration from zeroing the
 	// video estimate (measured mode is the anti-forgery layer).
-	declaredAudioKbps int
+	declaredAudioBitrateKbps int
 
 	// deltas for derived metrics: the SRS API reports NO fps, and kbps is a
 	// 30s rolling average (0 right after start) — both are computed from the
@@ -105,35 +105,35 @@ func (m *Manager) Start(
 	log.Printf("[session] started %s (session=%d record=%v)", streamName, sessionID, record)
 }
 
-// SetDeclaredAudioKbps records the publisher's DECLARED audio bitrate
+// SetDeclaredAudioBitrateKbps records the publisher's DECLARED audio bitrate
 // (onMetaData audiodatarate) so the monitor can subtract it from the
 // received total — the reported/judged bitrate is the VIDEO bitrate, the
 // number OBS' "Video Bitrate" field shows. Clamped to [0,320]: audio above
 // 320 kbps is not a real thing, and a forged larger value would otherwise
-// DeclaredAudioKbps returns the publisher's declared audio bitrate (0 when
+// DeclaredAudioBitrateKbps returns the publisher's declared audio bitrate (0 when
 // the encoder declared none) — reported with the periodic metrics.
-func (s *Session) DeclaredAudioKbps() int {
+func (s *Session) DeclaredAudioBitrateKbps() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.declaredAudioKbps
+	return s.declaredAudioBitrateKbps
 }
 
 // hide video from the measured check.
-func (m *Manager) SetDeclaredAudioKbps(streamName string, audioKbps int) {
+func (m *Manager) SetDeclaredAudioBitrateKbps(streamName string, audioBitrateKbps int) {
 	m.mu.Lock()
 	s, ok := m.sessions[streamName]
 	m.mu.Unlock()
 	if !ok {
 		return
 	}
-	if audioKbps < 0 {
-		audioKbps = 0
+	if audioBitrateKbps < 0 {
+		audioBitrateKbps = 0
 	}
-	if audioKbps > 320 {
-		audioKbps = 320
+	if audioBitrateKbps > 320 {
+		audioBitrateKbps = 320
 	}
 	s.mu.Lock()
-	s.declaredAudioKbps = audioKbps
+	s.declaredAudioBitrateKbps = audioBitrateKbps
 	s.mu.Unlock()
 }
 
@@ -218,11 +218,11 @@ func (m *Manager) monitor(s *Session, limits *node.Limits) {
 					s.Fps = math.Round(fps*100) / 100
 				}
 				if kbps := float64(info.RecvBytes-s.lastRecvBytes) * 8 / dt / 1000; kbps > 0 {
-					video := int(math.Round(kbps)) - s.declaredAudioKbps
+					video := int(math.Round(kbps)) - s.declaredAudioBitrateKbps
 					if video < 0 {
 						video = 0
 					}
-					s.BitrateKbps = video
+					s.VideoBitrateKbps = video
 				}
 			}
 		}
@@ -267,12 +267,12 @@ func checkLimits(s *Session, l *node.Limits) []string {
 	// 10% headroom on the measured video estimate: RTMP chunking overhead
 	// and encoder ABR overshoot ride on top of the nominal rate — without
 	// it, a stream set exactly AT the cap would flag on every poll.
-	if l.MaxVideoBitrateKbps > 0 && s.BitrateKbps > l.MaxVideoBitrateKbps+l.MaxVideoBitrateKbps/10 {
+	if l.MaxVideoBitrateKbps > 0 && s.VideoBitrateKbps > l.MaxVideoBitrateKbps+l.MaxVideoBitrateKbps/10 {
 		reasons = append(reasons, "bitrate exceeds limit")
 	}
 	// Audio cap: measured audio isn't separable from the total cheaply, so
 	// police the DECLARED rate (what the user set in OBS) — same 10% headroom.
-	if l.MaxAudioBitrateKbps > 0 && s.declaredAudioKbps > l.MaxAudioBitrateKbps+l.MaxAudioBitrateKbps/10 {
+	if l.MaxAudioBitrateKbps > 0 && s.declaredAudioBitrateKbps > l.MaxAudioBitrateKbps+l.MaxAudioBitrateKbps/10 {
 		reasons = append(reasons, "audio bitrate exceeds limit")
 	}
 	return reasons

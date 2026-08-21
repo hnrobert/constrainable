@@ -62,8 +62,9 @@ type SRSStreamInfo struct {
 	} `json:"audio"`
 }
 
-// BitrateKbps is the publish-side bitrate (what SRS receives from OBS).
-func (i *SRSStreamInfo) BitrateKbps() int { return i.Kbps.Recv30s }
+// TotalBitrateKbps is the publish-side TOTAL bitrate SRS receives from OBS
+// (video + audio + container overhead — NOT the video-only estimate).
+func (i *SRSStreamInfo) TotalBitrateKbps() int { return i.Kbps.Recv30s }
 
 // GetStreamInfo fetches metrics for one live stream by name.
 // Returns nil if not found or on error.
