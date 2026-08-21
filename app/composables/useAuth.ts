@@ -22,6 +22,13 @@ export interface BootstrapStatus {
   registerNotice: string
 }
 
+/** Auth responses carry the admin login-notice when one is configured; it is
+ *  stashed here and consumed by LoginNoticeDialog on the landing page. */
+const LOGIN_NOTICE_KEY = 'ci:login-notice'
+function stashLoginNotice(u: { loginNotice?: string }): void {
+  if (import.meta.client && u.loginNotice) sessionStorage.setItem(LOGIN_NOTICE_KEY, u.loginNotice)
+}
+
 const INVITE_KEY = 'ci:invite'
 
 /** Stash an invite code so the next register() auto-joins its group. */
@@ -69,10 +76,11 @@ export function useAuth() {
 
   async function login(email: string, password: string): Promise<SessionUser> {
     const cipher = await encryptPassword(password)
-    const u = await $fetch<SessionUser>('/api/auth/login', {
+    const u = await $fetch<SessionUser & { loginNotice?: string }>('/api/auth/login', {
       method: 'POST',
       body: { email, password: cipher },
     })
+    stashLoginNotice(u)
     user.value = u
     probed.value = true
     return u
@@ -96,10 +104,11 @@ export function useAuth() {
   async function register(email: string, password: string, code: string, session: string): Promise<SessionUser> {
     const cipher = await encryptPassword(password)
     const invite = takePendingInvite()
-    const u = await $fetch<SessionUser>('/api/auth/register', {
+    const u = await $fetch<SessionUser & { loginNotice?: string }>('/api/auth/register', {
       method: 'POST',
       body: { email, password: cipher, code, session, ...(invite ? { invite } : {}) },
     })
+    stashLoginNotice(u)
     user.value = u
     probed.value = true
     return u

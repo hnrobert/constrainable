@@ -242,6 +242,19 @@ function discardAndLeave(): void {
               Hot-reloads on save.
             </template>
           </FieldRow>
+          <FieldRow label="Login popup notice (markdown)">
+            <Textarea
+              v-model="form.dashboard.loginNotice"
+              rows="4"
+              class="w-full"
+              placeholder="e.g. **Contest starts Saturday 09:00** —&#10;finish your OBS setup tonight (see your event guide)."
+            />
+            <template #hint>
+              Shown as a popup exactly ONCE, right after a user signs in or
+              registers (cookie-restored sessions never trigger it). Markdown
+              supported (formulas, mermaid). Leave empty to disable.
+            </template>
+          </FieldRow>
           <FieldRow label="New-user announcement pool (one per line, newest on top)">
             <Textarea
               v-model="announcementPoolText"

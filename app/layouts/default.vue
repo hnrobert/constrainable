@@ -189,5 +189,8 @@ watch(
         <slot />
       </div>
     </main>
+
+    <!-- one-shot login notice popup (fires on the post-login landing page) -->
+    <LoginNoticeDialog />
   </div>
 </template>

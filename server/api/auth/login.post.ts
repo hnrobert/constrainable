@@ -12,6 +12,7 @@ import { rsaDecrypt } from '../../utils/rsa'
 import { createSessionCookie } from '../../utils/session'
 import { audit } from '../../services/audit'
 import { normalizeEmail } from '../../utils/registration'
+import { getConfig } from '../../utils/config-store'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
@@ -52,5 +53,9 @@ export default defineEventHandler(async (event) => {
   const cookie = await createSessionCookie(user.id, user.role)
   setCookie(event, cookie.name, cookie.value, cookie.options)
   audit('info', 'auth', `login: ${email}`, { actor: email, detail: { userId: user.id } })
-  return { id: user.id, email: user.email, role: user.role }
+  // The admin login-notice rides along when configured: the client stashes it
+  // for the one-shot popup that fires on landing (cookie-restored sessions
+  // never get this field, so the popup stays login-only).
+  const loginNotice = getConfig().dashboard.loginNotice
+  return { id: user.id, email: user.email, role: user.role, ...(loginNotice ? { loginNotice } : {}) }
 })

@@ -135,5 +135,7 @@ export default defineEventHandler(async (event) => {
     actor: email,
     detail: { userId: user.id, role, first: isFirst, verified: !isFirst, joinedGroup, assignedNode },
   })
-  return { id: user.id, email: user.email, role: user.role }
+  // Registration is also an explicit entry (auto-login) — same one-shot popup.
+  const loginNotice = getConfig().dashboard.loginNotice
+  return { id: user.id, email: user.email, role: user.role, ...(loginNotice ? { loginNotice } : {}) }
 })

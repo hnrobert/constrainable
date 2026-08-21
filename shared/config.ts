@@ -85,6 +85,13 @@ const dashboardSchema = z.object({
    */
   notice: z.string().default(''),
   /**
+   * Admin-authored notice shown as a POPUP exactly once, right after an
+   * explicit login or registration lands ('' = no popup). Session-cookie
+   * restores never trigger it. Markdown supported — rendered by RichText
+   * (html:false, so no raw HTML).
+   */
+  loginNotice: z.string().default(''),
+  /**
    * NEW-USER announcement pool, newest-first (one single-line announcement
    * per row). Every registration POPS the top row: it becomes that user's
    * dashboard announcement and is removed from the pool. Empty pool = new
