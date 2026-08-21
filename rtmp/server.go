@@ -58,10 +58,11 @@ var SRSAddr = "localhost:1935"
 // disconnect, upstream death, write failure, or KillStream.
 // GateLimits is the caps block carried in the publish:start ack.
 type GateLimits struct {
-	MaxWidth       int
-	MaxHeight      int
-	MaxFps         int
-	MaxBitrateKbps int
+	MaxWidth            int
+	MaxHeight           int
+	MaxFps              int
+	MaxVideoBitrateKbps int
+	MaxAudioBitrateKbps int
 }
 
 // PublishGrant is the control plane's verdict for one publish: allow/deny,
@@ -133,8 +134,14 @@ func SpecViolations(sp StreamSpec, l *GateLimits) []string {
 	if l.MaxFps > 0 && sp.Fps > float64(l.MaxFps) {
 		reasons = append(reasons, "fps exceeds limit")
 	}
-	if l.MaxBitrateKbps > 0 && int(sp.VideoKbps+sp.AudioKbps) > l.MaxBitrateKbps {
+	// Bitrate = the VIDEO rate only — limits mean OBS' "Video Bitrate" field
+	// (audio is not part of the number users set or the guides quote).
+	if l.MaxVideoBitrateKbps > 0 && int(sp.VideoKbps) > l.MaxVideoBitrateKbps {
 		reasons = append(reasons, "bitrate exceeds limit")
+	}
+	// Audio has its own cap — OBS' "Audio Bitrate" field (Output → Audio).
+	if l.MaxAudioBitrateKbps > 0 && int(sp.AudioKbps) > l.MaxAudioBitrateKbps {
+		reasons = append(reasons, "audio bitrate exceeds limit")
 	}
 	return reasons
 }
@@ -236,7 +243,17 @@ func HandleOBS(conn net.Conn, app AppClient) {
 	authed := false  // true only after a successful authmod verify (stage 3)
 	authedUser := "" // the email that was verified (must match the stream name)
 	var up *Upstream
-	published := ""             // final stream name once the control plane approves the publish
+	published := "" // final stream name once the control plane approves the publish
+	// Exactly ONE terminal BadName per connection: the gate/spec rejects and
+	// the upstream death callback share this once — otherwise the callback
+	// races the main loop's close and a SECOND error lands after the first.
+	var rejectOnce sync.Once
+	writeBadName := func(desc string) {
+		rejectOnce.Do(func() {
+			_ = cw.WriteMessage(&Message{Type: 20, CSID: 5, StreamID: 1, Payload: CmdOnStatusError(
+				"NetStream.Publish.BadName", desc)})
+		})
+	}
 	var grantLimits *GateLimits // event caps from the publish grant
 	var grantStrict bool        // strict mode: reject declared-spec violations locally
 	defer func() {
@@ -287,12 +304,10 @@ func HandleOBS(conn net.Conn, app AppClient) {
 					if sp, ok := ParseMetadata(vals); ok && OnPublishSpec != nil {
 						allow, rejectReason := OnPublishSpec(published, sp, grantLimits, grantStrict)
 						if !allow {
-							log.Printf("%s spec rejected on '%s': %s (declared %dx%d@%.2f %.0fkbps)",
-								remote, published, rejectReason, sp.Width, sp.Height, sp.Fps, sp.VideoKbps+sp.AudioKbps)
+							log.Printf("%s spec rejected on '%s': %s (declared %dx%d@%.2f video=%.0fkbps)",
+								remote, published, rejectReason, sp.Width, sp.Height, sp.Fps, sp.VideoKbps)
 							armSpecCooldown(published, authedUser)
-							_ = cw.WriteMessage(&Message{Type: 20, CSID: 5, StreamID: 1, Payload: CmdOnStatusError(
-								"NetStream.Publish.BadName",
-								rejectReason)})
+							writeBadName(rejectReason)
 							up.Close()
 							_ = conn.Close()
 							return
@@ -527,12 +542,20 @@ func HandleOBS(conn net.Conn, app AppClient) {
 					return
 				}
 				up = u
-				// Drain SRS→gateway messages; when SRS closes the upstream (or we
-				// do), close the OBS connection too — no zombie half-live state.
+				// Drain SRS→gateway messages. SRS closing the upstream OR
+				// reporting a mid-stream onStatus ERROR (unsupported codec
+				// etc.) is fatal for the relay: tell OBS with BadName —
+				// terminal, same UX as a wrong password — and close. Without
+				// this the publisher streams into a dead pipe for minutes.
 				go func() {
-					u.Drain(remote)
-					log.Printf("%s upstream gone — closing OBS connection", remote)
-					conn.Close()
+					u.Drain(remote, func(reason string) {
+						log.Printf("%s upstream died (%s) — rejecting OBS publisher", remote, reason)
+						// NOTE: no spec-cooldown here — transient upstream loss
+						// (app/SRS restart) should stay reconnectable; only
+						// deliberate spec rejections arm the cooldown.
+						writeBadName("The ingest rejected this stream: " + reason)
+						conn.Close()
+					})
 				}()
 				// Session gate: the control plane opens the session (row, limits,
 				// record flag) before we tell OBS "go". Deny or ack timeout is
@@ -543,9 +566,7 @@ func HandleOBS(conn net.Conn, app AppClient) {
 				}
 				if !grant.Allowed {
 					log.Printf("%s publish '%s' denied by control plane", remote, final)
-					_ = cw.WriteMessage(&Message{Type: 20, CSID: 5, StreamID: 1, Payload: CmdOnStatusError(
-						"NetStream.Publish.BadName",
-						"Authentication failed: the server rejected this stream.")})
+					writeBadName("Authentication failed: the server rejected this stream.")
 					up.Close()
 					_ = conn.Close()
 					return
@@ -571,8 +592,7 @@ func HandleOBS(conn net.Conn, app AppClient) {
 						if !allow {
 							log.Printf("%s spec rejected on '%s': %s", remote, published, rejectReason)
 							armSpecCooldown(published, authedUser)
-							_ = cw.WriteMessage(&Message{Type: 20, CSID: 5, StreamID: 1, Payload: CmdOnStatusError(
-								"NetStream.Publish.BadName", rejectReason)})
+							writeBadName(rejectReason)
 							up.Close()
 							_ = conn.Close()
 							return

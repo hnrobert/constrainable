@@ -10,7 +10,7 @@ import (
 // The strict declared-spec gate: metadata-time violations are checked LOCALLY
 // against the grant's caps — nothing is relayed before the reject.
 func TestSpecViolations(t *testing.T) {
-	lim := &GateLimits{MaxWidth: 1920, MaxHeight: 1080, MaxFps: 30, MaxBitrateKbps: 4000}
+	lim := &GateLimits{MaxWidth: 1920, MaxHeight: 1080, MaxFps: 30, MaxVideoBitrateKbps: 4000}
 
 	if r := SpecViolations(StreamSpec{Width: 1920, Height: 1080, Fps: 30, VideoKbps: 2500, AudioKbps: 128}, lim); len(r) != 0 {
 		t.Fatalf("clean spec flagged: %v", r)
@@ -21,8 +21,12 @@ func TestSpecViolations(t *testing.T) {
 	if r := SpecViolations(StreamSpec{Width: 1280, Height: 720, Fps: 60, VideoKbps: 2500}, lim); len(r) != 1 || r[0] != "fps exceeds limit" {
 		t.Fatalf("fps: %v", r)
 	}
-	// declared video+audio vs the cap
-	if r := SpecViolations(StreamSpec{Width: 1280, Height: 720, Fps: 30, VideoKbps: 3900, AudioKbps: 200}, lim); len(r) != 1 || r[0] != "bitrate exceeds limit" {
+	// bitrate = the VIDEO rate only (OBS' "Video Bitrate" field semantics) —
+	// the audio track must not count toward the cap
+	if r := SpecViolations(StreamSpec{Width: 1280, Height: 720, Fps: 30, VideoKbps: 3900, AudioKbps: 200}, lim); len(r) != 0 {
+		t.Fatalf("audio must not count toward the bitrate cap: %v", r)
+	}
+	if r := SpecViolations(StreamSpec{Width: 1280, Height: 720, Fps: 30, VideoKbps: 4100}, lim); len(r) != 1 || r[0] != "bitrate exceeds limit" {
 		t.Fatalf("bitrate: %v", r)
 	}
 	// multiple at once
@@ -55,7 +59,7 @@ func TestSpecRejectClosesConnection(t *testing.T) {
 	OnPublishGate = func(streamName, tok, authedUser string) PublishGrant {
 		return PublishGrant{
 			Allowed: true,
-			Limits:  &GateLimits{MaxWidth: 1280, MaxHeight: 720, MaxFps: 30, MaxBitrateKbps: 2000},
+			Limits:  &GateLimits{MaxWidth: 1280, MaxHeight: 720, MaxFps: 30, MaxVideoBitrateKbps: 2000},
 			Strict:  true,
 		}
 	}

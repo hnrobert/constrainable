@@ -238,10 +238,11 @@ func main() {
 		var limits *rtmp.GateLimits
 		if auth.Limits != nil {
 			limits = &rtmp.GateLimits{
-				MaxWidth:       auth.Limits.MaxWidth,
-				MaxHeight:      auth.Limits.MaxHeight,
-				MaxFps:         auth.Limits.MaxFps,
-				MaxBitrateKbps: auth.Limits.MaxBitrateKbps,
+				MaxWidth:            auth.Limits.MaxWidth,
+				MaxHeight:           auth.Limits.MaxHeight,
+				MaxFps:              auth.Limits.MaxFps,
+				MaxVideoBitrateKbps: auth.Limits.MaxVideoBitrateKbps,
+				MaxAudioBitrateKbps: auth.Limits.MaxAudioBitrateKbps,
 			}
 		}
 		// measured enforcement only when the event opted in — the caps go to
@@ -258,6 +259,9 @@ func main() {
 		manager.End(streamName)
 	}
 	rtmp.OnPublishSpec = func(streamName string, spec rtmp.StreamSpec, limits *rtmp.GateLimits, strict bool) (bool, string) {
+		// Record the declared audio rate so the measured monitor can report
+		// and judge the VIDEO bitrate (OBS' "Video Bitrate" field semantics).
+		manager.SetDeclaredAudioKbps(streamName, int(spec.AudioKbps))
 		// Ask the control plane for a verdict on this declared spec (fresh every
 		// time — the event's caps/strict may have changed). Transport failure
 		// falls back to the publish grant's caps.

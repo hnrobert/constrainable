@@ -79,10 +79,11 @@ type PublishAuthorized struct {
 
 // Limits mirrors the Node config's per-event / global stream caps.
 type Limits struct {
-	MaxWidth       int `json:"maxWidth"`
-	MaxHeight      int `json:"maxHeight"`
-	MaxFps         int `json:"maxFps"`
-	MaxBitrateKbps int `json:"maxBitrateKbps"`
+	MaxWidth            int `json:"maxWidth"`
+	MaxHeight           int `json:"maxHeight"`
+	MaxFps              int `json:"maxFps"`
+	MaxVideoBitrateKbps int `json:"maxVideoBitrateKbps"`
+	MaxAudioBitrateKbps int `json:"maxAudioBitrateKbps"`
 }
 
 // MetricsReport carries periodic probe results for one session.

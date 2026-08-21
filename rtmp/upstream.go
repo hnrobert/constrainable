@@ -7,6 +7,7 @@
 package rtmp
 
 import (
+	"fmt"
 	"log"
 	"net"
 )
@@ -65,16 +66,42 @@ func DialUpstream(addr string) (*Upstream, error) {
 	return up, nil
 }
 
-// publish sends publish(streamName,"live") and waits for the first command back
-// (typically onStatus NetStream.Publish.Start).
+// publish sends publish(streamName,"live") and waits for onStatus. SRS
+// answering with an ERROR (unsupported codec, bad name, …) used to be treated
+// as success because only "a command arrived" was checked — the gateway then
+// told OBS "Publish.Start" and streamed into a dead relay. Now the verdict is
+// parsed: error → fail the publish so the caller rejects the client outright.
 func (up *Upstream) Publish(name string) error {
 	if err := up.Cw.WriteMessage(&Message{Type: 20, CSID: 3, Payload: CmdPublish(name)}); err != nil {
 		return err
 	}
-	if _, err := up.readUntilCommand(); err != nil {
+	vals, err := up.readUntilCommand()
+	if err != nil {
 		return err
 	}
+	if code, desc := onStatusVerdict(vals); code != "" && code != "NetStream.Publish.Start" {
+		return fmt.Errorf("upstream rejected publish: %s (%s)", code, desc)
+	}
 	return nil
+}
+
+// onStatusVerdict extracts (code, description) from an onStatus/onResult
+// command: vals = [name, txn?, info-map]; the info map carries
+// code/description. Returns "" when the shape isn't an onStatus info object.
+func onStatusVerdict(vals []interface{}) (string, string) {
+	for _, v := range vals {
+		m, ok := v.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		code, _ := m["code"].(string)
+		if code == "" {
+			continue
+		}
+		desc, _ := m["description"].(string)
+		return code, desc
+	}
+	return "", ""
 }
 
 // writeFrame forwards a media/script message to SRS on the upstream stream id.
@@ -84,13 +111,29 @@ func (up *Upstream) WriteFrame(m *Message) error {
 	return up.Cw.WriteMessage(&fwd)
 }
 
-// drain reads and discards SRS→gateway messages (onStatus, ACKs, control) so
-// SRS' send side never blocks. Run in its own goroutine after publish.
-func (up *Upstream) Drain(remote string) {
+// drain reads SRS→gateway messages (onStatus, ACKs, control) so SRS' send
+// side never blocks. Two things must ESCAPE the drain loop instead of being
+// discarded:
+//   - a mid-stream onStatus ERROR from SRS (fatal for the relay)
+//   - the upstream connection dying (read error)
+//
+// Both call onDeath — the server closes the OBS connection with BadName so
+// the publisher sees an immediate, terminal rejection instead of streaming
+// into a dead pipe for minutes. Run in its own goroutine after publish.
+func (up *Upstream) Drain(remote string, onDeath func(reason string)) {
 	for {
-		if _, err := up.Cr.ReadMessage(); err != nil {
+		msg, err := up.Cr.ReadMessage()
+		if err != nil {
 			log.Printf("%s upstream closed: %v", remote, err)
+			onDeath("upstream connection lost: " + err.Error())
 			return
+		}
+		if msg.Type == 20 || msg.Type == 17 { // AMF0 / AMF3 command
+			if code, desc := onStatusVerdict(AmfDecodeAll(msg.Payload)); code != "" && code != "NetStream.Publish.Start" {
+				log.Printf("%s upstream onStatus %s: %s", remote, code, desc)
+				onDeath("upstream: " + code + " — " + desc)
+				return
+			}
 		}
 	}
 }
