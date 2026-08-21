@@ -29,11 +29,12 @@ const toast = useToast()
 const { data: nodes, refresh, status: nodesStatus } = useFetch<NodeRow[]>('/api/nodes')
 
 /* ------------------------------ latency test ----------------------------- */
-const rtts = ref<Record<string, number | null> | null>(null)
+// Results live in app-wide state (NOT per-instance refs): leaving and
+// re-entering the events page remounts this picker — plain refs would wipe
+// the table. useState keeps the last results visible across navigations.
+const rtts = useState<Record<string, number | null> | null>('nodes:rtts', () => null)
+const outcomes = useState<Record<string, 'ms' | 'timeout' | 'n/a'>>('nodes:outcomes', () => ({}))
 const pinging = ref(false)
-/** per-node outcome: 'timeout' = probed but no answer, 'n/a' = no probe
- *  responder (old firmware) — both render differently from a pending probe */
-const outcomes = ref<Record<string, 'ms' | 'timeout' | 'n/a'>>({})
 
 /** show one node's result the moment its probe resolves (progressive fill-in) */
 function reportResult(id: string, ms: number | null, probed: boolean): void {
@@ -86,12 +87,8 @@ async function pingNodes(): Promise<void> {
   if (pinging.value) return
   pinging.value = true
   const list = nodes.value ?? []
-  rtts.value = {}
-  outcomes.value = {}
-  // seed every node as pending (—), then fill each slot the instant its own
-  // probe settles — successes appear first, stragglers flip to timeout when
-  // their 4s window lapses
-  for (const n of list) reportResult(n.nodeId, null, false)
+  // NOTE: no blanket reset — previous results stay visible while the re-test
+  // runs; each node's slot flips the moment its fresh probe settles.
   try {
     const latencies: { nodeId: string; latencyMs: number }[] = []
     await Promise.all(
@@ -116,10 +113,19 @@ async function pingNodes(): Promise<void> {
   }
 }
 
-// entering the page (events list embeds this picker) runs the test once
-onMounted(() => {
-  void pingNodes()
-})
+// Auto-test once per mount, but only once the node list has actually loaded
+// (useFetch resolves after mount on client-side navigation — testing at mount
+// time probed an empty list, which is why returning to the page showed "—").
+let autoRan = false
+watch(
+  () => nodes.value,
+  (list) => {
+    if (autoRan || !list || list.length === 0 || pinging.value) return
+    autoRan = true
+    void pingNodes()
+  },
+  { immediate: true },
+)
 
 function rttChip(
   ms: number | null | undefined,

@@ -18,6 +18,7 @@ export function listActiveSessions(eventId?: number | null): SessionSnapshot[] {
     height: r.height ?? null,
     fps: r.fps ?? null,
     bitrateKbps: r.bitrateKbps ?? null,
+    audioKbps: r.audioKbps ?? null,
     compliant: r.compliant,
     rejectReason: r.rejectReason ?? null,
     startedAt: r.startedAt.getTime(),

@@ -81,6 +81,7 @@ async function closeGhost(s: PublishSession, reason: string): Promise<void> {
     height: s.height,
     fps: s.fps,
     bitrateKbps: s.bitrateKbps,
+    audioKbps: s.audioKbps ?? null,
     compliant: !!s.compliant,
     rejectReason: s.rejectReason,
     startedAt: s.startedAt.getTime(),

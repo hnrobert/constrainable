@@ -38,6 +38,7 @@ interface Metrics {
   height: number | null
   fps: number | null
   bitrateKbps: number | null
+  audioKbps: number | null
   status: SessionStatus
   compliant: boolean
 }
@@ -139,7 +140,7 @@ export async function handlePublish(
 
   emit(
     'session:start',
-    snapshot(session, { width: null, height: null, fps: null, bitrateKbps: null, status: 'allowed', compliant: false }),
+    snapshot(session, { width: null, height: null, fps: null, bitrateKbps: null, audioKbps: null, status: 'allowed', compliant: false }),
   )
   audit('info', 'publish', `publish started: ${ctx.stream}`, {
     actor: ctx.stream,
@@ -185,6 +186,7 @@ export async function handleUnpublish(ctx: {
           height: prev?.height ?? null,
           fps: prev?.fps ?? null,
           bitrateKbps: prev?.bitrateKbps ?? null,
+          audioKbps: prev?.audioKbps ?? null,
           status: finalStatus,
           compliant: prev?.compliant ?? false,
         },
@@ -213,6 +215,7 @@ async function monitorSession(s: ActiveSession, studentLabel: string | null): Pr
     height: null,
     fps: null,
     bitrateKbps: null,
+    audioKbps: null,
     status: 'allowed',
     compliant: false,
   }
@@ -282,6 +285,7 @@ function persistMetrics(sessionId: number, m: Metrics): void {
     height: m.height,
     fps: m.fps,
     bitrateKbps: m.bitrateKbps,
+    audioKbps: m.audioKbps,
   })
 }
 
@@ -306,6 +310,7 @@ function snapshot(s: ActiveSession, m: Metrics, endedAt: number | null = null): 
     height: m.height,
     fps: m.fps,
     bitrateKbps: m.bitrateKbps,
+    audioKbps: m.audioKbps,
     compliant: m.compliant,
     rejectReason: null,
     startedAt: s.startedAtMs,

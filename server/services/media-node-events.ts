@@ -77,10 +77,12 @@ interface MetricsPayload {
   width?: number
   height?: number
   fps?: number
-  bitrateKbps?: number
+  videoBitrateKbps?: number
+  audioKbps?: number
 }
 
 interface SpecPayload {
+  videoBitrateKbps?: number
 	nodeId: string
 	streamName: string
 	width: number
@@ -383,18 +385,16 @@ async function handlePublishStart(
 function handleMetrics(payload: MetricsPayload): void {
   const row = PublishSessionsRepository.findById(payload.sessionId)
   if (!row) return
-  PublishSessionsRepository.updateMetrics(payload.sessionId, {
+  const m = {
     width: payload.width ?? row.width,
     height: payload.height ?? row.height,
     fps: payload.fps ?? row.fps,
-    bitrateKbps: payload.bitrateKbps ?? row.bitrateKbps,
-  })
-  emit('session:metric', snapshotFromRow(row, {
-    width: payload.width ?? row.width,
-    height: payload.height ?? row.height,
-    fps: payload.fps ?? row.fps,
-    bitrateKbps: payload.bitrateKbps ?? row.bitrateKbps,
-  }))
+    // legacy nodes still send `bitrateKbps` (pre-rename) — accept both
+    bitrateKbps: payload.videoBitrateKbps ?? (payload as { bitrateKbps?: number }).bitrateKbps ?? row.bitrateKbps,
+    audioKbps: payload.audioKbps ?? row.audioKbps ?? null,
+  }
+  PublishSessionsRepository.updateMetrics(payload.sessionId, m)
+  emit('session:metric', snapshotFromRow(row, m))
 }
 
 function handleEnd(payload: EndPayload): void {
@@ -475,22 +475,17 @@ function handleSpec(payload: SpecPayload, ack?: (r: { allow: boolean; reason?: s
   // Bitrate = the VIDEO rate only (OBS' "Video Bitrate" field) — limits and
   // the guides quote that number; adding the audio track inflated it
   // (100 kbps video + 160 kbps default audio read as 260).
-  const bitrateKbps = Math.round(payload.videoKbps || 0)
+  const bitrateKbps = Math.round(payload.videoBitrateKbps ?? payload.videoKbps ?? 0)
   const audioKbps = Math.round(payload.audioKbps || 0)
-  PublishSessionsRepository.updateMetrics(row.id, {
+  const specMetrics = {
     width: payload.width || row.width,
     height: payload.height || row.height,
     fps: payload.fps || row.fps,
     bitrateKbps: bitrateKbps || row.bitrateKbps,
-  })
-  emit('session:metric', {
-    ...snapshotFromRow(row, {
-      width: payload.width || row.width,
-      height: payload.height || row.height,
-      fps: payload.fps || row.fps,
-      bitrateKbps: bitrateKbps || row.bitrateKbps,
-    }),
-  })
+    audioKbps: audioKbps || row.audioKbps || null,
+  }
+  PublishSessionsRepository.updateMetrics(row.id, specMetrics)
+  emit('session:metric', { ...snapshotFromRow(row, specMetrics) })
 
   // Immediate limit gate on the declared values. The verdict goes back as an
   // ACK. STRICT events: the node rejects the connection exactly like a wrong
@@ -556,7 +551,11 @@ function handleViolation(payload: ViolationPayload): void {
       width: payload.metrics?.width ?? row.width,
       height: payload.metrics?.height ?? row.height,
       fps: payload.metrics?.fps ?? row.fps,
-      bitrateKbps: payload.metrics?.bitrateKbps ?? row.bitrateKbps,
+      bitrateKbps:
+        payload.metrics?.videoBitrateKbps ??
+        (payload.metrics as { bitrateKbps?: number } | undefined)?.bitrateKbps ??
+        row.bitrateKbps,
+      audioKbps: payload.metrics?.audioKbps ?? row.audioKbps ?? null,
     }),
     reasons: payload.reasons,
   })
@@ -573,6 +572,7 @@ function snapshotFromRow(
     height?: number | null
     fps?: number | null
     bitrateKbps?: number | null
+    audioKbps?: number | null
     endedAt?: number | null
   } = {},
 ): SessionSnapshot {
@@ -587,6 +587,7 @@ function snapshotFromRow(
     height: over.height ?? row.height ?? null,
     fps: over.fps ?? row.fps ?? null,
     bitrateKbps: over.bitrateKbps ?? row.bitrateKbps ?? null,
+    audioKbps: over.audioKbps ?? row.audioKbps ?? null,
     compliant: !!row.compliant,
     rejectReason: row.rejectReason ?? null,
     startedAt: row.startedAt.getTime(),

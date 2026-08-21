@@ -283,7 +283,10 @@ export const publishSessions = sqliteTable(
     width: integer('width'),
     height: integer('height'),
     fps: real('fps'),
+    /** video-only estimate (total minus declared audio) */
     bitrateKbps: integer('bitrate_kbps'),
+    /** the publisher's declared AUDIO rate (OBS Audio Bitrate field) */
+    audioKbps: integer('audio_kbps'),
     compliant: integer('compliant', { mode: 'boolean' }).notNull().default(false),
     startedAt: integer('started_at', { mode: 'timestamp' }).notNull().default(now),
     endedAt: integer('ended_at', { mode: 'timestamp' }),

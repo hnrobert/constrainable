@@ -36,8 +36,16 @@ function when(e: EventView): string {
 }
 
 const columns: DataTableColumn[] = [
-  { key: 'name', header: 'Event' },
-  { key: 'when', header: 'When' },
+  // fluid-ellipsis column (same trick as the events dashboard): max-w-0 caps
+  // its preferred width, w-full claims the space the other columns leave —
+  // long event names ellipsize instead of stretching the table sideways
+  {
+    key: 'name',
+    header: 'Event',
+    class: 'w-full max-w-0 truncate font-medium',
+    headClass: 'w-full max-w-0',
+  },
+  { key: 'when', header: 'When', class: 'whitespace-nowrap text-muted-foreground' },
   { key: 'status', header: 'Status' },
 ]
 </script>

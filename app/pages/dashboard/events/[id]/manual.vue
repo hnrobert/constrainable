@@ -649,7 +649,7 @@ sudo apt install obs-studio</pre>
             <li>
               Set both <strong>Base (Canvas)</strong> and <strong>Output (Scaled)</strong> FPS:
               pick <strong>Integer FPS Value</strong> (not a fractional Common value) and stay
-              at most <code>{{ limits.maxFps }} fps</code>, and at least 2 (30 recommended).
+              at most <code>{{ limits.maxFps }} fps</code>.
             </li>
           </ol>
           <figure class="space-y-1.5">
