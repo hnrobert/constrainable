@@ -763,6 +763,30 @@ sudo apt install obs-studio</pre>
             <li>Make sure the status shows <strong>LIVE</strong> — your stream is being received.</li>
             <li>See if the event requires you to record locally as a backup, if so, you can click the <strong>Start Recording</strong> button to record everything locally simultaneously.</li>
           </ol>
+
+          <!-- verify the server ACTUALLY accepted the publish — OBS' green
+               indicator only means it handed the bytes to the gateway -->
+          <div class="space-y-1.5 rounded-lg border border-primary/40 bg-muted/40 p-3">
+            <p class="text-sm font-medium">Did the server accept your stream?</p>
+            <p class="text-sm text-muted-foreground">
+              OBS turning green only means it connected — the server can still reject the stream
+              afterwards. To be sure, open <strong>My Audit</strong> in the left menu and check
+              your <strong>latest entry</strong>:
+            </p>
+            <ul class="space-y-1 text-sm text-muted-foreground">
+              <li>
+                <span class="font-medium text-ok">“media-node publish started” —</span>
+                you are live. Nothing else to do.
+              </li>
+              <li>
+                <span class="font-medium text-warn">“publish ended” or any yellow/red entry —</span>
+                the server refused or cut your stream. The entry's message says why — follow it:
+                rejected? Re-copy the
+                <a href="#values" class="underline underline-offset-2" @click.prevent="jump('values')">connection values</a>
+                and sign-in. Flagged for limits? See step 4.2 / 4.3. Then restart streaming in OBS.
+              </li>
+            </ul>
+          </div>
           <figure class="space-y-1.5">
             <img
               src="/manual/start_streaming.png"
@@ -785,6 +809,12 @@ sudo apt install obs-studio</pre>
         <CardHeader><CardTitle>Common issues</CardTitle></CardHeader>
         <CardContent>
           <ul class="space-y-2 text-sm text-muted-foreground">
+            <li>
+              <span class="font-medium text-foreground">Not sure the stream was accepted? —</span>
+              check <strong>My Audit</strong>: the latest entry should read
+              <em>media-node publish started</em>. An <em>ended</em> or yellow/red entry means the
+              server refused or cut you — read its message and follow the matching item below.
+            </li>
             <li>
               <span class="font-medium text-foreground">Failed to connect / could not access the server —</span>
               re-copy the

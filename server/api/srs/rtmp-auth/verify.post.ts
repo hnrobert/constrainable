@@ -29,7 +29,7 @@ export default defineEventHandler(async (event) => {
     // credentials (no-auth events accept any non-empty login) instead of a hard
     // auth failure. No enumeration: same shape as the known-user path. Audited
     // without attribution — the account doesn't exist, the string is untrusted.
-    audit('warn', 'auth', 'authmod verify failed: unknown user', {
+    audit('warn', 'auth', 'authmod failed: user does not exist', {
       detail: { attemptedEmail: email || null, source: 'http' },
     })
     return { allow: false, known: false }
@@ -43,7 +43,7 @@ export default defineEventHandler(async (event) => {
   // known + !allow = a REAL account with the WRONG password → the gateway
   // refuses the connection outright (librtmp-fatal `authfailed`).
   if (!ok) {
-    audit('warn', 'auth', `authmod password rejected: ${email}`, {
+    audit('warn', 'auth', `authmod failed: wrong password (${email})`, {
       actor: email,
       detail: { email, source: 'http' },
     })

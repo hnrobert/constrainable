@@ -229,7 +229,7 @@ export function wireMediaNodeNamespace(io: SocketIOServer): void {
           // Unknown username: placeholder credentials, not a hard auth failure.
           // Audited for visibility, but NOT attributed to the attempted address
           // — the account doesn't exist and the string is untrusted input.
-          audit('warn', 'auth', 'authmod verify failed: unknown user', {
+          audit('warn', 'auth', 'authmod failed: user does not exist', {
             detail: {
               attemptedEmail: email || null,
               nodeId: listNodes().find((n) => n.socketId === socket.id)?.nodeId ?? null,
@@ -247,7 +247,7 @@ export function wireMediaNodeNamespace(io: SocketIOServer): void {
         // known + !allow = a real account with the wrong password → the node
         // refuses the connection outright (librtmp-fatal `authfailed`)
         if (!ok) {
-          audit('warn', 'auth', `authmod password rejected: ${email}`, {
+          audit('warn', 'auth', `authmod failed: wrong password (${email})`, {
             actor: email,
             detail: {
               email,

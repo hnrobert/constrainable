@@ -159,6 +159,22 @@ async function saveSettings(): Promise<boolean> {
     saving.value = false
   }
 }
+async function deleteThisEvent(): Promise<void> {
+  confirm.ask(
+    `Delete this event permanently? Its roster, stream keys, publish sessions and audit history are removed; recordings and bans scoped to it are deleted too. This cannot be undone.`,
+    async () => {
+      try {
+        await $fetch(`/api/events/${id}`, { method: 'DELETE' })
+        toast.info('Event deleted')
+        await navigateTo('/dashboard/events', { replace: true })
+      } catch (e: any) {
+        toast.error('Delete failed: ' + (e?.data?.statusMessage || e?.message || ''))
+      }
+    },
+    { actionLabel: 'Delete event', destructive: true },
+  )
+}
+
 function resetSettings(): void {
   if (event.value) {
     settings.value = structuredClone(toRaw(event.value))
@@ -334,10 +350,28 @@ const statusOptions: { value: EventStatus; label: string }[] = [
             <Label>Max video bitrate (kbps)</Label>
             <Input v-model="limits.maxVideoBitrateKbps" type="number" min="0" placeholder="Inherit global" />
           </div>
+          <div class="space-y-1.5">
+            <Label>Max audio bitrate (kbps)</Label>
+            <Input v-model="limits.maxAudioBitrateKbps" type="number" min="0" placeholder="Inherit global" />
+          </div>
           <p class="text-xs text-muted-foreground sm:col-span-2">
             Streams above these caps are flagged (or kicked, per the enforcement mode); blank fields inherit the global config.
           </p>
         </div>
+      </CardContent>
+    </Card>
+
+    <!-- danger zone — deletion lives at the very bottom of Settings -->
+    <Card class="border-destructive/40">
+      <CardHeader>
+        <CardTitle class="text-destructive">Danger zone</CardTitle>
+        <CardDescription>
+          Deleting removes the event with its roster, stream keys, publish sessions, audit history,
+          event-scoped recordings and bans. There is no undo.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Button variant="destructive" @click="deleteThisEvent">Delete this event</Button>
       </CardContent>
     </Card>
 
