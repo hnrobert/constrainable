@@ -114,10 +114,11 @@ export function listEvents(): EventView[] {
   return EventsRepository.findAll().map(toView)
 }
 
-/** Catalog visible to NON-admins: draft/scheduled are admin-only until live. */
+/** Catalog visible to NON-admins: draft is admin-only; scheduled shows
+ *  (countdown to the window) so participants can find the event early. */
 export function listEventsForUser(): EventView[] {
   return EventsRepository.findAll()
-    .filter((e) => e.status !== 'draft' && e.status !== 'scheduled')
+    .filter((e) => e.status !== 'draft')
     .map(toView)
 }
 

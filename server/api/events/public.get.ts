@@ -13,9 +13,8 @@ export default defineEventHandler((): EventView[] => {
     .filter(
       (e) =>
         e.visibility === ('public' as EventVisibility) &&
-        // draft = admin-only, scheduled hasn't opened — never on the homepage
-        e.status !== 'draft' &&
-        e.status !== 'scheduled',
+        // draft = admin-only until published; scheduled IS listed (upcoming)
+        e.status !== 'draft',
     )
     .map((e) => {
       const groupRows: EventGroupRef[] = GroupsRepository.findGroupsForEvent(e.id).map((g) => ({
