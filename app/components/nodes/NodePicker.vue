@@ -31,6 +31,15 @@ const { data: nodes, refresh, status: nodesStatus } = useFetch<NodeRow[]>('/api/
 /* ------------------------------ latency test ----------------------------- */
 const rtts = ref<Record<string, number | null> | null>(null)
 const pinging = ref(false)
+/** per-node outcome: 'timeout' = probed but no answer, 'n/a' = no probe
+ *  responder (old firmware) — both render differently from a pending probe */
+const outcomes = ref<Record<string, 'ms' | 'timeout' | 'n/a'>>({})
+
+/** show one node's result the moment its probe resolves (progressive fill-in) */
+function reportResult(id: string, ms: number | null, probed: boolean): void {
+  rtts.value = { ...(rtts.value ?? {}), [id]: ms }
+  outcomes.value = { ...outcomes.value, [id]: ms != null ? 'ms' : probed ? 'timeout' : 'n/a' }
+}
 
 /** True browser→node RTT via an ICE check; null = no answer within 4s. */
 async function browserProbe(nodeId: string): Promise<number | null> {
@@ -74,21 +83,29 @@ async function browserProbe(nodeId: string): Promise<number | null> {
 }
 
 async function pingNodes(): Promise<void> {
+  if (pinging.value) return
   pinging.value = true
+  const list = nodes.value ?? []
+  rtts.value = {}
+  outcomes.value = {}
+  // seed every node as pending (—), then fill each slot the instant its own
+  // probe settles — successes appear first, stragglers flip to timeout when
+  // their 4s window lapses
+  for (const n of list) reportResult(n.nodeId, null, false)
   try {
-    const list = nodes.value ?? []
-    // probe every node in parallel; ones without the responder get null → n/a
-    const results = await Promise.all(
-      list.map(async (n) => ({
-        id: n.nodeId,
-        ms: n.publicProbeUdpPort > 0 ? await browserProbe(n.nodeId) : null,
-      })),
+    const latencies: { nodeId: string; latencyMs: number }[] = []
+    await Promise.all(
+      list.map(async (n) => {
+        // no responder (old firmware): n/a immediately, nothing to probe
+        if (!(n.publicProbeUdpPort > 0)) {
+          reportResult(n.nodeId, null, false)
+          return
+        }
+        const ms = await browserProbe(n.nodeId)
+        reportResult(n.nodeId, ms, true)
+        if (ms != null) latencies.push({ nodeId: n.nodeId, latencyMs: ms })
+      }),
     )
-    rtts.value = Object.fromEntries(results.map((r) => [r.id, r.ms]))
-
-    const latencies = results
-      .filter((r) => r.ms != null)
-      .map((r) => ({ nodeId: r.id, latencyMs: r.ms as number }))
     if (latencies.length) {
       await $fetch('/api/nodes/measure', { method: 'POST', body: { latencies } }).catch(() => null)
     }
@@ -99,11 +116,23 @@ async function pingNodes(): Promise<void> {
   }
 }
 
-function rttChip(ms: number | null | undefined): { label: string; cls: string } {
-  if (ms == null) return { label: 'n/a', cls: 'text-muted-foreground' }
-  if (ms < 50) return { label: `${ms} ms`, cls: 'text-ok font-semibold' }
-  if (ms < 150) return { label: `${ms} ms`, cls: 'text-foreground' }
-  return { label: `${ms} ms`, cls: 'text-warn font-semibold' }
+// entering the page (events list embeds this picker) runs the test once
+onMounted(() => {
+  void pingNodes()
+})
+
+function rttChip(
+  ms: number | null | undefined,
+  outcome?: 'ms' | 'timeout' | 'n/a',
+): { label: string; cls: string } {
+  if (ms != null) {
+    if (ms < 50) return { label: `${ms} ms`, cls: 'text-ok font-semibold' }
+    if (ms < 150) return { label: `${ms} ms`, cls: 'text-foreground' }
+    return { label: `${ms} ms`, cls: 'text-warn font-semibold' }
+  }
+  if (outcome === 'timeout') return { label: 'timeout', cls: 'text-warn font-semibold' }
+  if (outcome === 'n/a') return { label: 'n/a', cls: 'text-muted-foreground' }
+  return { label: '—', cls: 'text-muted-foreground' }
 }
 
 /* ------------------------------- selection ------------------------------- */
@@ -153,7 +182,7 @@ const offlineMine = computed(() => {
         No ingest node assigned to you yet — choose one below.
       </span>
       <Button variant="outline" size="sm" class="ml-auto" :disabled="pinging" @click="pingNodes">
-        {{ pinging ? 'Testing…' : 'Test latency' }}
+        {{ pinging ? 'Testing…' : 'Re-test latency' }}
       </Button>
     </div>
 
@@ -182,9 +211,9 @@ const offlineMine = computed(() => {
               <span
                 v-if="rtts"
                 class="rounded-sm bg-muted px-1.5 py-0.5 font-mono text-xs tabular-nums"
-                :class="rttChip(rtts[n.nodeId]).cls"
-                :title="n.publicProbeUdpPort > 0 ? 'measured from your browser (ICE)' : 'node firmware has no probe responder — update it to measure'"
-              >{{ rttChip(rtts[n.nodeId]).label }}</span>
+                :class="rttChip(rtts[n.nodeId], outcomes[n.nodeId]).cls"
+                :title="n.publicProbeUdpPort > 0 ? (rtts[n.nodeId] != null ? 'measured from your browser (ICE)' : 'no answer within the probe window (4s)') : 'node firmware has no probe responder — update it to measure'"
+              >{{ rttChip(rtts[n.nodeId], outcomes[n.nodeId]).label }}</span>
               <span v-else class="text-xs text-muted-foreground">—</span>
             </td>
             <td class="py-2.5 pr-4 tabular-nums" :class="{ 'text-destructive': n.assigned > n.maxUsers }">
