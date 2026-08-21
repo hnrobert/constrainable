@@ -194,7 +194,7 @@ func main() {
 		func(sessionID int64, s *media.Session) {
 			_ = socketClient.Emit("publish:metrics", node.MetricsReport{
 				SessionID: sessionID, Width: s.Width, Height: s.Height,
-				Fps: s.Fps, BitrateKbps: s.BitrateKbps,
+				Fps: s.Fps, VideoBitrateKbps: s.BitrateKbps, AudioKbps: s.DeclaredAudioKbps(),
 			})
 		},
 		func(sessionID int64, reasons []string, s *media.Session) {
@@ -202,7 +202,7 @@ func main() {
 				SessionID: sessionID, Reasons: reasons,
 				Metrics: &node.MetricsReport{
 					SessionID: sessionID, Width: s.Width, Height: s.Height,
-					Fps: s.Fps, BitrateKbps: s.BitrateKbps,
+					Fps: s.Fps, VideoBitrateKbps: s.BitrateKbps, AudioKbps: s.DeclaredAudioKbps(),
 				},
 			})
 		},

@@ -110,6 +110,14 @@ func (m *Manager) Start(
 // received total — the reported/judged bitrate is the VIDEO bitrate, the
 // number OBS' "Video Bitrate" field shows. Clamped to [0,320]: audio above
 // 320 kbps is not a real thing, and a forged larger value would otherwise
+// DeclaredAudioKbps returns the publisher's declared audio bitrate (0 when
+// the encoder declared none) — reported with the periodic metrics.
+func (s *Session) DeclaredAudioKbps() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.declaredAudioKbps
+}
+
 // hide video from the measured check.
 func (m *Manager) SetDeclaredAudioKbps(streamName string, audioKbps int) {
 	m.mu.Lock()

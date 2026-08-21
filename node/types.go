@@ -88,11 +88,12 @@ type Limits struct {
 
 // MetricsReport carries periodic probe results for one session.
 type MetricsReport struct {
-	SessionID   int64   `json:"sessionId"`
-	Width       int     `json:"width,omitempty"`
-	Height      int     `json:"height,omitempty"`
-	Fps         float64 `json:"fps,omitempty"`
-	BitrateKbps int     `json:"bitrateKbps,omitempty"`
+	SessionID        int64   `json:"sessionId"`
+	Width            int     `json:"width,omitempty"`
+	Height           int     `json:"height,omitempty"`
+	Fps              float64 `json:"fps,omitempty"`
+	VideoBitrateKbps int     `json:"videoBitrateKbps,omitempty"`
+	AudioKbps        int     `json:"audioKbps,omitempty"`
 }
 
 // EndReport signals a stream ended and carries the final duration.
