@@ -10,7 +10,13 @@ import type { LimitsOverride } from '#shared/config'
 
 export default defineEventHandler((): EventView[] => {
   return EventsRepository.findAll()
-    .filter((e) => e.visibility === ('public' as EventVisibility))
+    .filter(
+      (e) =>
+        e.visibility === ('public' as EventVisibility) &&
+        // draft = admin-only, scheduled hasn't opened — never on the homepage
+        e.status !== 'draft' &&
+        e.status !== 'scheduled',
+    )
     .map((e) => {
       const groupRows: EventGroupRef[] = GroupsRepository.findGroupsForEvent(e.id).map((g) => ({
         id: g.id,

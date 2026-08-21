@@ -55,6 +55,22 @@ export function parseToken(param: string): string | null {
  * publisher is outside the window, or null when within it. A bound that is null
  * (unset) is not enforced — so an event with no times is always in-window.
  */
+/** human reason for a non-live status at publish time */
+function publishClosedReason(status: string | undefined): string {
+  switch (status) {
+    case undefined:
+      return 'event closed'
+    case 'draft':
+      return 'event not published yet'
+    case 'scheduled':
+      return 'event not started yet'
+    case 'ended':
+      return 'event ended'
+    default:
+      return 'event closed'
+  }
+}
+
 function withinWindow(e: Pick<Event, 'startsAt' | 'endsAt'>): string | null {
   const now = Date.now()
   if (e.startsAt && now < e.startsAt.getTime()) return 'event not started'
@@ -85,8 +101,10 @@ export async function authorizePublish(ctx: AuthContext): Promise<AuthResult> {
       if (!(await verifyToken(token, key.tokenHash))) continue
 
       const event = EventsRepository.findById(key.eventId)
-      if (!event || event.status === 'archived') {
-        return { allow: false, reason: 'event closed' }
+      if (!event || event.status !== 'live') {
+        // only LIVE accepts streams: draft is admin-only, scheduled hasn't
+        // opened, ended/archived are closed
+        return { allow: false, reason: publishClosedReason(event?.status) }
       }
       const windowReason = withinWindow(event)
       if (windowReason) return { allow: false, reason: windowReason }
@@ -111,7 +129,7 @@ export async function authorizePublish(ctx: AuthContext): Promise<AuthResult> {
     const event =
       (await findEventByPublishToken(token)) ?? EventsRepository.findByPublishKey(token) ?? null
     if (event) {
-      if (event.status === 'archived') return { allow: false, reason: 'event closed' }
+      if (event.status !== 'live') return { allow: false, reason: publishClosedReason(event.status) }
       const windowReason = withinWindow(event)
       if (windowReason) return { allow: false, reason: windowReason }
       return { allow: true, eventId: event.id, streamKeyId: -1, studentLabel: null }

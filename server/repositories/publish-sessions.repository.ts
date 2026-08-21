@@ -16,6 +16,15 @@ export const PublishSessionsRepository = {
     return db.select().from(publishSessions).where(eq(publishSessions.id, id)).get()
   },
   /** Newest not-yet-ended session for one stream — playback/kick routing. */
+  /** active (not ended) sessions of one event — event-end cutoff */
+  findActiveByEvent(eventId: number): PublishSession[] {
+    return db
+      .select()
+      .from(publishSessions)
+      .where(and(eq(publishSessions.eventId, eventId), isNull(publishSessions.endedAt)))
+      .all()
+  },
+
   findActiveByStream(streamName: string): PublishSession | undefined {
     return db
       .select()

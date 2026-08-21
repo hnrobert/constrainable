@@ -9,6 +9,7 @@ import { EventsRepository } from '../repositories/events.repository'
 import { EventSlugAliasesRepository } from '../repositories/event-slug-aliases.repository'
 import { GroupsRepository } from '../repositories/groups.repository'
 import type { Event } from '../database/schema'
+import type { EventStatus } from '#shared/event-view'
 import { limitsOverrideSchema, type LimitsOverride } from '#shared/config'
 import type { EventGroupRef, EventVisibility } from '#shared/event-view'
 import { generateToken, hashToken } from '../utils/token'
@@ -113,6 +114,13 @@ export function listEvents(): EventView[] {
   return EventsRepository.findAll().map(toView)
 }
 
+/** Catalog visible to NON-admins: draft/scheduled are admin-only until live. */
+export function listEventsForUser(): EventView[] {
+  return EventsRepository.findAll()
+    .filter((e) => e.status !== 'draft' && e.status !== 'scheduled')
+    .map(toView)
+}
+
 export function getEvent(id: number): EventView {
   return toView(getRow(id))
 }
@@ -134,6 +142,23 @@ function validEventKey(slug: string): string {
   return slug
 }
 
+
+/** Scheduled events must carry a full window; end must follow start. */
+function assertWindow(
+  status: EventStatus | undefined,
+  startsAt: Date | number | null,
+  endsAt: Date | number | null,
+): void {
+  const s = startsAt ? new Date(startsAt).getTime() : null
+  const e = endsAt ? new Date(endsAt).getTime() : null
+  if (status === 'scheduled' && (!s || !e)) {
+    throw createError({ statusCode: 400, statusMessage: 'scheduled events need both a start and an end time' })
+  }
+  if (s && e && e <= s) {
+    throw createError({ statusCode: 400, statusMessage: 'end time must be after the start time' })
+  }
+}
+
 export function createEvent(input: EventInput): EventView {
   const name = (input.name ?? '').trim()
   if (!name) throw createError({ statusCode: 400, statusMessage: 'name is required' })
@@ -142,6 +167,8 @@ export function createEvent(input: EventInput): EventView {
 
   const limitsOverride =
     input.limitsOverride != null ? JSON.stringify(limitsOverrideSchema.parse(input.limitsOverride)) : null
+
+  assertWindow(input.status, input.startsAt ?? null, input.endsAt ?? null)
 
   const row = EventsRepository.insert({
     name,
@@ -198,6 +225,11 @@ export function updateEvent(id: number, patch: EventInput): EventView {
   if (patch.startsAt !== undefined) set.startsAt = toTs(patch.startsAt)
   if (patch.endsAt !== undefined) set.endsAt = toTs(patch.endsAt)
   if (patch.status != null) set.status = patch.status
+  assertWindow(
+    (set.status as EventStatus | undefined) ?? existing.status,
+    ((set.startsAt as Date | undefined) ?? existing.startsAt ?? null) as Date | null,
+    ((set.endsAt as Date | undefined) ?? existing.endsAt ?? null) as Date | null,
+  )
   if (patch.recordEnabled != null) set.recordEnabled = patch.recordEnabled
   if (patch.strictLimits != null) set.strictLimits = patch.strictLimits
   if (patch.enforceMeasuredLimits != null) set.enforceMeasuredLimits = patch.enforceMeasuredLimits

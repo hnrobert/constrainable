@@ -64,7 +64,9 @@ const settingsDirty = computed(() => {
     s.strictLimits !== e.strictLimits ||
     s.enforceMeasuredLimits !== e.enforceMeasuredLimits ||
     s.visibility !== e.visibility ||
-    s.streamGuide !== e.streamGuide
+    s.streamGuide !== e.streamGuide ||
+    startsAtLocal.value !== toLocalInput(e.startsAt) ||
+    endsAtLocal.value !== toLocalInput(e.endsAt)
   const lo = e.limitsOverride ?? {}
   const limitsChanged =
     Number(limits.maxWidth || 0) !== (lo.maxWidth ?? 0) ||
@@ -123,6 +125,14 @@ async function saveSettings(): Promise<boolean> {
     toast.error('Event key may only contain lowercase letters, digits, _ and -')
     return false
   }
+  if (windowIncomplete.value) {
+    toast.error('Scheduled events need both a start and an end time')
+    return false
+  }
+  if (windowReversed.value) {
+    toast.error('The end time must be after the start time')
+    return false
+  }
   saving.value = true
   saved.value = false
   try {
@@ -139,6 +149,8 @@ async function saveSettings(): Promise<boolean> {
         enforceMeasuredLimits: s.enforceMeasuredLimits,
         visibility: s.visibility,
         streamGuide: s.streamGuide,
+        startsAt: fromLocalInput(startsAtLocal.value),
+        endsAt: fromLocalInput(endsAtLocal.value),
         limitsOverride: limitsPayload(),
         groupIds: selectedGroupIds.value,
       },
@@ -177,6 +189,8 @@ async function deleteThisEvent(): Promise<void> {
 
 function resetSettings(): void {
   if (event.value) {
+    startsAtLocal.value = toLocalInput(event.value.startsAt)
+    endsAtLocal.value = toLocalInput(event.value.endsAt)
     settings.value = structuredClone(toRaw(event.value))
     selectedGroupIds.value = event.value.groups.map((g) => g.id)
     const lo = event.value.limitsOverride ?? {}
@@ -208,6 +222,44 @@ async function copy(text: string, label = 'Copied'): Promise<void> {
     toast.error('Copy failed, please copy manually')
   }
 }
+
+// Streaming window: REQUIRED when scheduled (opens+closes), end-time optional
+// when live (auto-end + cut streams at close). Stored as datetime-local
+// strings; converted to epoch-ms on save, back from the event on load.
+const startsAtLocal = ref('')
+const endsAtLocal = ref('')
+
+function toLocalInput(ms: number | null | undefined): string {
+  if (!ms) return ''
+  const d = new Date(ms)
+  const pad = (n: number): string => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+function fromLocalInput(v: string): number | null {
+  if (!v) return null
+  const t = new Date(v).getTime()
+  return Number.isFinite(t) ? t : null
+}
+
+watch(
+  event,
+  (e) => {
+    startsAtLocal.value = toLocalInput(e?.startsAt)
+    endsAtLocal.value = toLocalInput(e?.endsAt)
+  },
+  { immediate: true, flush: 'sync' },
+)
+
+const windowIncomplete = computed(
+  () =>
+    settings.value?.status === 'scheduled' && (startsAtLocal.value === '' || endsAtLocal.value === ''),
+)
+const windowReversed = computed(
+  () =>
+    startsAtLocal.value !== '' &&
+    endsAtLocal.value !== '' &&
+    (fromLocalInput(endsAtLocal.value) ?? 0) <= (fromLocalInput(startsAtLocal.value) ?? 0),
+)
 
 const statusOptions: { value: EventStatus; label: string }[] = [
   { value: 'draft', label: 'Draft' },
@@ -256,6 +308,31 @@ const statusOptions: { value: EventStatus; label: string }[] = [
                 <SelectItem v-for="o in statusOptions" :key="o.value" :value="o.value">{{ o.label }}</SelectItem>
               </SelectContent>
             </Select>
+            <p class="text-xs text-muted-foreground">
+              Only <strong>Live</strong> accepts streams. Scheduled opens automatically at the
+              start time; both close automatically at the end time (active streams are cut).
+            </p>
+          </div>
+          <div class="space-y-1.5">
+            <Label>Starts at {{ settings.status === 'scheduled' ? '*' : '' }}</Label>
+            <Input v-model="startsAtLocal" type="datetime-local" />
+            <p v-if="settings.status === 'scheduled' && !startsAtLocal" class="text-xs text-destructive">
+              Required for scheduled events.
+            </p>
+          </div>
+          <div class="space-y-1.5">
+            <Label>Ends at {{ ['scheduled', 'live'].includes(settings.status) ? '*' : '' }}</Label>
+            <Input v-model="endsAtLocal" type="datetime-local" />
+            <p v-if="windowIncomplete" class="text-xs text-destructive">
+              Scheduled events need both times.
+            </p>
+            <p v-else-if="windowReversed" class="text-xs text-destructive">End must be after start.</p>
+            <p
+              v-else-if="settings.status === 'live' && endsAtLocal"
+              class="text-xs text-muted-foreground"
+            >
+              At this time the event flips to <strong>ended</strong> and all its streams are cut.
+            </p>
           </div>
           <div class="space-y-1.5">
             <Label>Visibility</Label>

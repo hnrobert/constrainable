@@ -14,7 +14,12 @@ export default defineEventHandler((event) => {
     throw createError({ statusCode: 400, statusMessage: 'invalid event id' })
   }
   const ev = getEvent(id)
+  if (!ev) throw createError({ statusCode: 404, statusMessage: 'event not found' })
   const auth = event.context.auth
+  // draft/scheduled are admin-only until live — 404 (no existence leak)
+  if (auth?.role !== 'admin' && (ev.status === 'draft' || ev.status === 'scheduled')) {
+    throw createError({ statusCode: 404, statusMessage: 'event not found' })
+  }
   if (!canViewEvent(auth, { visibility: ev.visibility, groupIds: ev.groups.map((g) => g.id) })) {
     throw createError({ statusCode: 403, statusMessage: 'forbidden' })
   }
