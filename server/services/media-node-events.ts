@@ -64,6 +64,8 @@ interface PublishAuthorizedAck {
   reason?: string
   sessionId?: number
   eventId?: number | null
+  /** the event KEY (slug) — the node files DVR recordings under <key>/<user>/ */
+  eventKey?: string
   limits?: { maxWidth: number; maxHeight: number; maxFps: number; maxVideoBitrateKbps: number; maxAudioBitrateKbps: number }
   record?: boolean
   /** strict events: the node rejects declared-spec violations locally (OBS-terminal) */
@@ -362,6 +364,7 @@ async function handlePublishStart(
       allow: true,
       sessionId: row.id,
       eventId: auth.eventId ?? null,
+      eventKey: event?.slug ?? '',
       // Limits always travel with the grant: the node checks the DECLARED
       // spec against them locally when strict (metadata-time, OBS-terminal),
       // and runs the MEASURED 5s monitor against them when measured.
