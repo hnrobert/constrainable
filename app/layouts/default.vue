@@ -6,6 +6,7 @@ import {
   CalendarDays,
   Radio,
   Users,
+  UserRoundCog,
   UsersRound,
   Settings,
   Mail,
@@ -47,6 +48,7 @@ const generalNav: NavItem[] = [
   { label: 'Events', to: '/dashboard/events', icon: CalendarDays },
   // { label: 'My Live', to: '/live', icon: Radio },
   { label: 'My Audit', to: '/dashboard/my-audit', icon: ScrollText },
+  { label: 'My Settings', to: '/dashboard/settings', icon: UserRoundCog },
 ]
 
 const adminNav: NavItem[] = [

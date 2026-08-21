@@ -1,6 +1,7 @@
 /**
- * List audit log entries, newest-first, with optional filters. Admin-only
- * (requireAdmin). Query params: ?level=&category=&eventId=&q=&limit=.
+ * List audit log entries, newest-first, one PAGE at a time with optional
+ * filters. Admin-only (requireAdmin). Query params:
+ * ?level=&category=&eventId=&q=&page=&pageSize= (defaults: 1 / 50).
  */
 import { listAudit } from '../../services/audit'
 import { AUDIT_CATEGORIES, AUDIT_LEVELS } from '#shared/audit'
@@ -19,6 +20,7 @@ export default defineEventHandler((event) => {
     category: pick(q.category ? String(q.category) : null, AUDIT_CATEGORIES),
     eventId: q.eventId ? Number(q.eventId) : null,
     q: q.q ? String(q.q) : null,
-    limit: q.limit ? Number(q.limit) : null,
+    page: q.page ? Number(q.page) : null,
+    pageSize: q.pageSize ? Number(q.pageSize) : null,
   })
 })

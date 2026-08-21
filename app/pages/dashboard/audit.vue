@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AuditView } from '#shared/audit'
+import type { AuditPageView, AuditView } from '#shared/audit'
 import type { DataTableColumn } from '~/components/DataTable.vue'
 import { AUDIT_CATEGORIES, AUDIT_LEVELS } from '#shared/audit'
 
@@ -22,11 +22,16 @@ const filters = reactive<{ level: string; category: string; eventId: string; q: 
   eventId: ALL,
   q: '',
 })
-// applied filters drive the query; updated on search.
+// applied filters + paging drive the query; updated on search / pager.
 const applied = ref({ level: '', category: '', eventId: '', q: '' })
-const { data, refresh, pending } = useFetch<AuditView[]>('/api/audit', { query: applied })
+const page = ref(1)
+const pageSize = ref(50)
+const query = computed(() => ({ ...applied.value, page: page.value, pageSize: pageSize.value }))
+const { data, refresh, pending } = useFetch<AuditPageView>('/api/audit', { query })
+const rows = computed(() => data.value?.entries ?? [])
 
 function apply(): void {
+  page.value = 1 // new filter set → back to the first page
   applied.value = {
     level: filters.level === ALL ? '' : filters.level,
     category: filters.category === ALL ? '' : filters.category,
@@ -41,6 +46,20 @@ function resetFilters(): void {
   filters.q = ''
   apply()
 }
+function onPageSize(n: number): void {
+  pageSize.value = n
+  page.value = 1
+}
+// filters shrank the result set while deep in the pages → jump back to the
+// (new) last page instead of showing an empty one
+watch(
+  () => data.value,
+  (d) => {
+    if (!d || d.entries.length > 0) return
+    const last = Math.max(1, Math.ceil(d.total / d.pageSize))
+    if (page.value > last) page.value = last
+  },
+)
 
 function fmtDate(ms: number): string {
   // compact, column-friendly: 'Aug 20, 2026, 19:49:54'
@@ -134,14 +153,14 @@ function hasDetail(row: AuditView): boolean {
     <Card>
       <CardHeader>
         <div class="flex items-center justify-between">
-          <CardTitle>Showing {{ data?.length ?? 0 }} (newest first, max 200)</CardTitle>
+          <CardTitle>{{ data?.total ?? 0 }} entries (newest first)</CardTitle>
           <Button variant="outline" size="sm" :disabled="pending" @click="refresh()">{{ pending ? 'Refreshing…' : 'Refresh' }}</Button>
         </div>
       </CardHeader>
       <CardContent>
         <DataTable
           :columns="columns"
-          :rows="data ?? []"
+          :rows="rows"
           :row-key="(row: AuditView) => row.id"
           :detail-when="hasDetail"
           empty="No audit entries."
@@ -159,6 +178,16 @@ function hasDetail(row: AuditView): boolean {
             <pre class="m-0 max-h-48 overflow-auto whitespace-pre-wrap wrap-break-word border-t border-dashed bg-muted/40 px-3 py-2 text-xs">{{ prettyDetail(row.detail) }}</pre>
           </template>
         </DataTable>
+        <div class="mt-4 border-t pt-3">
+          <AuditPager
+            :page="page"
+            :page-size="pageSize"
+            :total="data?.total ?? 0"
+            :pending="pending"
+            @update:page="page = $event"
+            @update:page-size="onPageSize"
+          />
+        </div>
       </CardContent>
     </Card>
   </div>

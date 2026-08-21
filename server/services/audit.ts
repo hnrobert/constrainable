@@ -5,7 +5,7 @@
 import { AuditLogRepository } from '../repositories/audit-log.repository'
 import { emit } from '../utils/bus'
 import type { AuditCategory, AuditLevel } from '#shared/events'
-import type { AuditFilters, AuditView } from '#shared/audit'
+import type { AuditFilters, AuditView, AuditPageView } from '#shared/audit'
 import type { AuditEntry } from '../database/schema'
 
 export interface AuditInput {
@@ -45,8 +45,8 @@ export function audit(
   })
 }
 
-const AUDIT_MAX_LIMIT = 1000
-const AUDIT_DEFAULT_LIMIT = 200
+const AUDIT_MAX_PAGE_SIZE = 1000
+const AUDIT_DEFAULT_PAGE_SIZE = 50
 
 /** Map a DB row to the client view: epoch-ms timestamp + parsed JSON detail. */
 function toAuditView(row: AuditEntry): AuditView {
@@ -77,16 +77,18 @@ function toAuditView(row: AuditEntry): AuditView {
  * endpoint validates level/category against the known enum sets before calling,
  * so they are already well-typed here.
  */
-export function listAudit(filters: AuditFilters = {}): AuditView[] {
-  const limit = Math.min(Math.max(filters.limit ?? AUDIT_DEFAULT_LIMIT, 1), AUDIT_MAX_LIMIT)
-  const rows = AuditLogRepository.findMany({
+export function listAudit(filters: AuditFilters = {}): AuditPageView {
+  const pageSize = Math.min(Math.max(filters.pageSize ?? AUDIT_DEFAULT_PAGE_SIZE, 1), AUDIT_MAX_PAGE_SIZE)
+  const page = Math.max(filters.page ?? 1, 1)
+  const where = {
     level: filters.level ?? null,
     category: filters.category ?? null,
     eventId: filters.eventId ?? null,
     actor: filters.actor ?? null,
     involvedEmail: filters.involvedEmail ?? null,
     q: filters.q ?? null,
-    limit,
-  })
-  return rows.map(toAuditView)
+  }
+  const total = AuditLogRepository.countFiltered(where)
+  const rows = AuditLogRepository.findMany({ ...where, limit: pageSize, offset: (page - 1) * pageSize })
+  return { entries: rows.map(toAuditView), total, page, pageSize }
 }

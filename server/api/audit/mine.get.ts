@@ -4,7 +4,7 @@
  * about their publishing (rejects, violations, bans, forced disconnects), so a
  * regular user can see exactly WHY a stream failed. Any logged-in session; the
  * all-events admin view stays at GET /api/audit. Query params:
- * ?level=&category=&q=&limit=.
+ * ?level=&category=&q=&page=&pageSize= (defaults: 1 / 50).
  */
 import { createError } from 'h3'
 import { UsersRepository } from '../../repositories/users.repository'
@@ -28,6 +28,7 @@ export default defineEventHandler((event) => {
     level: pick(q.level ? String(q.level) : null, AUDIT_LEVELS),
     category: pick(q.category ? String(q.category) : null, AUDIT_CATEGORIES),
     q: q.q ? String(q.q) : null,
-    limit: q.limit ? Number(q.limit) : null,
+    page: q.page ? Number(q.page) : null,
+    pageSize: q.pageSize ? Number(q.pageSize) : null,
   })
 })

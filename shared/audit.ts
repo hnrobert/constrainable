@@ -37,6 +37,20 @@ export interface AuditFilters {
   q?: string | null
   /** max rows to return (server clamps to [1, AUDIT_MAX_LIMIT]) */
   limit?: number | null
+  /** 1-based page number (server clamps to ≥1) */
+  page?: number | null
+  /** rows per page (server clamps to [1, AUDIT_MAX_PAGE_SIZE]) */
+  pageSize?: number | null
+}
+
+/** Paged audit result returned by the list endpoints. */
+export interface AuditPageView {
+  entries: AuditView[]
+  /** total rows matching the filters (independent of paging) */
+  total: number
+  /** the clamped paging actually applied */
+  page: number
+  pageSize: number
 }
 
 /** Allowed enum values, reused by the endpoint (validation) + the page (filters). */
