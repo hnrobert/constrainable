@@ -67,14 +67,16 @@ type PublishStart struct {
 // PublishAuthorized is Node's ack to publish:start — the authorization decision
 // plus everything the node needs to run the session.
 type PublishAuthorized struct {
-	Allow     bool    `json:"allow"`
-	Reason    string  `json:"reason,omitempty"`
-	SessionID int64   `json:"sessionId,omitempty"`
-	EventID   *int64  `json:"eventId,omitempty"`
-	Limits    *Limits `json:"limits,omitempty"`
-	Record    bool    `json:"record"`
-	Strict    bool    `json:"strict"`
-	Measured  bool    `json:"measured"`
+	Allow     bool   `json:"allow"`
+	Reason    string `json:"reason,omitempty"`
+	SessionID int64  `json:"sessionId,omitempty"`
+	EventID   *int64 `json:"eventId,omitempty"`
+	/** the event's KEY (slug) — recordings file under RECORD_DIR/<key>/<user>/ */
+	EventKey string  `json:"eventKey,omitempty"`
+	Limits   *Limits `json:"limits,omitempty"`
+	Record   bool    `json:"record"`
+	Strict   bool    `json:"strict"`
+	Measured bool    `json:"measured"`
 }
 
 // Limits mirrors the Node config's per-event / global stream caps.

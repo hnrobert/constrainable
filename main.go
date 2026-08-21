@@ -72,7 +72,7 @@ func startSRS(cfg *Config) *exec.Cmd {
 	return cmd
 }
 
-// reportRecording scans RECORD_DIR/<stream>/ for the FLV segments SRS DVR
+// reportRecording scans RECORD_DIR/<stream>/ for the FLV segments SRS DVR wrote during the session and reports them under <eventKey>/<user>/
 // wrote during the session and reports them to the control plane
 // (recording:ready). Runs in its own goroutine with a short delay — SRS
 // finalizes (closes) the DVR file only after it sees the relay go away.
@@ -85,12 +85,16 @@ func reportRecording(cfg *Config, c *node.Client, s *media.Session) {
 		if err != nil {
 			return // no DVR output for this stream (nothing to report)
 		}
-		// Per-event subdirectory (e<id>): SRS's dvr_path only knows the
-		// stream, so finished segments are MOVED under e<eventId>/<stream>/
-		// before reporting — recordings from different events never share a
-		// folder. Event-less sessions keep the plain <stream>/ layout.
+		// Recordings file under <eventKey>/<user>/ — first level the event
+		// KEY (slug, filesystem-safe [a-z0-9_-]), second the publisher.
+		// SRS's dvr_path only knows the stream, so finished segments are
+		// MOVED into place before reporting. Falls back to e<eventId> when
+		// the control plane sent no key; event-less sessions keep the plain
+		// <stream>/ layout.
 		eventDir := ""
-		if s.EventID != nil {
+		if s.EventKey != "" {
+			eventDir = s.EventKey
+		} else if s.EventID != nil {
 			eventDir = fmt.Sprintf("e%d", *s.EventID)
 		}
 		var segs []node.RecordingSegment
@@ -252,7 +256,7 @@ func main() {
 		if !auth.Measured {
 			monitorLimits = nil
 		}
-		manager.Start(streamName, auth.SessionID, auth.EventID, "", monitorLimits, auth.Record)
+		manager.Start(streamName, auth.SessionID, auth.EventID, auth.EventKey, "", monitorLimits, auth.Record)
 		return rtmp.PublishGrant{Allowed: true, Limits: limits, Strict: auth.Strict, Measured: auth.Measured}
 	}
 	rtmp.OnUnpublish = func(streamName string) {

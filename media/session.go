@@ -15,8 +15,10 @@ import (
 
 // Session tracks one live publisher's state.
 type Session struct {
-	SessionID   int64
-	EventID     *int64
+	SessionID int64
+	EventID   *int64
+	/** event KEY (slug) — the first folder level for DVR recordings. */
+	EventKey    string
 	StreamName  string
 	SRSClientID string
 	Record      bool
@@ -79,6 +81,7 @@ func (m *Manager) Start(
 	streamName string,
 	sessionID int64,
 	eventID *int64,
+	eventKey string,
 	srsClientID string,
 	limits *node.Limits,
 	record bool,
@@ -90,6 +93,7 @@ func (m *Manager) Start(
 	}
 	s := &Session{
 		SessionID:   sessionID,
+		EventKey:    eventKey,
 		EventID:     eventID,
 		StreamName:  streamName,
 		SRSClientID: srsClientID,
