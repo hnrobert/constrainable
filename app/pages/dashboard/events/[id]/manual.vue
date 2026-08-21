@@ -62,23 +62,24 @@ const limitsSummary = computed(
 
 /* ------------------------------ pagination ------------------------------- */
 // Page map (≤ 2 screenshots each): 1 values/overview · 2 install · 3 capture
-// 1–2 · 4 capture 3–done · 5 volume + open settings · 6 stream · 7 output
-// (video + audio bitrate) · 8 video + apply · 9 other software + going live
-// + troubleshooting.
-const PAGE_COUNT = 9
+// 1–2 · 4 capture 3–done · 5 fit-to-screen · 6 volume + open settings ·
+// 7 stream · 8 output (video + audio bitrate) · 9 video + apply · 10 other
+// software + going live + troubleshooting.
+const PAGE_COUNT = 10
 
 const ANCHORS: Record<string, number> = {
   values: 1,
   install: 2,
   capture: 3,
   'capture-b': 4,
-  volume: 5,
-  settings: 5,
-  'settings-b': 7,
-  'settings-c': 8,
-  'other-software': 9,
-  'go-live': 9,
-  troubleshooting: 9,
+  'capture-fit': 5,
+  volume: 6,
+  settings: 6,
+  'settings-b': 8,
+  'settings-c': 9,
+  'other-software': 10,
+  'go-live': 10,
+  troubleshooting: 10,
 }
 
 const page = computed({
@@ -119,11 +120,12 @@ const sections = [
   { page: 2, label: '1 · Install' },
   { page: 3, label: '2 · Capture (1/2)' },
   { page: 4, label: '2 · Capture (2/2)' },
-  { page: 5, label: '3 · Volume' },
-  { page: 6, label: '4 · Stream' },
-  { page: 7, label: '4 · Output / Audio' },
-  { page: 8, label: '4 · Video / Apply' },
-  { page: 9, label: '5 · Going live' },
+  { page: 5, label: '2 · Fit to screen' },
+  { page: 6, label: '3 · Volume' },
+  { page: 7, label: '4 · Stream' },
+  { page: 8, label: '4 · Output / Audio' },
+  { page: 9, label: '4 · Video / Apply' },
+  { page: 10, label: '5 · Going live' },
 ]
 
 async function copy(text: string, label = 'Copied'): Promise<void> {
@@ -463,8 +465,46 @@ sudo apt install obs-studio</pre>
       </CardContent>
     </Card>
 
-    <!-- ================ PAGE 5 · volume + open settings (2 screenshots) ================ -->
-    <template v-else-if="page === 5">
+    <!-- ================ PAGE 5 · fit the capture to the screen (1 screenshot) ================ -->
+    <Card v-else-if="page === 5" id="capture-fit" class="scroll-mt-6">
+      <CardHeader>
+        <CardTitle>2 · Add a Display Capture <span class="text-muted-foreground">(final touch)</span></CardTitle>
+        <CardDescription>Make the capture fill the whole canvas.</CardDescription>
+      </CardHeader>
+      <CardContent class="space-y-3">
+        <p class="text-sm text-muted-foreground">
+          If the preview shows your screen with black bars around it (the capture doesn't fill the
+          canvas), fit it to the screen:
+        </p>
+        <ol class="list-decimal space-y-1.5 pl-5 text-sm text-muted-foreground">
+          <li>
+            In the <strong>Sources</strong> list, <strong>right-click</strong> the
+            <strong>Display Capture</strong> entry.
+          </li>
+          <li>Choose <strong>Transform</strong>.</li>
+          <li>Click <strong>Fit to Screen</strong>.</li>
+        </ol>
+        <figure class="space-y-1.5">
+          <img
+            src="/manual/transform.png"
+            alt="The source right-click menu open at Transform, with Fit to Screen highlighted"
+            class="w-full rounded-lg border"
+            loading="lazy"
+          />
+          <figcaption class="text-xs text-muted-foreground">
+            Right-click the source → Transform → Fit to Screen.
+          </figcaption>
+        </figure>
+        <p class="text-xs text-muted-foreground">
+          This only stretches the capture to the OBS canvas — the outgoing stream stays capped at
+          <code>{{ limits.maxWidth }}×{{ limits.maxHeight }}</code>; the downscaling is configured
+          in step 4.3.
+        </p>
+      </CardContent>
+    </Card>
+
+    <!-- ================ PAGE 6 · volume + open settings (2 screenshots) ================ -->
+    <template v-else-if="page === 6">
       <Card id="volume" class="scroll-mt-6">
         <CardHeader>
           <CardTitle>3 · Set the volume</CardTitle>
@@ -512,8 +552,8 @@ sudo apt install obs-studio</pre>
       </Card>
     </template>
 
-    <!-- ================ PAGE 6 · stream (1 screenshot) ================ -->
-    <Card v-else-if="page === 6" id="settings-stream" class="scroll-mt-6">
+    <!-- ================ PAGE 7 · stream (1 screenshot) ================ -->
+    <Card v-else-if="page === 7" id="settings-stream" class="scroll-mt-6">
       <CardHeader>
         <CardTitle>4 · Configure the streaming settings <span class="text-muted-foreground">(continued)</span></CardTitle>
         <CardDescription>The Stream panel — where your connection values go.</CardDescription>
@@ -561,8 +601,8 @@ sudo apt install obs-studio</pre>
       </CardContent>
     </Card>
 
-    <!-- ================ PAGE 7 · output + audio bitrate (2 screenshots) ================ -->
-    <Card v-else-if="page === 7" id="settings-b" class="scroll-mt-6">
+    <!-- ================ PAGE 8 · output + audio bitrate (2 screenshots) ================ -->
+    <Card v-else-if="page === 8" id="settings-b" class="scroll-mt-6">
       <CardHeader>
         <CardTitle>4 · Configure the streaming settings <span class="text-muted-foreground">(continued)</span></CardTitle>
         <CardDescription>Output panel — video and audio bitrates.</CardDescription>
@@ -630,7 +670,7 @@ sudo apt install obs-studio</pre>
     </Card>
 
     <!-- ================ PAGE 7 · video + apply (2 screenshots) ================ -->
-    <Card v-else-if="page === 8" id="settings-c" class="scroll-mt-6">
+    <Card v-else-if="page === 9" id="settings-c" class="scroll-mt-6">
       <CardHeader>
         <CardTitle>4 · Configure the streaming settings <span class="text-muted-foreground">(continued)</span></CardTitle>
         <CardDescription>Video panel — and the most important step.</CardDescription>
@@ -689,8 +729,8 @@ sudo apt install obs-studio</pre>
       </CardContent>
     </Card>
 
-    <!-- ================ PAGE 9 · other software + going live + troubleshooting (1 screenshot) ================ -->
-    <template v-else-if="page === 9">
+    <!-- ================ PAGE 10 · other software + going live + troubleshooting (1 screenshot) ================ -->
+    <template v-else-if="page === 10">
       <Card id="other-software" class="scroll-mt-6">
         <CardHeader>
           <CardTitle>Using other streaming software</CardTitle>
