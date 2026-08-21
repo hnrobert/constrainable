@@ -70,7 +70,7 @@ const columns: DataTableColumn[] = [
   { key: 'streamName', header: 'User', class: 'font-medium' },
   { key: 'resolution', header: 'Resolution' },
   { key: 'fps', header: 'Framerate' },
-  { key: 'bitrateKbps', header: 'Video / Audio kbps' },
+  { key: 'videoBitrateKbps', header: 'Video / Audio kbps' },
   { key: 'status', header: 'Status' },
   { key: 'startedAt', header: 'Started', class: 'text-muted-foreground' },
   { key: 'actions', header: 'Action', headClass: 'w-0' },
@@ -90,14 +90,14 @@ const columns: DataTableColumn[] = [
     <template #cell-event="{ row }">{{ props.eventLabels[row.eventId ?? -1] ?? '—' }}</template>
     <template #cell-resolution="{ row }">{{ resolution(row) }}</template>
     <template #cell-fps="{ row }">{{ row.fps != null ? row.fps.toFixed(2) : '—' }}</template>
-    <template #cell-bitrateKbps="{ row }">
+    <template #cell-videoBitrateKbps="{ row }">
       <!-- video rate always means the OBS Video Bitrate field; audio (declared
            rate) shows alongside when the node reports it -->
-      <span v-if="row.bitrateKbps != null">
-        {{ row.bitrateKbps }}<span v-if="row.audioKbps != null" class="text-muted-foreground"> / {{ row.audioKbps }}</span>
+      <span v-if="row.videoBitrateKbps != null">
+        {{ row.videoBitrateKbps }}<span v-if="row.audioBitrateKbps != null" class="text-muted-foreground"> / {{ row.audioBitrateKbps }}</span>
         <span class="text-muted-foreground"> kbps</span>
       </span>
-      <span v-else>{{ row.audioKbps != null ? `— / ${row.audioKbps} kbps` : '—' }}</span>
+      <span v-else>{{ row.audioBitrateKbps != null ? `— / ${row.audioBitrateKbps} kbps` : '—' }}</span>
     </template>
     <template #cell-startedAt="{ row }">{{ fmtTime(row.startedAt) }}</template>
     <template #cell-actions="{ row }">

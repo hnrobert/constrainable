@@ -25,9 +25,9 @@ export interface SessionSnapshot {
   height: number | null
   fps: number | null
   /** video-only estimate (total minus declared audio) */
-  bitrateKbps: number | null
+  videoBitrateKbps: number | null
   /** declared AUDIO rate (OBS Audio Bitrate) */
-  audioKbps: number | null
+  audioBitrateKbps: number | null
   compliant: boolean
   rejectReason: string | null
   /** epoch ms */

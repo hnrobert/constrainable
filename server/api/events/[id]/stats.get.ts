@@ -29,7 +29,7 @@ export default defineEventHandler((event) => {
     width: s.width ?? null,
     height: s.height ?? null,
     fps: s.fps ?? null,
-    bitrateKbps: s.bitrateKbps ?? null,
+    videoBitrateKbps: s.videoBitrateKbps ?? null,
     startedAt: s.startedAt.getTime(),
     endedAt: s.endedAt ? s.endedAt.getTime() : null,
   }))

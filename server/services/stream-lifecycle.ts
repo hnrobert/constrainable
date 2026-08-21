@@ -37,8 +37,8 @@ interface Metrics {
   width: number | null
   height: number | null
   fps: number | null
-  bitrateKbps: number | null
-  audioKbps: number | null
+  videoBitrateKbps: number | null
+  audioBitrateKbps: number | null
   status: SessionStatus
   compliant: boolean
 }
@@ -140,7 +140,7 @@ export async function handlePublish(
 
   emit(
     'session:start',
-    snapshot(session, { width: null, height: null, fps: null, bitrateKbps: null, audioKbps: null, status: 'allowed', compliant: false }),
+    snapshot(session, { width: null, height: null, fps: null, videoBitrateKbps: null, audioBitrateKbps: null, status: 'allowed', compliant: false }),
   )
   audit('info', 'publish', `publish started: ${ctx.stream}`, {
     actor: ctx.stream,
@@ -185,8 +185,8 @@ export async function handleUnpublish(ctx: {
           width: prev?.width ?? null,
           height: prev?.height ?? null,
           fps: prev?.fps ?? null,
-          bitrateKbps: prev?.bitrateKbps ?? null,
-          audioKbps: prev?.audioKbps ?? null,
+          videoBitrateKbps: prev?.videoBitrateKbps ?? null,
+          audioBitrateKbps: prev?.audioBitrateKbps ?? null,
           status: finalStatus,
           compliant: prev?.compliant ?? false,
         },
@@ -214,8 +214,8 @@ async function monitorSession(s: ActiveSession, studentLabel: string | null): Pr
     width: null,
     height: null,
     fps: null,
-    bitrateKbps: null,
-    audioKbps: null,
+    videoBitrateKbps: null,
+    audioBitrateKbps: null,
     status: 'allowed',
     compliant: false,
   }
@@ -231,7 +231,7 @@ async function monitorSession(s: ActiveSession, studentLabel: string | null): Pr
       metrics.width = result.width
       metrics.height = result.height
       metrics.fps = result.fps
-      metrics.bitrateKbps = result.bitrateKbps
+      metrics.videoBitrateKbps = result.videoBitrateKbps
       persistMetrics(s.sessionId, metrics)
       emit('session:metric', snapshot(s, metrics))
 
@@ -273,8 +273,8 @@ function checkLimits(r: ProbeResult, l: Limits): string[] {
   if (l.maxFps > 0 && r.fps > l.maxFps) {
     reasons.push(`fps ${r.fps.toFixed(2)} > ${l.maxFps}`)
   }
-  if (l.maxVideoBitrateKbps > 0 && r.bitrateKbps > l.maxVideoBitrateKbps) {
-    reasons.push(`bitrate ${r.bitrateKbps}kbps > ${l.maxVideoBitrateKbps}kbps`)
+  if (l.maxVideoBitrateKbps > 0 && r.videoBitrateKbps > l.maxVideoBitrateKbps) {
+    reasons.push(`bitrate ${r.videoBitrateKbps}kbps > ${l.maxVideoBitrateKbps}kbps`)
   }
   return reasons
 }
@@ -284,8 +284,8 @@ function persistMetrics(sessionId: number, m: Metrics): void {
     width: m.width,
     height: m.height,
     fps: m.fps,
-    bitrateKbps: m.bitrateKbps,
-    audioKbps: m.audioKbps,
+    videoBitrateKbps: m.videoBitrateKbps,
+    audioBitrateKbps: m.audioBitrateKbps,
   })
 }
 
@@ -309,8 +309,8 @@ function snapshot(s: ActiveSession, m: Metrics, endedAt: number | null = null): 
     width: m.width,
     height: m.height,
     fps: m.fps,
-    bitrateKbps: m.bitrateKbps,
-    audioKbps: m.audioKbps,
+    videoBitrateKbps: m.videoBitrateKbps,
+    audioBitrateKbps: m.audioBitrateKbps,
     compliant: m.compliant,
     rejectReason: null,
     startedAt: s.startedAtMs,

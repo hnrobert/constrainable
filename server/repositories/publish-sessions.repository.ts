@@ -91,8 +91,8 @@ export const PublishSessionsRepository = {
       width: number | null
       height: number | null
       fps: number | null
-      bitrateKbps: number | null
-      audioKbps: number | null
+      videoBitrateKbps: number | null
+      audioBitrateKbps: number | null
     },
   ): void {
     db.update(publishSessions)
@@ -100,8 +100,8 @@ export const PublishSessionsRepository = {
         width: m.width,
         height: m.height,
         fps: m.fps,
-        bitrateKbps: m.bitrateKbps,
-        audioKbps: m.audioKbps,
+        videoBitrateKbps: m.videoBitrateKbps,
+        audioBitrateKbps: m.audioBitrateKbps,
         lastMetricAt: new Date(),
       })
       .where(eq(publishSessions.id, id))

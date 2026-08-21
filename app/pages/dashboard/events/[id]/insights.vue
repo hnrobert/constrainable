@@ -14,7 +14,7 @@ interface RecentSession {
   width: number | null
   height: number | null
   fps: number | null
-  bitrateKbps: number | null
+  videoBitrateKbps: number | null
   startedAt: number
   endedAt: number | null
 }
@@ -62,7 +62,7 @@ const columns: DataTableColumn[] = [
   { key: 'status', header: 'Status' },
   { key: 'resolution', header: 'Resolution' },
   { key: 'fps', header: 'Framerate' },
-  { key: 'bitrateKbps', header: 'Bitrate' },
+  { key: 'videoBitrateKbps', header: 'Video bitrate' },
   { key: 'startedAt', header: 'Started', class: 'text-muted-foreground' },
   { key: 'endedAt', header: 'Ended', class: 'text-muted-foreground' },
 ]
@@ -135,8 +135,8 @@ const columns: DataTableColumn[] = [
             {{ row.width && row.height ? `${row.width}×${row.height}` : '—' }}
           </template>
           <template #cell-fps="{ row }">{{ row.fps != null ? row.fps.toFixed(2) : '—' }}</template>
-          <template #cell-bitrateKbps="{ row }">
-            {{ row.bitrateKbps != null ? `${row.bitrateKbps} kbps` : '—' }}
+          <template #cell-videoBitrateKbps="{ row }">
+            {{ row.videoBitrateKbps != null ? `${row.videoBitrateKbps} kbps` : '—' }}
           </template>
           <template #cell-startedAt="{ row }">{{ fmtTime(row.startedAt) }}</template>
           <template #cell-endedAt="{ row }">{{ fmtTime(row.endedAt) }}</template>

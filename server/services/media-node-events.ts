@@ -78,7 +78,7 @@ interface MetricsPayload {
   height?: number
   fps?: number
   videoBitrateKbps?: number
-  audioKbps?: number
+  audioBitrateKbps?: number
 }
 
 interface SpecPayload {
@@ -89,7 +89,7 @@ interface SpecPayload {
 	height: number
 	fps: number
 	videoKbps: number
-	audioKbps: number
+	audioBitrateKbps: number
 }
 
 interface EndPayload {
@@ -389,9 +389,8 @@ function handleMetrics(payload: MetricsPayload): void {
     width: payload.width ?? row.width,
     height: payload.height ?? row.height,
     fps: payload.fps ?? row.fps,
-    // legacy nodes still send `bitrateKbps` (pre-rename) — accept both
-    bitrateKbps: payload.videoBitrateKbps ?? (payload as { bitrateKbps?: number }).bitrateKbps ?? row.bitrateKbps,
-    audioKbps: payload.audioKbps ?? row.audioKbps ?? null,
+    videoBitrateKbps: payload.videoBitrateKbps ?? row.videoBitrateKbps,
+    audioBitrateKbps: payload.audioBitrateKbps ?? row.audioBitrateKbps ?? null,
   }
   PublishSessionsRepository.updateMetrics(payload.sessionId, m)
   emit('session:metric', snapshotFromRow(row, m))
@@ -475,14 +474,14 @@ function handleSpec(payload: SpecPayload, ack?: (r: { allow: boolean; reason?: s
   // Bitrate = the VIDEO rate only (OBS' "Video Bitrate" field) — limits and
   // the guides quote that number; adding the audio track inflated it
   // (100 kbps video + 160 kbps default audio read as 260).
-  const bitrateKbps = Math.round(payload.videoBitrateKbps ?? payload.videoKbps ?? 0)
-  const audioKbps = Math.round(payload.audioKbps || 0)
+  const videoKbps = Math.round(payload.videoBitrateKbps ?? payload.videoKbps ?? 0)
+  const audioBitrateKbps = Math.round(payload.audioBitrateKbps || 0)
   const specMetrics = {
     width: payload.width || row.width,
     height: payload.height || row.height,
     fps: payload.fps || row.fps,
-    bitrateKbps: bitrateKbps || row.bitrateKbps,
-    audioKbps: audioKbps || row.audioKbps || null,
+    videoBitrateKbps: videoKbps || row.videoBitrateKbps,
+    audioBitrateKbps: audioBitrateKbps || row.audioBitrateKbps || null,
   }
   PublishSessionsRepository.updateMetrics(row.id, specMetrics)
   emit('session:metric', { ...snapshotFromRow(row, specMetrics) })
@@ -501,8 +500,8 @@ function handleSpec(payload: SpecPayload, ack?: (r: { allow: boolean; reason?: s
   if (limits.maxWidth > 0 && payload.width > limits.maxWidth) reasons.add('resolution exceeds limit')
   if (limits.maxHeight > 0 && payload.height > limits.maxHeight) reasons.add('resolution exceeds limit')
   if (limits.maxFps > 0 && payload.fps > limits.maxFps) reasons.add('fps exceeds limit')
-  if (limits.maxVideoBitrateKbps > 0 && bitrateKbps > limits.maxVideoBitrateKbps) reasons.add('bitrate exceeds limit')
-  if (limits.maxAudioBitrateKbps > 0 && audioKbps > limits.maxAudioBitrateKbps) {
+  if (limits.maxVideoBitrateKbps > 0 && videoKbps > limits.maxVideoBitrateKbps) reasons.add('bitrate exceeds limit')
+  if (limits.maxAudioBitrateKbps > 0 && audioBitrateKbps > limits.maxAudioBitrateKbps) {
     reasons.add('audio bitrate exceeds limit')
   }
 
@@ -551,11 +550,8 @@ function handleViolation(payload: ViolationPayload): void {
       width: payload.metrics?.width ?? row.width,
       height: payload.metrics?.height ?? row.height,
       fps: payload.metrics?.fps ?? row.fps,
-      bitrateKbps:
-        payload.metrics?.videoBitrateKbps ??
-        (payload.metrics as { bitrateKbps?: number } | undefined)?.bitrateKbps ??
-        row.bitrateKbps,
-      audioKbps: payload.metrics?.audioKbps ?? row.audioKbps ?? null,
+      videoBitrateKbps: payload.metrics?.videoBitrateKbps ?? row.videoBitrateKbps,
+      audioBitrateKbps: payload.metrics?.audioBitrateKbps ?? row.audioBitrateKbps ?? null,
     }),
     reasons: payload.reasons,
   })
@@ -571,8 +567,8 @@ function snapshotFromRow(
     width?: number | null
     height?: number | null
     fps?: number | null
-    bitrateKbps?: number | null
-    audioKbps?: number | null
+    videoBitrateKbps?: number | null
+    audioBitrateKbps?: number | null
     endedAt?: number | null
   } = {},
 ): SessionSnapshot {
@@ -586,8 +582,8 @@ function snapshotFromRow(
     width: over.width ?? row.width ?? null,
     height: over.height ?? row.height ?? null,
     fps: over.fps ?? row.fps ?? null,
-    bitrateKbps: over.bitrateKbps ?? row.bitrateKbps ?? null,
-    audioKbps: over.audioKbps ?? row.audioKbps ?? null,
+    videoBitrateKbps: over.videoBitrateKbps ?? row.videoBitrateKbps ?? null,
+    audioBitrateKbps: over.audioBitrateKbps ?? row.audioBitrateKbps ?? null,
     compliant: !!row.compliant,
     rejectReason: row.rejectReason ?? null,
     startedAt: row.startedAt.getTime(),

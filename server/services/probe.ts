@@ -11,7 +11,7 @@ export interface ProbeResult {
   width: number
   height: number
   fps: number
-  bitrateKbps: number
+  videoBitrateKbps: number
 }
 
 /**
@@ -72,10 +72,10 @@ async function probeOnce(target: string, timeoutMs: number): Promise<ProbeResult
   const width = Number(s.width) || 0
   const height = Number(s.height) || 0
   const fps = parseFps(s.avg_frame_rate) ?? parseFps(s.r_frame_rate) ?? 0
-  const bitrateKbps = Math.floor(
+  const videoBitrateKbps = Math.floor(
     (Number(s.bit_rate) || Number(data?.format?.bit_rate) || 0) / 1000,
   )
-  return { width, height, fps, bitrateKbps }
+  return { width, height, fps, videoBitrateKbps }
 }
 
 /**
