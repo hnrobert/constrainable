@@ -20,6 +20,7 @@ import { resolveFlvBase, getHostingNode, getSocket } from '../../../services/med
 import { getSocketIO } from '../../../utils/socket-io'
 import { getAuth } from '../../../utils/auth'
 import { UsersRepository } from '../../../repositories/users.repository'
+import { PublishSessionsRepository } from '../../../repositories/publish-sessions.repository'
 
 const NODE_WHEP_TIMEOUT_MS = 8000
 
@@ -43,6 +44,13 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'SDP offer body is required' })
   }
 
+  // Which side holds the stream? An ACTIVE session decides; without one the
+  // stream is not live anywhere — say so plainly instead of falling through
+  // to the local SRS and reporting a confusing "endpoint not reachable".
+  const session = PublishSessionsRepository.findActiveByStream(stream)
+  if (!session) {
+    throw createError({ statusCode: 404, statusMessage: 'stream is not live' })
+  }
   // Remote-hosted stream → relay the SDP through the node's control socket.
   const host = getHostingNode(stream)
   if (host) {

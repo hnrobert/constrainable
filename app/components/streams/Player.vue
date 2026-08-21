@@ -114,10 +114,26 @@ async function startWebrtc(): Promise<void> {
           status.value = 'playing'
         }
         v?.addEventListener('resize', onFirstFrame)
-        frameWatchdog = setTimeout(() => {
+        frameWatchdog = setTimeout(async () => {
           if (a !== attempt || !pc) return
+          // Diagnostics in the error: distinguishes "video RTP arriving but
+          // undecodable" (codec/B-frames) from "nothing arriving at all"
+          // (bridge/candidate), so the paste tells us which side to fix.
+          let diag = ''
+          try {
+            const stats = await pc.getStats()
+            let vBytes = 0, vFrames: number | string = '-', aBytes = 0
+            stats.forEach((r) => {
+              const x = r as unknown as Record<string, unknown>
+              if (x.type !== 'inbound-rtp') return
+              if (x.kind === 'video') { vBytes = Number(x.bytesReceived ?? 0); vFrames = Number(x.framesDecoded ?? 0) }
+              if (x.kind === 'audio') aBytes = Number(x.bytesReceived ?? 0)
+            })
+            diag = ` [recv: video ${vBytes}B/${vFrames}f, audio ${aBytes}B]`
+          } catch { /* stats unavailable */ }
           fail(
-            'connected but no video frames — the stream may still be bridging or waiting for a keyframe; retry',
+            'connected but no video frames' + diag +
+              ' — if video bytes flow with 0 frames decoded, the publisher uses B-frames: set bf=0 in OBS (Output → Advanced → x264 options) and keyframe interval 2s; if nothing arrives, the node is still bridging — retry',
             a,
           )
         }, FIRST_FRAME_TIMEOUT_MS)

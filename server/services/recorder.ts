@@ -132,7 +132,10 @@ async function finalizeRecording(
   const endedAt = new Date()
   const segDurSec = Math.max(0, Math.round((endedAt.getTime() - h.startedAt) / 1000))
   const { date, ts } = localParts(new Date(h.startedAt))
-  const dateDir = join(env.recordDir, date)
+  // Per-event directory (e<id>) so recordings from different events never
+  // share a folder; event-less sessions keep the plain <date>/ layout.
+  const eventDir = eventId != null ? `e${eventId}` : ''
+  const dateDir = join(env.recordDir, eventDir, date)
   mkdirSync(dateDir, { recursive: true })
   const segPath = join(dateDir, `${safeName(streamName)}_${ts}.mkv`)
   try {
