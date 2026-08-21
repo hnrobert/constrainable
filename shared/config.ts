@@ -30,7 +30,9 @@ const limitsSchema = z.object({
   maxWidth: z.number().int().min(0).default(1920),
   maxHeight: z.number().int().min(0).default(1080),
   maxFps: z.number().min(0).default(30),
-  maxBitrateKbps: z.number().int().min(0).default(4000),
+  maxVideoBitrateKbps: z.number().int().min(0).default(4000),
+  /** cap on OBS' Audio Bitrate field (0 = no limit) */
+  maxAudioBitrateKbps: z.number().int().min(0).default(160),
 })
 
 const recordSchema = z.object({
@@ -110,7 +112,8 @@ export const limitsOverrideSchema = z.object({
   maxWidth: z.number().int().min(0).nullish(),
   maxHeight: z.number().int().min(0).nullish(),
   maxFps: z.number().min(0).nullish(),
-  maxBitrateKbps: z.number().int().min(0).nullish(),
+  maxVideoBitrateKbps: z.number().int().min(0).nullish(),
+  maxAudioBitrateKbps: z.number().int().min(0).nullish(),
 })
 
 export type LimitsOverride = z.infer<typeof limitsOverrideSchema>

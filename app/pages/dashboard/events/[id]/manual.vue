@@ -48,7 +48,8 @@ const limits = computed(
       maxWidth: 1920,
       maxHeight: 1080,
       maxFps: 30,
-      maxBitrateKbps: 4000,
+      maxVideoBitrateKbps: 4000,
+      maxAudioBitrateKbps: 0,
     },
 )
 const startsAt = computed(() => event.value?.startsAt ?? null)
@@ -56,14 +57,15 @@ const endsAt = computed(() => event.value?.endsAt ?? null)
 /** One-line caps summary for spots away from their step-by-step home (4.2/4.3). */
 const limitsSummary = computed(
   () =>
-    `${limits.value.maxWidth}×${limits.value.maxHeight}, ${limits.value.maxFps} fps, ${limits.value.maxBitrateKbps} kbps`,
+    `${limits.value.maxWidth}×${limits.value.maxHeight}, ${limits.value.maxFps} fps, ${limits.value.maxVideoBitrateKbps} kbps${limits.value.maxAudioBitrateKbps > 0 ? ` video + ${limits.value.maxAudioBitrateKbps} kbps audio` : ''}`,
 )
 
 /* ------------------------------ pagination ------------------------------- */
 // Page map (≤ 2 screenshots each): 1 values/overview · 2 install · 3 capture
-// 1–2 · 4 capture 3–done · 5 volume + open settings · 6 stream + output ·
-// 7 video + apply · 8 other software + going live + troubleshooting.
-const PAGE_COUNT = 8
+// 1–2 · 4 capture 3–done · 5 volume + open settings · 6 stream · 7 output
+// (video + audio bitrate) · 8 video + apply · 9 other software + going live
+// + troubleshooting.
+const PAGE_COUNT = 9
 
 const ANCHORS: Record<string, number> = {
   values: 1,
@@ -72,11 +74,11 @@ const ANCHORS: Record<string, number> = {
   'capture-b': 4,
   volume: 5,
   settings: 5,
-  'settings-b': 6,
-  'settings-c': 7,
-  'other-software': 8,
-  'go-live': 8,
-  troubleshooting: 8,
+  'settings-b': 7,
+  'settings-c': 8,
+  'other-software': 9,
+  'go-live': 9,
+  troubleshooting: 9,
 }
 
 const page = computed({
@@ -118,9 +120,10 @@ const sections = [
   { page: 3, label: '2 · Capture (1/2)' },
   { page: 4, label: '2 · Capture (2/2)' },
   { page: 5, label: '3 · Volume' },
-  { page: 6, label: '4 · Stream / Output' },
-  { page: 7, label: '4 · Video / Apply' },
-  { page: 8, label: '5 · Going live' },
+  { page: 6, label: '4 · Stream' },
+  { page: 7, label: '4 · Output / Audio' },
+  { page: 8, label: '4 · Video / Apply' },
+  { page: 9, label: '5 · Going live' },
 ]
 
 async function copy(text: string, label = 'Copied'): Promise<void> {
@@ -258,7 +261,8 @@ function fmt(ts: number | null): string {
             <ul class="space-y-1.5 text-sm text-muted-foreground">
               <li>Resolution: up to <code>{{ limits.maxWidth }}×{{ limits.maxHeight }}</code></li>
               <li>Frame rate: up to <code>{{ limits.maxFps }} fps</code></li>
-              <li>Video bitrate: up to <code>{{ limits.maxBitrateKbps }} kbps</code></li>
+              <li>Video bitrate: up to <code>{{ limits.maxVideoBitrateKbps }} kbps</code></li>
+              <li v-if="limits.maxAudioBitrateKbps > 0">Audio bitrate: up to <code>{{ limits.maxAudioBitrateKbps }} kbps</code></li>
             </ul>
             <p class="text-xs text-muted-foreground">
               Streams above these caps are flagged and may be disconnected — step 4 shows where to
@@ -508,11 +512,11 @@ sudo apt install obs-studio</pre>
       </Card>
     </template>
 
-    <!-- ================ PAGE 6 · stream + output (2 screenshots) ================ -->
-    <Card v-else-if="page === 6" id="settings-b" class="scroll-mt-6">
+    <!-- ================ PAGE 6 · stream (1 screenshot) ================ -->
+    <Card v-else-if="page === 6" id="settings-stream" class="scroll-mt-6">
       <CardHeader>
         <CardTitle>4 · Configure the streaming settings <span class="text-muted-foreground">(continued)</span></CardTitle>
-        <CardDescription>Stream and Output panels.</CardDescription>
+        <CardDescription>The Stream panel — where your connection values go.</CardDescription>
       </CardHeader>
       <CardContent class="space-y-6">
         <div class="space-y-3">
@@ -554,8 +558,17 @@ sudo apt install obs-studio</pre>
             </figcaption>
           </figure>
         </div>
+      </CardContent>
+    </Card>
 
-        <div class="space-y-3">
+    <!-- ================ PAGE 7 · output + audio bitrate (2 screenshots) ================ -->
+    <Card v-else-if="page === 7" id="settings-b" class="scroll-mt-6">
+      <CardHeader>
+        <CardTitle>4 · Configure the streaming settings <span class="text-muted-foreground">(continued)</span></CardTitle>
+        <CardDescription>Output panel — video and audio bitrates.</CardDescription>
+      </CardHeader>
+      <CardContent class="space-y-6">
+<div class="space-y-3">
           <h3 class="text-sm font-semibold">4.2 · Output</h3>
           <p class="text-sm text-muted-foreground">
             Click <strong>Output</strong> in the left panel, then:
@@ -573,7 +586,7 @@ sudo apt install obs-studio</pre>
             </li>
             <li>
               Set the <strong>Bitrate</strong> — up to
-              <code>{{ limits.maxBitrateKbps }} kbps</code> for this event.
+              <code>{{ limits.maxVideoBitrateKbps }} kbps</code> for this event.
             </li>
           </ol>
           <figure class="space-y-1.5">
@@ -585,15 +598,39 @@ sudo apt install obs-studio</pre>
             />
             <figcaption class="text-xs text-muted-foreground">
               Example values shown — keep the bitrate at or below
-              {{ limits.maxBitrateKbps }} kbps.
+              {{ limits.maxVideoBitrateKbps }} kbps.
             </figcaption>
           </figure>
+        </div>
+
+        <div class="space-y-3">
+          <h3 class="text-sm font-semibold">4.2b · Audio bitrate</h3>
+          <p class="text-sm text-muted-foreground">
+            Still in <strong>Output</strong>, scroll to the <strong>Audio</strong> section and set
+            <strong>Audio Bitrate</strong> — at most
+            <code>{{ limits.maxAudioBitrateKbps }} kbps</code> for this event.
+          </p>
+          <figure class="space-y-1.5">
+            <img
+              src="/manual/audio_bitrate.png"
+              alt="OBS output settings — the Audio section with the Audio Bitrate field"
+              class="w-full rounded-lg border"
+              loading="lazy"
+            />
+            <figcaption class="text-xs text-muted-foreground">
+              The Audio Bitrate field — keep it at or below
+              {{ limits.maxAudioBitrateKbps }} kbps.
+            </figcaption>
+          </figure>
+          <p v-if="limits.maxAudioBitrateKbps <= 0" class="text-xs text-muted-foreground">
+            This event sets no audio cap — OBS' default is fine.
+          </p>
         </div>
       </CardContent>
     </Card>
 
     <!-- ================ PAGE 7 · video + apply (2 screenshots) ================ -->
-    <Card v-else-if="page === 7" id="settings-c" class="scroll-mt-6">
+    <Card v-else-if="page === 8" id="settings-c" class="scroll-mt-6">
       <CardHeader>
         <CardTitle>4 · Configure the streaming settings <span class="text-muted-foreground">(continued)</span></CardTitle>
         <CardDescription>Video panel — and the most important step.</CardDescription>
@@ -652,8 +689,8 @@ sudo apt install obs-studio</pre>
       </CardContent>
     </Card>
 
-    <!-- ================ PAGE 8 · other software + going live + troubleshooting (1 screenshot) ================ -->
-    <template v-else-if="page === 8">
+    <!-- ================ PAGE 9 · other software + going live + troubleshooting (1 screenshot) ================ -->
+    <template v-else-if="page === 9">
       <Card id="other-software" class="scroll-mt-6">
         <CardHeader>
           <CardTitle>Using other streaming software</CardTitle>
@@ -705,7 +742,8 @@ sudo apt install obs-studio</pre>
             command-line tools such as stock <code>ffmpeg</code> cannot — they only work for
             events where signing in is not required. Whatever you use, keep the output within
             this event's limits — at most <code>{{ limits.maxWidth }}×{{ limits.maxHeight }}</code>,
-            <code>{{ limits.maxFps }} fps</code>, <code>{{ limits.maxBitrateKbps }} kbps</code> —
+            <code>{{ limits.maxFps }} fps</code>, <code>{{ limits.maxVideoBitrateKbps }} kbps</code>
+            video{{ limits.maxAudioBitrateKbps > 0 ? ` + ${limits.maxAudioBitrateKbps} kbps audio` : '' }} —
             and prefer an H.264 encoder.
           </p>
         </CardContent>
@@ -756,7 +794,7 @@ sudo apt install obs-studio</pre>
             </li>
             <li>
               <span class="font-medium text-foreground">Stream flagged or disconnected —</span>
-              your resolution, FPS or bitrate is above this event's caps
+              your resolution, FPS, video or audio bitrate is above this event's caps
               ({{ limitsSummary }}); see step 4.2 / 4.3.
             </li>
             <li>

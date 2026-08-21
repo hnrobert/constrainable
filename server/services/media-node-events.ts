@@ -64,7 +64,7 @@ interface PublishAuthorizedAck {
   reason?: string
   sessionId?: number
   eventId?: number | null
-  limits?: { maxWidth: number; maxHeight: number; maxFps: number; maxBitrateKbps: number }
+  limits?: { maxWidth: number; maxHeight: number; maxFps: number; maxVideoBitrateKbps: number; maxAudioBitrateKbps: number }
   record?: boolean
   /** strict events: the node rejects declared-spec violations locally (OBS-terminal) */
   strict?: boolean
@@ -367,7 +367,8 @@ async function handlePublishStart(
         maxWidth: limits.maxWidth,
         maxHeight: limits.maxHeight,
         maxFps: limits.maxFps,
-        maxBitrateKbps: limits.maxBitrateKbps,
+        maxVideoBitrateKbps: limits.maxVideoBitrateKbps,
+        maxAudioBitrateKbps: limits.maxAudioBitrateKbps,
       },
       strict: event?.strictLimits ?? false,
       measured: event?.enforceMeasuredLimits ?? false,
@@ -471,7 +472,11 @@ function handleSpec(payload: SpecPayload, ack?: (r: { allow: boolean; reason?: s
     ack?.({ allow: false, reason: 'no active session' })
     return
   }
-  const bitrateKbps = Math.round((payload.videoKbps || 0) + (payload.audioKbps || 0))
+  // Bitrate = the VIDEO rate only (OBS' "Video Bitrate" field) — limits and
+  // the guides quote that number; adding the audio track inflated it
+  // (100 kbps video + 160 kbps default audio read as 260).
+  const bitrateKbps = Math.round(payload.videoKbps || 0)
+  const audioKbps = Math.round(payload.audioKbps || 0)
   PublishSessionsRepository.updateMetrics(row.id, {
     width: payload.width || row.width,
     height: payload.height || row.height,
@@ -501,7 +506,10 @@ function handleSpec(payload: SpecPayload, ack?: (r: { allow: boolean; reason?: s
   if (limits.maxWidth > 0 && payload.width > limits.maxWidth) reasons.add('resolution exceeds limit')
   if (limits.maxHeight > 0 && payload.height > limits.maxHeight) reasons.add('resolution exceeds limit')
   if (limits.maxFps > 0 && payload.fps > limits.maxFps) reasons.add('fps exceeds limit')
-  if (limits.maxBitrateKbps > 0 && bitrateKbps > limits.maxBitrateKbps) reasons.add('bitrate exceeds limit')
+  if (limits.maxVideoBitrateKbps > 0 && bitrateKbps > limits.maxVideoBitrateKbps) reasons.add('bitrate exceeds limit')
+  if (limits.maxAudioBitrateKbps > 0 && audioKbps > limits.maxAudioBitrateKbps) {
+    reasons.add('audio bitrate exceeds limit')
+  }
 
   if (reasons.size === 0) {
     ack?.({ allow: true })

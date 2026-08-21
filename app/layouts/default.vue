@@ -45,7 +45,7 @@ interface NavItem {
 const generalNav: NavItem[] = [
   { label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard },
   { label: 'Events', to: '/dashboard/events', icon: CalendarDays },
-  { label: 'My Live', to: '/live', icon: Radio },
+  // { label: 'My Live', to: '/live', icon: Radio },
   { label: 'My Audit', to: '/dashboard/my-audit', icon: ScrollText },
 ]
 

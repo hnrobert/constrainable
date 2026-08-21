@@ -70,7 +70,8 @@ const settingsDirty = computed(() => {
     Number(limits.maxWidth || 0) !== (lo.maxWidth ?? 0) ||
     Number(limits.maxHeight || 0) !== (lo.maxHeight ?? 0) ||
     Number(limits.maxFps || 0) !== (lo.maxFps ?? 0) ||
-    Number(limits.maxBitrateKbps || 0) !== (lo.maxBitrateKbps ?? 0)
+    Number(limits.maxVideoBitrateKbps || 0) !== (lo.maxVideoBitrateKbps ?? 0) ||
+    Number(limits.maxAudioBitrateKbps || 0) !== (lo.maxAudioBitrateKbps ?? 0)
   return scalarChanged || limitsChanged || !sameSet(selectedGroupIds.value, e.groups.map((g) => g.id))
 })
 
@@ -83,7 +84,7 @@ const visibilityLabel: Record<EventVisibility, string> = {
 const saving = ref(false)
 const saved = ref(false)
 // per-event stream caps (limitsOverride; blank = inherit global)
-const limits = reactive({ maxWidth: '', maxHeight: '', maxFps: '', maxBitrateKbps: '' })
+const limits = reactive({ maxWidth: '', maxHeight: '', maxFps: '', maxVideoBitrateKbps: '', maxAudioBitrateKbps: '' })
 watch(
   event,
   (e) => {
@@ -91,8 +92,10 @@ watch(
     limits.maxWidth = e.limitsOverride?.maxWidth != null ? String(e.limitsOverride.maxWidth) : ''
     limits.maxHeight = e.limitsOverride?.maxHeight != null ? String(e.limitsOverride.maxHeight) : ''
     limits.maxFps = e.limitsOverride?.maxFps != null ? String(e.limitsOverride.maxFps) : ''
-    limits.maxBitrateKbps =
-      e.limitsOverride?.maxBitrateKbps != null ? String(e.limitsOverride.maxBitrateKbps) : ''
+    limits.maxVideoBitrateKbps =
+      e.limitsOverride?.maxVideoBitrateKbps != null ? String(e.limitsOverride.maxVideoBitrateKbps) : ''
+    limits.maxAudioBitrateKbps =
+      e.limitsOverride?.maxAudioBitrateKbps != null ? String(e.limitsOverride.maxAudioBitrateKbps) : ''
   },
   { immediate: true, flush: 'sync' },
 )
@@ -107,7 +110,8 @@ function limitsPayload(): Record<string, number | null> {
     maxWidth: num(limits.maxWidth),
     maxHeight: num(limits.maxHeight),
     maxFps: num(limits.maxFps),
-    maxBitrateKbps: num(limits.maxBitrateKbps),
+    maxVideoBitrateKbps: num(limits.maxVideoBitrateKbps),
+    maxAudioBitrateKbps: num(limits.maxAudioBitrateKbps),
   }
 }
 /** Event key charset: lowercase letters, digits, underscore, hyphen — nothing else. */
@@ -163,7 +167,8 @@ function resetSettings(): void {
     limits.maxWidth = lo.maxWidth != null ? String(lo.maxWidth) : ''
     limits.maxHeight = lo.maxHeight != null ? String(lo.maxHeight) : ''
     limits.maxFps = lo.maxFps != null ? String(lo.maxFps) : ''
-    limits.maxBitrateKbps = lo.maxBitrateKbps != null ? String(lo.maxBitrateKbps) : ''
+    limits.maxVideoBitrateKbps = lo.maxVideoBitrateKbps != null ? String(lo.maxVideoBitrateKbps) : ''
+    limits.maxAudioBitrateKbps = lo.maxAudioBitrateKbps != null ? String(lo.maxAudioBitrateKbps) : ''
   }
 }
 
@@ -326,8 +331,8 @@ const statusOptions: { value: EventStatus; label: string }[] = [
             <Input v-model="limits.maxFps" type="number" min="0" step="any" placeholder="Inherit global" />
           </div>
           <div class="space-y-1.5">
-            <Label>Max bitrate (kbps)</Label>
-            <Input v-model="limits.maxBitrateKbps" type="number" min="0" placeholder="Inherit global" />
+            <Label>Max video bitrate (kbps)</Label>
+            <Input v-model="limits.maxVideoBitrateKbps" type="number" min="0" placeholder="Inherit global" />
           </div>
           <p class="text-xs text-muted-foreground sm:col-span-2">
             Streams above these caps are flagged (or kicked, per the enforcement mode); blank fields inherit the global config.

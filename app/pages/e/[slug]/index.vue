@@ -174,7 +174,8 @@ function fmt(ts: number | null): string {
             <ul class="space-y-1.5 text-sm text-muted-foreground">
               <li>Resolution: up to <code>{{ guide.limits.maxWidth }}×{{ guide.limits.maxHeight }}</code> (Rescale Output, Bicubic)</li>
               <li>Frame rate: up to <code>{{ guide.limits.maxFps }} fps</code> (an <strong>Integer FPS Value</strong>)</li>
-              <li>Video bitrate: up to <code>{{ guide.limits.maxBitrateKbps }} kbps</code></li>
+              <li>Video bitrate: up to <code>{{ guide.limits.maxVideoBitrateKbps }} kbps</code></li>
+              <li v-if="guide.limits.maxAudioBitrateKbps > 0">Audio bitrate: up to <code>{{ guide.limits.maxAudioBitrateKbps }} kbps</code></li>
               <li>Encoder: <strong>H.264</strong> — any variant in its name works</li>
             </ul>
             <p class="mt-3 text-xs text-muted-foreground">

@@ -270,8 +270,8 @@ function checkLimits(r: ProbeResult, l: Limits): string[] {
   if (l.maxFps > 0 && r.fps > l.maxFps) {
     reasons.push(`fps ${r.fps.toFixed(2)} > ${l.maxFps}`)
   }
-  if (l.maxBitrateKbps > 0 && r.bitrateKbps > l.maxBitrateKbps) {
-    reasons.push(`bitrate ${r.bitrateKbps}kbps > ${l.maxBitrateKbps}kbps`)
+  if (l.maxVideoBitrateKbps > 0 && r.bitrateKbps > l.maxVideoBitrateKbps) {
+    reasons.push(`bitrate ${r.bitrateKbps}kbps > ${l.maxVideoBitrateKbps}kbps`)
   }
   return reasons
 }

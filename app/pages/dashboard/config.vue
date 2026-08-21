@@ -49,7 +49,8 @@ const sections: Section[] = [
       { path: 'limits.maxWidth', label: 'Max width (px)', kind: 'number', hint: '0 = no limit' },
       { path: 'limits.maxHeight', label: 'Max height (px)', kind: 'number', hint: '0 = no limit' },
       { path: 'limits.maxFps', label: 'Max framerate (fps)', kind: 'number', hint: '0 = no limit' },
-      { path: 'limits.maxBitrateKbps', label: 'Max bitrate (kbps)', kind: 'number', hint: '0 = no limit' },
+      { path: 'limits.maxVideoBitrateKbps', label: 'Max video bitrate (kbps)', kind: 'number', hint: '0 = no limit; matches the OBS Video Bitrate field (audio not counted)' },
+      { path: 'limits.maxAudioBitrateKbps', label: 'Max audio bitrate (kbps)', kind: 'number', hint: '0 = no limit; matches OBS Output → Audio bitrate' },
     ],
   },
   {
