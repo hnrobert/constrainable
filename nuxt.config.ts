@@ -68,6 +68,11 @@ export default defineNuxtConfig({
   nitro: {
     preset: 'node-server',
     experimental: { tasks: false },
+    // Build-time gzip+brotli for everything in public/ (the /_nuxt bundle).
+    // The reverse proxy (Caddy/nginx) serves the precompressed files when the
+    // client sends Accept-Encoding — measured 373KB main bundle → ~100KB.
+    // Note: generateStaticViewmode off, so this also covers favicon etc.
+    compressPublicAssets: true,
     // `bun:sqlite` is a Bun-only built-in (not an npm pkg, not a node: builtin),
     // so Rollup can't resolve it statically and warns "could not be resolved –
     // treating it as an external dependency". That's correct: it's resolved at
