@@ -11,27 +11,67 @@ import (
 
 // ---- decode ----
 
+// Decoding is bounds-checked throughout: this runs on raw network payloads,
+// and a malformed one must degrade to a partial decode (trunc set), never a
+// panic — a panic here would drop the OBS connection without a terminal
+// error, which reads as a network failure and makes OBS retry.
 type amfReader struct {
-	b []byte
-	i int
+	b     []byte
+	i     int
+	trunc bool // a read ran past the buffer — stop decoding
 }
 
-func (r *amfReader) u8() byte    { v := r.b[r.i]; r.i++; return v }
-func (r *amfReader) u16() uint16 { v := binary.BigEndian.Uint16(r.b[r.i:]); r.i += 2; return v }
-func (r *amfReader) u32() uint32 { v := binary.BigEndian.Uint32(r.b[r.i:]); r.i += 4; return v }
+func (r *amfReader) u8() byte {
+	if r.i+1 > len(r.b) {
+		r.trunc = true
+		return 0
+	}
+	v := r.b[r.i]
+	r.i++
+	return v
+}
+func (r *amfReader) u16() uint16 {
+	if r.i+2 > len(r.b) {
+		r.trunc = true
+		return 0
+	}
+	v := binary.BigEndian.Uint16(r.b[r.i:])
+	r.i += 2
+	return v
+}
+func (r *amfReader) u32() uint32 {
+	if r.i+4 > len(r.b) {
+		r.trunc = true
+		return 0
+	}
+	v := binary.BigEndian.Uint32(r.b[r.i:])
+	r.i += 4
+	return v
+}
 func (r *amfReader) f64() float64 {
+	if r.i+8 > len(r.b) {
+		r.trunc = true
+		return 0
+	}
 	bits := binary.BigEndian.Uint64(r.b[r.i:])
 	r.i += 8
 	return math.Float64frombits(bits)
 }
 func (r *amfReader) str() string {
 	n := int(r.u16())
+	if r.trunc || r.i+n > len(r.b) {
+		r.trunc = true
+		return ""
+	}
 	s := string(r.b[r.i : r.i+n])
 	r.i += n
 	return s
 }
 
 func (r *amfReader) value() interface{} {
+	if r.trunc {
+		return nil
+	}
 	switch r.u8() {
 	case 0x00: // number
 		return r.f64()
@@ -48,8 +88,12 @@ func (r *amfReader) value() interface{} {
 		return r.object()
 	case 0x0a: // strict array
 		n := r.u32()
+		if r.trunc || n > uint32(len(r.b)) { // each element is ≥1 byte
+			r.trunc = true
+			return nil
+		}
 		arr := make([]interface{}, 0, n)
-		for k := uint32(0); k < n; k++ {
+		for k := uint32(0); k < n && !r.trunc; k++ {
 			arr = append(arr, r.value())
 		}
 		return arr
@@ -60,10 +104,17 @@ func (r *amfReader) value() interface{} {
 
 func (r *amfReader) object() map[string]interface{} {
 	o := map[string]interface{}{}
-	for r.i < len(r.b) {
+	for r.i < len(r.b) && !r.trunc {
 		klen := int(r.u16())
+		if r.trunc {
+			break
+		}
 		if klen == 0 { // terminator: 0x00 0x00 then 0x09 marker
 			r.u8()
+			break
+		}
+		if r.i+klen > len(r.b) {
+			r.trunc = true
 			break
 		}
 		key := string(r.b[r.i : r.i+klen])
@@ -73,11 +124,12 @@ func (r *amfReader) object() map[string]interface{} {
 	return o
 }
 
-// amfDecodeAll reads AMF0 values until the buffer is exhausted.
+// amfDecodeAll reads AMF0 values until the buffer is exhausted (a malformed
+// tail truncates the decode — the values decoded so far are returned).
 func AmfDecodeAll(b []byte) []interface{} {
 	r := &amfReader{b: b}
 	out := []interface{}{}
-	for r.i < len(r.b) {
+	for r.i < len(r.b) && !r.trunc {
 		out = append(out, r.value())
 	}
 	return out

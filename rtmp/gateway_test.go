@@ -7,14 +7,16 @@ package rtmp
 
 import (
 	"bytes"
-	"encoding/json"
 	"crypto/md5"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"runtime/debug"
 	"strings"
 	"testing"
 	"time"
@@ -45,7 +47,12 @@ func startGateway(t *testing.T, appBase, token string) string {
 				return
 			}
 			go func() {
-				defer func() { _ = recover(); _ = c.Close() }()
+				defer func() {
+					if r := recover(); r != nil {
+						log.Printf("gateway handler panic: %v\n%s", r, debug.Stack())
+					}
+					_ = c.Close()
+				}()
 				HandleOBS(c, app)
 			}()
 		}
@@ -406,7 +413,10 @@ func fakeSRS(t *testing.T, names chan<- string) string {
 							}
 						}
 						_ = cw.WriteMessage(&Message{Type: 20, CSID: 5, StreamID: 1, Payload: CmdOnStatusPublishStart()})
-						return
+						// stay connected like real SRS — exiting here closes the
+						// upstream, and the gateway's upstream-gone watcher then
+						// kills the OBS side (races post-publish frames)
+						continue
 					}
 				}
 			}()

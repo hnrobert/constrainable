@@ -232,24 +232,14 @@ func HandleOBS(conn net.Conn, app AppClient) {
 			cr.chunkSize = int(BE32(msg.Payload))
 
 		case 8, 9, 18: // audio / video / script data → forward to SRS
-			if up != nil {
-				if err := up.WriteFrame(msg); err != nil {
-					// Upstream is gone — tear the OBS connection down too,
-					// immediately. Keeping it half-alive leaves OBS showing
-					// "live" while frames vanish, and makes Stop hang.
-					log.Printf("%s upstream write failed: %v — closing OBS connection", remote, err)
-					up.Close()
-					conn.Close()
-					return
-				}
-			}
 			// Script data (type 18) carries onMetaData — OBS (librtmp) sends
 			// it as a DATA message, NOT a command. It is the FIRST message
 			// after publish accepts, before any media frame, so the declared
-			// spec is VERIFIED here: the backend judges it per spec (ack).
-			// Allow=false → NetStream.Publish.BadName, connection closed
-			// OBS-terminally — identical to a wrong password. Metadata and
-			// everything after never reach SRS.
+			// spec is VERIFIED BEFORE anything is forwarded: the backend
+			// judges it per spec (ack). Allow=false →
+			// NetStream.Publish.BadName, connection closed OBS-terminally —
+			// identical to a wrong password. Metadata and everything after
+			// never reach SRS.
 			if msg.Type == 18 && published != "" {
 				if vals := AmfDecodeAll(msg.Payload); len(vals) >= 3 {
 					if sp, ok := ParseMetadata(vals); ok && OnPublishSpec != nil {
@@ -265,6 +255,17 @@ func HandleOBS(conn net.Conn, app AppClient) {
 							return
 						}
 					}
+				}
+			}
+			if up != nil {
+				if err := up.WriteFrame(msg); err != nil {
+					// Upstream is gone — tear the OBS connection down too,
+					// immediately. Keeping it half-alive leaves OBS showing
+					// "live" while frames vanish, and makes Stop hang.
+					log.Printf("%s upstream write failed: %v — closing OBS connection", remote, err)
+					up.Close()
+					conn.Close()
+					return
 				}
 			}
 
@@ -489,12 +490,10 @@ func HandleOBS(conn net.Conn, app AppClient) {
 				_ = cw.WriteMessage(&Message{Type: 20, CSID: 5, StreamID: 1, Payload: CmdOnStatusPublishStart()})
 				log.Printf("%s publishing '%s' (authed=%v) -> %s", remote, name, authed, SRSAddr)
 
-			case "@setDataFrame": // onMetaData — forward to SRS as-is
-				if up != nil {
-					_ = up.WriteFrame(msg)
-				}
-				// OBS declares its encoder settings here, before the first
-				// frame — run the same spec gate as the type-18 branch (non-librtmp clients)
+			case "@setDataFrame": // onMetaData — verify spec, then forward to SRS
+				// The encoder settings are declared here, before the first
+				// frame — run the same spec gate as the type-18 branch (this
+				// is the non-librtmp client path), BEFORE forwarding.
 				if OnPublishSpec != nil {
 					if sp, ok := ParseMetadata(vals); ok && published != "" {
 						allow, rejectReason := OnPublishSpec(published, sp, grantLimits, grantStrict)
@@ -507,6 +506,9 @@ func HandleOBS(conn net.Conn, app AppClient) {
 							return
 						}
 					}
+				}
+				if up != nil {
+					_ = up.WriteFrame(msg)
 				}
 
 			case "releaseStream", "FCPublish", "FCUnpublish", "deleteStream", "_checkbw":

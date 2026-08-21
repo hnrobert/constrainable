@@ -85,6 +85,14 @@ func reportRecording(cfg *Config, c *node.Client, s *media.Session) {
 		if err != nil {
 			return // no DVR output for this stream (nothing to report)
 		}
+		// Per-event subdirectory (e<id>): SRS's dvr_path only knows the
+		// stream, so finished segments are MOVED under e<eventId>/<stream>/
+		// before reporting — recordings from different events never share a
+		// folder. Event-less sessions keep the plain <stream>/ layout.
+		eventDir := ""
+		if s.EventID != nil {
+			eventDir = fmt.Sprintf("e%d", *s.EventID)
+		}
 		var segs []node.RecordingSegment
 		var total int64
 		for _, e := range entries {
@@ -95,8 +103,17 @@ func reportRecording(cfg *Config, c *node.Client, s *media.Session) {
 			if err != nil {
 				continue
 			}
+			rel := path.Join(s.StreamName, e.Name())
+			if eventDir != "" {
+				dst := filepath.Join(cfg.RecordDir, eventDir, s.StreamName, e.Name())
+				if err := os.MkdirAll(filepath.Dir(dst), 0o755); err == nil {
+					if err := os.Rename(filepath.Join(dir, e.Name()), dst); err == nil {
+						rel = path.Join(eventDir, s.StreamName, e.Name())
+					}
+				}
+			}
 			segs = append(segs, node.RecordingSegment{
-				RelPath:   path.Join(s.StreamName, e.Name()),
+				RelPath:   rel,
 				SizeBytes: info.Size(),
 			})
 			total += info.Size()

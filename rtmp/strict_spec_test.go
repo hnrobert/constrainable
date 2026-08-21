@@ -1,6 +1,11 @@
 package rtmp
 
-import "testing"
+import (
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+)
 
 // The strict declared-spec gate: metadata-time violations are checked LOCALLY
 // against the grant's caps — nothing is relayed before the reject.
@@ -27,5 +32,75 @@ func TestSpecViolations(t *testing.T) {
 	// zero caps = uncapged
 	if r := SpecViolations(StreamSpec{Width: 99999, Height: 1, Fps: 900, VideoKbps: 1e6}, &GateLimits{}); len(r) != 0 {
 		t.Fatalf("zero limits must not flag: %v", r)
+	}
+}
+
+// End-to-end spec rejection: publish accepted → violating onMetaData (type-18
+// DATA message, as OBS sends it) → BadName with the reason + the connection
+// CLOSED by the server. This is the OBS-terminal "wrong password" UX — without
+// the close, OBS just keeps streaming.
+func TestSpecRejectClosesConnection(t *testing.T) {
+	const token = "test-token"
+	const openKey = "openkey123"
+	app := httptest.NewServer(mockAppMux(token, "", openKey, "", "", ""))
+	defer app.Close()
+	addr := startGateway(t, app.URL, token)
+
+	names := make(chan string, 8)
+	oldSRS := SRSAddr
+	SRSAddr = fakeSRS(t, names)
+	defer func() { SRSAddr = oldSRS }()
+
+	oldGate, oldSpec := OnPublishGate, OnPublishSpec
+	OnPublishGate = func(streamName, tok, authedUser string) PublishGrant {
+		return PublishGrant{
+			Allowed: true,
+			Limits:  &GateLimits{MaxWidth: 1280, MaxHeight: 720, MaxFps: 30, MaxBitrateKbps: 2000},
+			Strict:  true,
+		}
+	}
+	specSeen := make(chan StreamSpec, 1)
+	OnPublishSpec = func(streamName string, spec StreamSpec, limits *GateLimits, strict bool) (bool, string) {
+		specSeen <- spec
+		return false, "Stream rejected: resolution exceeds limit. Lower your OBS resolution and reconnect."
+	}
+	defer func() { OnPublishGate, OnPublishSpec = oldGate, oldSpec }()
+
+	c, cw, cr := credlessConnect(t, addr)
+	defer c.Close()
+	_ = cw.WriteMessage(&Message{Type: 20, CSID: 3, StreamID: 1, Payload: CmdPublish(openKey)})
+	if got := cmdField(cr); !strings.Contains(got, "NetStream.Publish.Start") {
+		t.Fatalf("publish: expected Publish.Start, got %q", got)
+	}
+
+	// OBS declares 1920x1080 — over the 1280x720 grant caps
+	_ = cw.WriteMessage(&Message{Type: 18, CSID: 4, StreamID: 1, Payload: encodeAMF0Metadata(t)})
+	if got := cmdField(cr); !strings.Contains(got, "resolution exceeds limit") {
+		t.Fatalf("metadata: expected spec-reject BadName, got %q", got)
+	}
+
+	// the server must close the connection — a lingering open conn means OBS
+	// keeps streaming (the bug this test guards against)
+	readErr := make(chan error, 1)
+	go func() {
+		_, err := cr.ReadMessage()
+		readErr <- err
+	}()
+	select {
+	case err := <-readErr:
+		if err == nil {
+			t.Fatal("expected the connection to close after the spec reject, got another message")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("connection still open 3s after the spec reject — OBS would keep streaming")
+	}
+
+	select {
+	case sp := <-specSeen:
+		if sp.Width != 1920 || sp.Height != 1080 {
+			t.Fatalf("spec hook: expected 1920x1080, got %dx%d", sp.Width, sp.Height)
+		}
+	default:
+		t.Fatal("spec hook never fired")
 	}
 }
