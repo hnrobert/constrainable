@@ -32,6 +32,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 )
 
 // AppClient abstracts the auth calls the RTMP handler needs (salt/verify/policy).
@@ -80,6 +81,47 @@ var (
 	// OnPublishSpec judges OBS' declared spec (onMetaData — the first message after publish accepts, before any frame). The verdict gates metadata forwarding: Allow=false → NetStream.Publish.BadName, connection closed OBS-terminally (same UX as a wrong password). The implementation asks the CONTROL PLANE per spec (ack) and may fall back to the grant's caps on transport failure — limits+strict come along as the fallback inputs.
 	OnPublishSpec func(streamName string, spec StreamSpec, limits *GateLimits, strict bool) (allow bool, rejectReason string)
 )
+
+// Spec-reject cooldown: a metadata-time rejection happens AFTER OBS already
+// saw Publish.Start, so closing the connection reads as a mid-stream network
+// failure and OBS auto-reconnect-loops (every cycle re-rejected). To make the
+// rejection OBS-TERMINAL like a wrong password, reconnects within the window
+// are refused at the CONNECT dance with librtmp's fatal `?reason=authfailed`
+// error — librtmp gives up entirely on that. Ephemeral, node-local, expires
+// on its own; NOT a ban (the app records none).
+var (
+	specCooldownMu     sync.Mutex
+	specCooldowns      = map[string]time.Time{}
+	specCooldownWindow = 30 * time.Second
+)
+
+func armSpecCooldown(keys ...string) {
+	specCooldownMu.Lock()
+	defer specCooldownMu.Unlock()
+	exp := time.Now().Add(specCooldownWindow)
+	for _, k := range keys {
+		if k != "" {
+			specCooldowns[k] = exp
+		}
+	}
+}
+
+func specCooldownActive(key string) bool {
+	if key == "" {
+		return false
+	}
+	specCooldownMu.Lock()
+	defer specCooldownMu.Unlock()
+	exp, ok := specCooldowns[key]
+	if !ok {
+		return false
+	}
+	if time.Now().After(exp) {
+		delete(specCooldowns, key)
+		return false
+	}
+	return true
+}
 
 // SpecViolations lists the declared-spec limit breaches ("" slice = clean).
 // Bitrate compares the declared video+audio data rates against the cap.
@@ -247,6 +289,7 @@ func HandleOBS(conn net.Conn, app AppClient) {
 						if !allow {
 							log.Printf("%s spec rejected on '%s': %s (declared %dx%d@%.2f %.0fkbps)",
 								remote, published, rejectReason, sp.Width, sp.Height, sp.Fps, sp.VideoKbps+sp.AudioKbps)
+							armSpecCooldown(published, authedUser)
 							_ = cw.WriteMessage(&Message{Type: 20, CSID: 5, StreamID: 1, Payload: CmdOnStatusError(
 								"NetStream.Publish.BadName",
 								rejectReason)})
@@ -290,6 +333,14 @@ func HandleOBS(conn net.Conn, app AppClient) {
 				qs := ParseApp(appField)
 
 				if _, ok := qs["response"]; ok {
+					if user := qs["user"]; specCooldownActive(user) {
+						// librtmp may replay the full authenticated URL on
+						// auto-reconnect — refuse fatally here too (stage 2
+						// check above covers the normal dance).
+						log.Printf("%s [stage3] user=%s in spec-reject cooldown → refusing connection", remote, user)
+						_ = cw.WriteMessage(&Message{Type: 20, CSID: 3, Payload: CmdError(txn, "?reason=authfailed&authmod=adobe&user="+user)})
+						return
+					}
 					// ---- STAGE 3: verify. A WRONG PASSWORD on a real account is
 					// FATAL: reply with librtmp's `?reason=authfailed` error and
 					// close — librtmp gives up the dance (no retry) and OBS shows
@@ -322,6 +373,15 @@ func HandleOBS(conn net.Conn, app AppClient) {
 						// events are still rejected at publish via policy. ----
 						SendConnectResult(cw, txn)
 						log.Printf("%s --> connect success (no credentials, open)", remote)
+					} else if specCooldownActive(user) {
+						// Spec-rejected moments ago: OBS is auto-retrying after
+						// the mid-publish disconnect. Refuse with the FATAL
+						// auth error — same terminal form as a wrong password,
+						// so librtmp gives up instead of looping. The user
+						// fixes their OBS settings and starts streaming again.
+						log.Printf("%s [stage2] user=%s in spec-reject cooldown → refusing connection", remote, user)
+						_ = cw.WriteMessage(&Message{Type: 20, CSID: 3, Payload: CmdError(txn, "?reason=authfailed&authmod=adobe&user="+user)})
+						return
 					} else {
 						// ---- STAGE 2: send the salt + opaque challenge ----
 						s := app.Salt(user) // real salt, or random if unknown
@@ -442,6 +502,17 @@ func HandleOBS(conn net.Conn, app AppClient) {
 				if final == "" {
 					final = "anon-" + RandHex(4)
 				}
+				if specCooldownActive(final) || specCooldownActive(authedUser) {
+					// Credless path / immediate manual restart: refuse the
+					// publish BEFORE any relay or Publish.Start — a publish
+					// that never starts reads as a bad stream key and OBS
+					// stops instead of reconnect-looping.
+					log.Printf("%s publish '%s' refused: spec-reject cooldown", remote, final)
+					_ = cw.WriteMessage(&Message{Type: 20, CSID: 5, StreamID: 1, Payload: CmdOnStatusError(
+						"NetStream.Publish.BadName",
+						"Stream rejected: your OBS output settings exceed this event's limits. Lower resolution/FPS/bitrate and start streaming again.")})
+					return
+				}
 				rewritten := SafeStreamName(final) + "?token=" + token
 				log.Printf("%s publish key '%s' → stream '%s'", remote, token, rewritten)
 				name = rewritten
@@ -499,6 +570,7 @@ func HandleOBS(conn net.Conn, app AppClient) {
 						allow, rejectReason := OnPublishSpec(published, sp, grantLimits, grantStrict)
 						if !allow {
 							log.Printf("%s spec rejected on '%s': %s", remote, published, rejectReason)
+							armSpecCooldown(published, authedUser)
 							_ = cw.WriteMessage(&Message{Type: 20, CSID: 5, StreamID: 1, Payload: CmdOnStatusError(
 								"NetStream.Publish.BadName", rejectReason)})
 							up.Close()

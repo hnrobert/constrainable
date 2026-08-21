@@ -64,7 +64,12 @@ func TestSpecRejectClosesConnection(t *testing.T) {
 		specSeen <- spec
 		return false, "Stream rejected: resolution exceeds limit. Lower your OBS resolution and reconnect."
 	}
-	defer func() { OnPublishGate, OnPublishSpec = oldGate, oldSpec }()
+	defer func() {
+		OnPublishGate, OnPublishSpec = oldGate, oldSpec
+		specCooldownMu.Lock()
+		specCooldowns = map[string]time.Time{}
+		specCooldownMu.Unlock()
+	}()
 
 	c, cw, cr := credlessConnect(t, addr)
 	defer c.Close()
@@ -102,5 +107,64 @@ func TestSpecRejectClosesConnection(t *testing.T) {
 		}
 	default:
 		t.Fatal("spec hook never fired")
+	}
+}
+
+// The reject above closes a connection OBS already considers LIVE, so OBS's
+// auto-reconnect kicks in. The cooldown must turn those reconnects into a
+// FATAL connect error (librtmp reason=authfailed — same as a wrong password)
+// so OBS stops instead of loop-publishing.
+func TestSpecRejectCooldownKillsReconnect(t *testing.T) {
+	const (
+		token    = "test-token"
+		authKey  = "authkey123"
+		user     = "robert@example.com"
+		password = "123456"
+		salt     = "deadbeefsalt"
+	)
+	salted2 := b64(md5raw(user + salt + password))
+	app := httptest.NewServer(mockAppMux(token, authKey, "", user, salt, salted2))
+	defer app.Close()
+	addr := startGateway(t, app.URL, token)
+
+	names := make(chan string, 8)
+	oldSRS := SRSAddr
+	SRSAddr = fakeSRS(t, names)
+	defer func() { SRSAddr = oldSRS }()
+
+	oldGate, oldSpec := OnPublishGate, OnPublishSpec
+	OnPublishGate = func(streamName, tok, authedUser string) PublishGrant {
+		return PublishGrant{Allowed: true, Strict: true,
+			Limits: &GateLimits{MaxWidth: 1280, MaxHeight: 720}}
+	}
+	OnPublishSpec = func(streamName string, spec StreamSpec, limits *GateLimits, strict bool) (bool, string) {
+		return false, "Stream rejected: resolution exceeds limit. Lower your OBS resolution and reconnect."
+	}
+	defer func() {
+		OnPublishGate, OnPublishSpec = oldGate, oldSpec
+		specCooldownMu.Lock()
+		specCooldowns = map[string]time.Time{}
+		specCooldownMu.Unlock()
+	}()
+
+	// cycle 1: full publish → violating metadata → BadName + close
+	c, cw, cr := danceAuth(t, addr, user, password)
+	_ = cw.WriteMessage(&Message{Type: 20, CSID: 3, StreamID: 1, Payload: CmdPublish(authKey)})
+	if got := cmdField(cr); !strings.Contains(got, "NetStream.Publish.Start") {
+		t.Fatalf("publish: expected Publish.Start, got %q", got)
+	}
+	_ = cw.WriteMessage(&Message{Type: 18, CSID: 4, StreamID: 1, Payload: encodeAMF0Metadata(t)})
+	if got := cmdField(cr); !strings.Contains(got, "resolution exceeds limit") {
+		t.Fatalf("metadata: expected spec-reject BadName, got %q", got)
+	}
+	c.Close()
+
+	// the auto-reconnect: stage-2 of the dance must be refused FATAALLY —
+	// reason=authfailed (a wrong password's terminal form), never needauth
+	c2, cw2, cr2 := openClient(t, addr)
+	defer c2.Close()
+	sendConnect(cw2, "live?authmod=adobe&user="+user)
+	if got := cmdField(cr2); !strings.Contains(got, "reason=authfailed") {
+		t.Fatalf("reconnect stage2: expected fatal authfailed (cooldown), got %q", got)
 	}
 }
