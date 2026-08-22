@@ -196,24 +196,30 @@ const offlineMine = computed(() => {
       <table class="w-full text-sm">
         <thead>
           <tr class="border-b text-left text-muted-foreground">
-            <th class="py-2 pr-4 font-medium">Node</th>
-            <th class="py-2 pr-4 font-medium">OBS address</th>
-            <th class="py-2 pr-4 font-medium">Latency</th>
+            <th class="py-2 pr-4 font-medium whitespace-nowrap">Node</th>
+            <!-- fluid column: claims the space left by the other columns and
+                 ellipsizes when the address is too long (never wraps) -->
+            <th class="py-2 pr-4 font-medium w-full max-w-0">OBS address</th>
+            <th class="py-2 pr-4 font-medium whitespace-nowrap">Latency</th>
             <th class="py-2 pr-4 font-medium">Load</th>
             <th class="py-2 font-medium" />
           </tr>
         </thead>
         <tbody>
           <tr v-for="n in nodes ?? []" :key="n.nodeId" class="border-b last:border-0">
-            <td class="py-2.5 pr-4">
+            <td class="py-2.5 pr-4 whitespace-nowrap">
               <span class="font-medium">{{ n.nodeId }}</span>
               <Badge v-if="n.isMine" variant="success" class="ml-2">yours</Badge>
             </td>
-            <td class="py-2.5 pr-4">
-              <code v-if="n.rtmpUrl" class="font-mono text-xs">{{ n.rtmpUrl }}</code>
-              <span v-else class="text-xs text-muted-foreground">via site host</span>
+            <td class="py-2.5 pr-4 w-full max-w-0">
+              <code
+                v-if="n.rtmpUrl"
+                class="block truncate font-mono text-xs"
+                :title="n.rtmpUrl"
+              >{{ n.rtmpUrl }}</code>
+              <span v-else class="block truncate text-xs text-muted-foreground">via site host</span>
             </td>
-            <td class="py-2.5 pr-4">
+            <td class="py-2.5 pr-4 whitespace-nowrap">
               <span
                 v-if="rtts"
                 class="rounded-sm bg-muted px-1.5 py-0.5 font-mono text-xs tabular-nums"
@@ -230,10 +236,12 @@ const offlineMine = computed(() => {
                 v-if="!n.isMine"
                 size="sm"
                 variant="outline"
+                class="w-30"
                 :disabled="selecting === n.nodeId"
                 @click="select(n)"
               >Use this node</Button>
-              <span v-else class="text-xs text-muted-foreground">selected</span>
+              <!-- same width as the action buttons above/below, grayed out -->
+              <Button v-else size="sm" variant="outline" class="w-30" disabled>selected</Button>
             </td>
           </tr>
           <tr v-if="!(nodes ?? []).length">

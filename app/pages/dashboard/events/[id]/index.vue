@@ -102,7 +102,7 @@ onMounted(async () => {
           <div class="space-y-1.5">
             <Label>Server</Label>
             <div class="flex items-center gap-2">
-              <code class="font-mono text-sm">{{ server }}</code>
+              <code class="min-w-0 flex-1 truncate font-mono text-sm" :title="server">{{ server }}</code>
               <Button variant="link" class="h-auto p-0 text-xs" @click="copy(server, 'Copied server address')">Copy</Button>
               <NuxtLink to="/nodes" class="text-xs underline decoration-dotted underline-offset-4">change / test nodes</NuxtLink>
             </div>
