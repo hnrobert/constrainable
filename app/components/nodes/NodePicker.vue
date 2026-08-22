@@ -201,7 +201,7 @@ const offlineMine = computed(() => {
                  ellipsizes when the address is too long (never wraps) -->
             <th class="py-2 pr-4 font-medium w-full max-w-0">OBS address</th>
             <th class="py-2 pr-4 font-medium whitespace-nowrap">Latency</th>
-            <th class="py-2 pr-4 font-medium">Load</th>
+            <th class="py-2 pr-4 font-medium whitespace-nowrap">Load</th>
             <th class="py-2 font-medium" />
           </tr>
         </thead>
@@ -228,7 +228,7 @@ const offlineMine = computed(() => {
               >{{ rttChip(rtts[n.nodeId], outcomes[n.nodeId]).label }}</span>
               <span v-else class="text-xs text-muted-foreground">—</span>
             </td>
-            <td class="py-2.5 pr-4 tabular-nums" :class="{ 'text-destructive': n.assigned > n.maxUsers }">
+            <td class="py-2.5 pr-4 whitespace-nowrap tabular-nums" :class="{ 'text-destructive': n.assigned > n.maxUsers }">
               {{ n.assigned }} / {{ n.maxUsers }}
             </td>
             <td class="py-2.5 text-right">
