@@ -51,10 +51,7 @@ const bootedAt = Date.now()
  * OBS ingest authority for a node — "host[:port]", the redundant :1935
  * omitted (shared/rtmp.ts normalizes it again downstream). '' = via app host.
  */
-export function rtmpAuthority(n: {
-  publicOrigin: string
-  publicRtmpPort?: number
-}): string {
+export function rtmpAuthority(n: { publicOrigin: string; publicRtmpPort?: number }): string {
   if (!n.publicOrigin) return ''
   const port = n.publicRtmpPort ?? 1935
   return port === 1935 ? n.publicOrigin : `${n.publicOrigin}:${port}`
@@ -64,7 +61,7 @@ export function rtmpAuthority(n: {
 export function deriveNodeId(origin: string): string {
   return origin
     .replace(/^https?:\/\//, '')
-    .replace(/[:\/].*$/, '')
+    .replace(/[:/].*$/, '')
     .replace(/[^a-z0-9-]/gi, '-')
     .toLowerCase()
 }
@@ -112,9 +109,7 @@ export function register(
   offlineSince.delete(nodeId)
   everSeen.add(nodeId)
   socketToNode.set(peer.id, nodeId)
-  console.log(
-    `[media-nodes] registered: ${nodeId} (${info.hostname}) flv=${entry.srsFlvBase}`,
-  )
+  console.log(`[media-nodes] registered: ${nodeId} (${info.hostname}) flv=${entry.srsFlvBase}`)
   return nodeId
 }
 

@@ -5,7 +5,9 @@
  * also embedded on the dashboard events page.
  */
 definePageMeta({ layout: 'default' })
-useAuth().fetchSession().catch(() => null)
+useAuth()
+  .fetchSession()
+  .catch(() => null)
 </script>
 
 <template>
@@ -13,9 +15,8 @@ useAuth().fetchSession().catch(() => null)
     <div class="space-y-1">
       <h1 class="text-2xl font-semibold">Ingest Nodes</h1>
       <p class="text-muted-foreground">
-        Your ingest node was chosen for you when you registered; you can switch to any node
-        below. Once selected you can only stream through that node — the OBS address on your
-        event guide page follows your choice.
+        Your ingest node was chosen for you when you registered; you can switch to any node below. Once selected you can
+        only stream through that node — the OBS address on your event guide page follows your choice.
       </p>
     </div>
 

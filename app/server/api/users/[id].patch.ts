@@ -34,7 +34,7 @@ export default defineEventHandler(async (event) => {
     const announcement = raw === null ? null : raw.slice(0, 4000)
     UsersRepository.updateAnnouncement(id, announcement)
     audit('info', 'admin', `announcement ${announcement ? 'set for' : 'cleared for'} ${target.email}`, {
-      actor: event.context.auth ? UsersRepository.findById(event.context.auth.userId)?.email ?? null : null,
+      actor: event.context.auth ? (UsersRepository.findById(event.context.auth.userId)?.email ?? null) : null,
       detail: { userId: id },
     })
   }
@@ -47,9 +47,7 @@ export default defineEventHandler(async (event) => {
     setUserRole(id, role)
   }
   if (Array.isArray(body?.groupIds)) {
-    const groupIds = body.groupIds
-      .map((g: unknown) => Number(g))
-      .filter((g: number) => Number.isInteger(g) && g > 0)
+    const groupIds = body.groupIds.map((g: unknown) => Number(g)).filter((g: number) => Number.isInteger(g) && g > 0)
     setUserGroups(id, groupIds)
   }
   if ('nodeId' in (body ?? {})) {

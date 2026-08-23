@@ -99,7 +99,8 @@ async function create(): Promise<void> {
             <Label>Event key *</Label>
             <Input v-model="form.slug" placeholder="e.g. regional-2026" />
             <p class="text-xs text-muted-foreground">
-              Lowercase letters, digits, <code>_</code> and <code>-</code> only. Doubles as the guide URL and the OBS stream key.
+              Lowercase letters, digits, <code>_</code> and <code>-</code> only. Doubles as the guide URL and the OBS
+              stream key.
             </p>
           </div>
           <div class="space-y-1.5 col-span-full">
@@ -118,8 +119,8 @@ async function create(): Promise<void> {
       <CardHeader>
         <CardTitle>Your ingest node</CardTitle>
         <CardDescription>
-          Pick the node you publish through (and test each node's latency from your own network)
-          — the OBS address on every event guide follows this choice.
+          Pick the node you publish through (and test each node's latency from your own network) — the OBS address on
+          every event guide follows this choice.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -129,12 +130,7 @@ async function create(): Promise<void> {
 
     <Card>
       <CardContent>
-        <DataTable
-          :columns="columns"
-          :rows="events ?? []"
-          :row-key="(e: EventView) => e.id"
-          empty="No events yet."
-        >
+        <DataTable :columns="columns" :rows="events ?? []" :row-key="(e: EventView) => e.id" empty="No events yet.">
           <template #cell-status="{ row }">
             <Badge :variant="statusVariant[row.status]">{{ statusLabel[row.status] }}</Badge>
           </template>

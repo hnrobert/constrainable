@@ -80,9 +80,7 @@ function syncSchema(): void {
  * the boot loudly with the exact remediation.
  */
 function verifySchema(sqlite: Database): void {
-  const rows = sqlite
-    .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
-    .all() as { name: string }[]
+  const rows = sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as { name: string }[]
   const live = new Set(rows.map((r) => r.name))
   const missing = SCHEMA_TABLES.map((t) => t.name).filter((n) => !live.has(n))
   if (missing.length > 0) {
@@ -106,9 +104,7 @@ function missingColumns(sqlite: Database): string[] {
   const out: string[] = []
   for (const table of SCHEMA_TABLES) {
     const live = new Set(
-      (sqlite.prepare(`PRAGMA table_info('${table.name}')`).all() as { name: string }[]).map(
-        (r) => r.name,
-      ),
+      (sqlite.prepare(`PRAGMA table_info('${table.name}')`).all() as { name: string }[]).map((r) => r.name),
     )
     for (const col of table.columns) if (!live.has(col)) out.push(`${table.name}.${col}`)
   }
@@ -129,9 +125,7 @@ function ensureColumns(sqlite: Database): void {
   for (const t of (Object.values(schema) as unknown[]).filter((x): x is Table => isTable(x))) {
     const name = (t as unknown as Record<symbol, string>)[Symbol.for('drizzle:Name')]!
     const live = new Set(
-      (sqlite.prepare(`PRAGMA table_info('${name}')`).all() as { name: string }[]).map(
-        (r) => r.name,
-      ),
+      (sqlite.prepare(`PRAGMA table_info('${name}')`).all() as { name: string }[]).map((r) => r.name),
     )
     for (const col of Object.values(getTableColumns(t)) as unknown as Record<string, any>[]) {
       if (live.has(col.name)) continue

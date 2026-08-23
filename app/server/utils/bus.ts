@@ -13,10 +13,7 @@ export function emit<K extends BusEventName>(event: K, payload: BusEventMap[K]):
   bus.emit(event, payload)
 }
 
-export function onBus<K extends BusEventName>(
-  event: K,
-  fn: (payload: BusEventMap[K]) => void,
-): () => void {
+export function onBus<K extends BusEventName>(event: K, fn: (payload: BusEventMap[K]) => void): () => void {
   bus.on(event, fn as (payload: unknown) => void)
   return () => bus.off(event, fn as (payload: unknown) => void)
 }

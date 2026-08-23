@@ -60,12 +60,16 @@ async function startTile(name: string) {
       video.srcObject = merged
       video.play().catch(() => {})
     }
-    video.addEventListener('resize', () => {
-      if (video.videoWidth > 0) {
-        framed.value.add(name)
-        capturePoster(name)
-      }
-    }, { once: true })
+    video.addEventListener(
+      'resize',
+      () => {
+        if (video.videoWidth > 0) {
+          framed.value.add(name)
+          capturePoster(name)
+        }
+      },
+      { once: true },
+    )
     const offer = await pc.createOffer()
     await pc.setLocalDescription(offer)
     const resp = await fetch(urls.whep, {
@@ -175,11 +179,7 @@ const statusVariant: Record<string, 'secondary' | 'warning' | 'success' | 'destr
             muted
             playsinline
           />
-          <Badge
-            v-if="statusVariant[s.status]"
-            :variant="statusVariant[s.status]"
-            class="absolute left-2 top-2"
-          >
+          <Badge v-if="statusVariant[s.status]" :variant="statusVariant[s.status]" class="absolute left-2 top-2">
             {{ s.status }}
           </Badge>
         </div>

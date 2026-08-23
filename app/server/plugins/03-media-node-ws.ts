@@ -26,7 +26,10 @@ interface BunServerWebSocket {
 interface BunServeOptions {
   port: number
   hostname?: string
-  fetch: (req: Request, server: { upgrade: (req: Request, opts?: { data?: unknown }) => boolean }) => Response | undefined
+  fetch: (
+    req: Request,
+    server: { upgrade: (req: Request, opts?: { data?: unknown }) => boolean },
+  ) => Response | undefined
   websocket: {
     open: (ws: BunServerWebSocket) => void
     message: (ws: BunServerWebSocket, message: string | Buffer) => void

@@ -48,7 +48,13 @@ export interface PublishAuthorizedAck {
   eventId?: number | null
   /** the event KEY (slug) — the node files DVR recordings under <key>/<user>/ */
   eventKey?: string
-  limits?: { maxWidth: number; maxHeight: number; maxFps: number; maxVideoBitrateKbps: number; maxAudioBitrateKbps: number }
+  limits?: {
+    maxWidth: number
+    maxHeight: number
+    maxFps: number
+    maxVideoBitrateKbps: number
+    maxAudioBitrateKbps: number
+  }
   record?: boolean
   /** strict events: the node rejects declared-spec violations locally (OBS-terminal) */
   strict?: boolean
@@ -142,11 +148,16 @@ export async function handlePublishStart(payload: PublishStartPayload): Promise<
       const where = pinnedAuthority
         ? ` — use ${obsServerUrl(pinnedAuthority)} (or change your selection on the Nodes page)`
         : ' — check the Nodes page on the website for your node address'
-      audit('warn', 'access', `publish on wrong node: ${payload.streamName} (${payload.nodeId}, locked to ${lockUser.nodeId})`, {
-        actor: payload.streamName,
-        streamName: payload.streamName,
-        detail: { nodeId: payload.nodeId, lockedTo: lockUser.nodeId },
-      })
+      audit(
+        'warn',
+        'access',
+        `publish on wrong node: ${payload.streamName} (${payload.nodeId}, locked to ${lockUser.nodeId})`,
+        {
+          actor: payload.streamName,
+          streamName: payload.streamName,
+          detail: { nodeId: payload.nodeId, lockedTo: lockUser.nodeId },
+        },
+      )
       return { allow: false, reason: `streaming is locked to your selected node${where}` }
     }
 
@@ -236,9 +247,8 @@ export function handleEnd(payload: EndPayload): void {
 }
 
 export function handleRecordingReady(payload: RecordingReadyPayload): void {
-  const existing = payload.eventId != null
-    ? RecordingsRepository.findMergeTarget(payload.eventId, payload.streamName)
-    : undefined
+  const existing =
+    payload.eventId != null ? RecordingsRepository.findMergeTarget(payload.eventId, payload.streamName) : undefined
 
   if (existing) {
     // Append segments to the existing recording
@@ -251,7 +261,8 @@ export function handleRecordingReady(payload: RecordingReadyPayload): void {
       durationSec: prevDur + payload.durationSec,
       avgFps:
         existing.avgFps && payload.avgFps
-          ? (existing.avgFps * prevDur + payload.avgFps * payload.durationSec) / Math.max(1, prevDur + payload.durationSec)
+          ? (existing.avgFps * prevDur + payload.avgFps * payload.durationSec) /
+            Math.max(1, prevDur + payload.durationSec)
           : (payload.avgFps ?? existing.avgFps),
       width: payload.width ?? existing.width,
       height: payload.height ?? existing.height,
@@ -340,12 +351,17 @@ export function handleSpec(payload: SpecPayload, ack?: (r: { allow: boolean; rea
     ...snapshotFromRow(row, { status: 'violating' }),
     reasons: reasonList,
   })
-  audit('warn', 'publish', `spec ${strict ? 'rejected' : 'exceeds limits'}: ${row.streamName} (${reasonList.join('; ')})`, {
-    actor: row.streamName,
-    eventId: row.eventId ?? null,
-    streamName: row.streamName,
-    detail: { sessionId: row.id, strict, reasons: reasonList },
-  })
+  audit(
+    'warn',
+    'publish',
+    `spec ${strict ? 'rejected' : 'exceeds limits'}: ${row.streamName} (${reasonList.join('; ')})`,
+    {
+      actor: row.streamName,
+      eventId: row.eventId ?? null,
+      streamName: row.streamName,
+      detail: { sessionId: row.id, strict, reasons: reasonList },
+    },
+  )
   if (!strict) {
     ack?.({ allow: true })
     return
@@ -383,7 +399,9 @@ export function handleViolation(payload: ViolationPayload): void {
 // --- RTMP auth (Adobe authmod) — the media-node's ONLY auth surface ---
 
 export function handleAuthSalt(p: { email?: string }): { salt: string; banned: boolean } {
-  const email = String(p?.email ?? '').trim().toLowerCase()
+  const email = String(p?.email ?? '')
+    .trim()
+    .toLowerCase()
   const user = email ? UsersRepository.findByEmail(email) : undefined
   // Unknown users get a random salt — byte-identical challenge, no enumeration
   return {
@@ -396,7 +414,9 @@ export function handleAuthVerify(
   nodeId: string | null,
   p: { email?: string; opaque?: string; challenge?: string; response?: string },
 ): { allow: boolean; known: boolean } {
-  const email = String(p?.email ?? '').trim().toLowerCase()
+  const email = String(p?.email ?? '')
+    .trim()
+    .toLowerCase()
   const user = email ? UsersRepository.findByEmail(email) : undefined
   if (!user?.authmodVerifier) {
     // Unknown username: placeholder credentials, not a hard auth failure.
@@ -424,10 +444,12 @@ export function handleAuthVerify(
   return { allow: ok, known: true }
 }
 
-export function handleAuthPolicy(p: {
-  token?: string
-  stream?: string
-}): { publishKey: boolean; requireAccountAuth: boolean; windowOpen: boolean; banned: boolean } {
+export function handleAuthPolicy(p: { token?: string; stream?: string }): {
+  publishKey: boolean
+  requireAccountAuth: boolean
+  windowOpen: boolean
+  banned: boolean
+} {
   const token = String(p?.token ?? '')
   const stream = String(p?.stream ?? '').trim()
   const row = token ? EventsRepository.findByPublishKey(token) : undefined
@@ -435,8 +457,7 @@ export function handleAuthPolicy(p: {
   const windowOpen =
     !row || row.status === 'archived'
       ? true
-      : (!row.startsAt || now >= row.startsAt.getTime()) &&
-        (!row.endsAt || now <= row.endsAt.getTime())
+      : (!row.startsAt || now >= row.startsAt.getTime()) && (!row.endsAt || now <= row.endsAt.getTime())
   return {
     publishKey: !!row,
     requireAccountAuth: true,

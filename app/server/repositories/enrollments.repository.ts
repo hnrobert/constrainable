@@ -15,9 +15,7 @@ export const EnrollmentsRepository = {
     return db
       .select()
       .from(eventEnrollments)
-      .where(
-        and(eq(eventEnrollments.eventId, eventId), eq(eventEnrollments.studentId, studentId)),
-      )
+      .where(and(eq(eventEnrollments.eventId, eventId), eq(eventEnrollments.studentId, studentId)))
       .get()
   },
   /** Roster / unkeyed list: enrollments joined to their student, by student number. */
@@ -39,10 +37,7 @@ export const EnrollmentsRepository = {
     return db.insert(eventEnrollments).values(values).returning().get()
   },
   updateSeat(id: number, seatLabel: string | null, status: Enrollment['status']): void {
-    db.update(eventEnrollments)
-      .set({ seatLabel, status })
-      .where(eq(eventEnrollments.id, id))
-      .run()
+    db.update(eventEnrollments).set({ seatLabel, status }).where(eq(eventEnrollments.id, id)).run()
   },
   remove(id: number): void {
     db.delete(eventEnrollments).where(eq(eventEnrollments.id, id)).run()

@@ -20,15 +20,11 @@ defineEmits<{ stay: []; discard: []; save: [] }>()
         <Card class="w-full max-w-sm">
           <CardHeader>
             <CardTitle>Unsaved changes</CardTitle>
-            <CardDescription>
-              Save your changes before leaving, discard them, or stay on this page.
-            </CardDescription>
+            <CardDescription> Save your changes before leaving, discard them, or stay on this page. </CardDescription>
           </CardHeader>
           <CardContent class="flex flex-col gap-2 sm:flex-row sm:justify-end">
             <Button variant="outline" class="sm:flex-1" @click="$emit('stay')">Stay</Button>
-            <Button variant="outline" class="sm:flex-1" :disabled="saving" @click="$emit('discard')">
-              Discard
-            </Button>
+            <Button variant="outline" class="sm:flex-1" :disabled="saving" @click="$emit('discard')"> Discard </Button>
             <Button class="sm:flex-1" :disabled="saving" @click="$emit('save')">Save &amp; leave</Button>
           </CardContent>
         </Card>

@@ -22,9 +22,8 @@ onBeforeUnmount(() => disposeSocket())
     <div class="space-y-1">
       <h1 class="text-2xl font-semibold">Media Nodes</h1>
       <p class="text-muted-foreground">
-        Registered ingest nodes with their OBS addresses, quotas and user assignments. Users are not
-        permanently bound: a node offline for over 5 minutes loses its users to automatic
-        reassignment on their next visit.
+        Registered ingest nodes with their OBS addresses, quotas and user assignments. Users are not permanently bound:
+        a node offline for over 5 minutes loses its users to automatic reassignment on their next visit.
       </p>
     </div>
 
@@ -37,8 +36,8 @@ onBeforeUnmount(() => disposeSocket())
           </Badge>
         </CardTitle>
         <CardDescription>
-          The auto-assign cap limits first-visit allocation (lowest latency first; overflow spreads
-          to the least-loaded node). Click a node to manage its assigned users. Live-updated over the socket.
+          The auto-assign cap limits first-visit allocation (lowest latency first; overflow spreads to the least-loaded
+          node). Click a node to manage its assigned users. Live-updated over the socket.
         </CardDescription>
       </CardHeader>
       <CardContent>

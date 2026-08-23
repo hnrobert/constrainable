@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { HTMLAttributes } from "vue"
+import type { HTMLAttributes } from 'vue'
 
 /** A single column descriptor for <DataTable>. */
 export interface DataTableColumn {
@@ -9,9 +9,9 @@ export interface DataTableColumn {
   key: string
   header?: string
   /** Class applied to every body cell in this column. */
-  class?: HTMLAttributes["class"]
+  class?: HTMLAttributes['class']
   /** Class applied to the header cell (<th>). */
-  headClass?: HTMLAttributes["class"]
+  headClass?: HTMLAttributes['class']
 }
 </script>
 
@@ -42,9 +42,9 @@ withDefaults(
     detailWhen?: (row: T) => boolean
     /** Optional per-row class (or data-state) — e.g. return
      *  `selected ? 'bg-muted' : undefined` to highlight the active row. */
-    rowClass?: (row: T) => HTMLAttributes["class"]
+    rowClass?: (row: T) => HTMLAttributes['class']
   }>(),
-  { empty: "No data." },
+  { empty: 'No data.' },
 )
 
 // Default cell fallback: read row[key]. Overridden per-column via #cell-<key>.

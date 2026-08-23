@@ -26,11 +26,9 @@ export default defineEventHandler((event) => {
   const row = token ? EventsRepository.findByPublishKey(token) : undefined
   const now = Date.now()
   const windowOpen =
-    !row ||
-    row.status === 'archived'
+    !row || row.status === 'archived'
       ? true // unknown tokens are SRS' problem; archived handled below
-      : (!row.startsAt || now >= row.startsAt.getTime()) &&
-        (!row.endsAt || now <= row.endsAt.getTime())
+      : (!row.startsAt || now >= row.startsAt.getTime()) && (!row.endsAt || now <= row.endsAt.getTime())
   return {
     publishKey: !!row,
     requireAccountAuth: true, // account auth is mandatory for every event

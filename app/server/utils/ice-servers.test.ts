@@ -21,10 +21,7 @@ describe('parseIceServers', () => {
   })
 
   it('comma list of URLs', () => {
-    expect(parseIceServers('stun:a:1, stun:b:2')).toEqual([
-      { urls: 'stun:a:1' },
-      { urls: 'stun:b:2' },
-    ])
+    expect(parseIceServers('stun:a:1, stun:b:2')).toEqual([{ urls: 'stun:a:1' }, { urls: 'stun:b:2' }])
   })
 
   it('turn:user:pass@host shorthand → credentials extracted', () => {

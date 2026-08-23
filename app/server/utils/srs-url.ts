@@ -1,6 +1,5 @@
 import { env } from './env'
 import type { IceServer } from '#shared/rtmp'
-import { getHostingNode } from '../services/media-node-registry'
 
 /**
  * The server-to-SRS pull address for the recorder and the monitor probe, as an
@@ -46,4 +45,3 @@ export function buildPlaybackUrls(streamName: string): PlaybackUrls {
     iceServers: env.iceServers,
   }
 }
-

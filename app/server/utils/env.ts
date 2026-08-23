@@ -21,16 +21,16 @@ export function parseIceServers(raw: string): IceServer[] {
     try {
       const parsed = JSON.parse(text)
       if (!Array.isArray(parsed)) throw new Error('not an array')
-      return parsed.filter(
-        (e): e is IceServer =>
-          typeof e?.urls === 'string' && e.urls !== '',
-      )
+      return parsed.filter((e): e is IceServer => typeof e?.urls === 'string' && e.urls !== '')
     } catch (err) {
       console.warn(`[env] ICE_SERVERS is not a valid JSON array, ignoring: ${err}`)
       return []
     }
   }
-  const urls = text.split(',').map((u) => u.trim()).filter(Boolean)
+  const urls = text
+    .split(',')
+    .map((u) => u.trim())
+    .filter(Boolean)
   if (urls.length === 0) return []
   // turn:user:pass@host:port → turn:host:port + credentials (RFC-ish shorthand)
   return urls.map((u) => {

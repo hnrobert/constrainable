@@ -5,13 +5,7 @@
  */
 import { and, asc, count, eq, inArray } from 'drizzle-orm'
 import { db } from '../database/db'
-import {
-  eventGroups,
-  groups,
-  userGroups,
-  type Group,
-  type NewGroup,
-} from '../database/schema'
+import { eventGroups, groups, userGroups, type Group, type NewGroup } from '../database/schema'
 
 export const GroupsRepository = {
   findAll(): Group[] {
@@ -67,13 +61,17 @@ export const GroupsRepository = {
     db.insert(userGroups).values({ userId, groupId }).onConflictDoNothing().run()
   },
   removeUserFromGroup(userId: number, groupId: number): void {
-    db.delete(userGroups).where(and(eq(userGroups.userId, userId), eq(userGroups.groupId, groupId))).run()
+    db.delete(userGroups)
+      .where(and(eq(userGroups.userId, userId), eq(userGroups.groupId, groupId)))
+      .run()
   },
   /** Replace a user's entire group membership with `groupIds`. */
   setUserGroups(userId: number, groupIds: number[]): void {
     db.delete(userGroups).where(eq(userGroups.userId, userId)).run()
     if (groupIds.length) {
-      db.insert(userGroups).values(groupIds.map((groupId) => ({ userId, groupId }))).run()
+      db.insert(userGroups)
+        .values(groupIds.map((groupId) => ({ userId, groupId })))
+        .run()
     }
   },
   /** True if the user belongs to at least one of the given groups. */
@@ -116,7 +114,9 @@ export const GroupsRepository = {
   setEventGroups(eventId: number, groupIds: number[]): void {
     db.delete(eventGroups).where(eq(eventGroups.eventId, eventId)).run()
     if (groupIds.length) {
-      db.insert(eventGroups).values(groupIds.map((groupId) => ({ eventId, groupId }))).run()
+      db.insert(eventGroups)
+        .values(groupIds.map((groupId) => ({ eventId, groupId })))
+        .run()
     }
   },
 }

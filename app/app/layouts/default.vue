@@ -64,9 +64,7 @@ const adminNav: NavItem[] = [
 // '/dashboard' is a prefix of every dashboard route, so only highlight it on an
 // exact match; every other item matches itself + its sub-paths.
 function isActive(to: string): boolean {
-  return to === '/dashboard'
-    ? route.path === '/dashboard'
-    : route.path === to || route.path.startsWith(to + '/')
+  return to === '/dashboard' ? route.path === '/dashboard' : route.path === to || route.path.startsWith(to + '/')
 }
 
 function toggleTheme(): void {
@@ -85,9 +83,7 @@ watch(
 <template>
   <div class="min-h-screen bg-background">
     <!-- Mobile top bar (sidebar is off-canvas below lg) -->
-    <div
-      class="sticky top-0 z-30 flex h-14 items-center gap-3 border-b bg-card px-4 lg:hidden"
-    >
+    <div class="sticky top-0 z-30 flex h-14 items-center gap-3 border-b bg-card px-4 lg:hidden">
       <Button variant="ghost" size="icon" @click="sidebarOpen = true">
         <Menu :size="18" />
       </Button>
@@ -95,11 +91,7 @@ watch(
     </div>
 
     <!-- Mobile overlay -->
-    <div
-      v-if="sidebarOpen"
-      class="fixed inset-0 z-40 bg-black/40 lg:hidden"
-      @click="sidebarOpen = false"
-    />
+    <div v-if="sidebarOpen" class="fixed inset-0 z-40 bg-black/40 lg:hidden" @click="sidebarOpen = false" />
 
     <!-- Sidebar -->
     <aside
@@ -108,12 +100,7 @@ watch(
     >
       <div class="flex h-14 items-center justify-between border-b px-4">
         <AppLogo />
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          class="lg:hidden"
-          @click="sidebarOpen = false"
-        >
+        <Button variant="ghost" size="icon-sm" class="lg:hidden" @click="sidebarOpen = false">
           <X :size="16" />
         </Button>
       </div>
@@ -135,9 +122,7 @@ watch(
         </NuxtLink>
 
         <template v-if="isAdmin">
-          <div
-            class="px-3 pb-1 pt-4 text-xs font-medium uppercase tracking-wider text-muted-foreground/60"
-          >
+          <div class="px-3 pb-1 pt-4 text-xs font-medium uppercase tracking-wider text-muted-foreground/60">
             Administration
           </div>
           <NuxtLink
@@ -165,17 +150,11 @@ watch(
         </Button>
 
         <div v-if="user" class="space-y-2">
-          <div
-            class="flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm"
-          >
+          <div class="flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm">
             <span class="truncate text-muted-foreground">{{ user.email }}</span>
             <Badge variant="secondary" class="uppercase">{{ user.role }}</Badge>
           </div>
-          <Button
-            variant="ghost"
-            class="w-full justify-start text-muted-foreground"
-            @click="logout"
-          >
+          <Button variant="ghost" class="w-full justify-start text-muted-foreground" @click="logout">
             <LogOut :size="16" />
             Sign out
           </Button>

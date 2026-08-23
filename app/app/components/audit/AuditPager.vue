@@ -42,10 +42,24 @@ const sizeSelect = computed({
     </div>
     <div class="flex items-center gap-2">
       <Button variant="outline" size="sm" :disabled="pending || page <= 1" @click="emit('update:page', 1)">«</Button>
-      <Button variant="outline" size="sm" :disabled="pending || page <= 1" @click="emit('update:page', page - 1)">Prev</Button>
+      <Button variant="outline" size="sm" :disabled="pending || page <= 1" @click="emit('update:page', page - 1)"
+        >Prev</Button
+      >
       <span class="min-w-24 text-center text-sm tabular-nums">Page {{ page }} / {{ pageCount }}</span>
-      <Button variant="outline" size="sm" :disabled="pending || page >= pageCount" @click="emit('update:page', page + 1)">Next</Button>
-      <Button variant="outline" size="sm" :disabled="pending || page >= pageCount" @click="emit('update:page', pageCount)">»</Button>
+      <Button
+        variant="outline"
+        size="sm"
+        :disabled="pending || page >= pageCount"
+        @click="emit('update:page', page + 1)"
+        >Next</Button
+      >
+      <Button
+        variant="outline"
+        size="sm"
+        :disabled="pending || page >= pageCount"
+        @click="emit('update:page', pageCount)"
+        >»</Button
+      >
     </div>
   </div>
 </template>

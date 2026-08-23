@@ -36,11 +36,12 @@ export async function reconcileStaleSessions(): Promise<void> {
   const now = Date.now()
   for (const s of remote) {
     const last = s.lastMetricAt?.getTime() ?? null
-    const stale = last != null
-      ? now - last > REMOTE_STALE_MS
-      : now - s.startedAt.getTime() > REMOTE_GRACE_MS
+    const stale = last != null ? now - last > REMOTE_STALE_MS : now - s.startedAt.getTime() > REMOTE_GRACE_MS
     if (!stale) continue
-    await closeGhost(s, `node ${s.nodeId} stopped reporting (last metric ${last ? `${Math.round((now - last) / 1000)}s ago` : 'never'})`)
+    await closeGhost(
+      s,
+      `node ${s.nodeId} stopped reporting (last metric ${last ? `${Math.round((now - last) / 1000)}s ago` : 'never'})`,
+    )
   }
   if (local.length === 0) return
 

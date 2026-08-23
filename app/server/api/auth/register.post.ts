@@ -57,7 +57,10 @@ export default defineEventHandler(async (event) => {
   }
   if (isDisallowedEmail(email)) {
     const rules = describeEmailRules()
-    throw createError({ statusCode: 403, statusMessage: `This email address is not allowed to register${rules ? ` (${rules})` : ''}` })
+    throw createError({
+      statusCode: 403,
+      statusMessage: `This email address is not allowed to register${rules ? ` (${rules})` : ''}`,
+    })
   }
   if (UsersRepository.findByEmail(email)) {
     throw createError({ statusCode: 409, statusMessage: 'This email is already registered' })
@@ -69,7 +72,10 @@ export default defineEventHandler(async (event) => {
   if (!isFirst) {
     if (!passesWhitelist(email)) {
       const rules = describeEmailRules()
-      throw createError({ statusCode: 403, statusMessage: `This email domain is not allowed to register${rules ? ` (${rules})` : ''}` })
+      throw createError({
+        statusCode: 403,
+        statusMessage: `This email domain is not allowed to register${rules ? ` (${rules})` : ''}`,
+      })
     }
     if (!session || !consumeCode(email, session, code)) {
       throw createError({ statusCode: 400, statusMessage: 'Verification code is invalid or expired' })
@@ -83,7 +89,13 @@ export default defineEventHandler(async (event) => {
   // authentication" can later prove account ownership without the password ever
   // traveling. See server/utils/authmod.ts.
   const authmod = mintAuthmod(email, password)
-  const user = UsersRepository.insert({ email, passwordHash, role, authmodSalt: authmod.salt, authmodVerifier: authmod.verifierCipher })
+  const user = UsersRepository.insert({
+    email,
+    passwordHash,
+    role,
+    authmodSalt: authmod.salt,
+    authmodVerifier: authmod.verifierCipher,
+  })
 
   // The ONE automatic node assignment every user gets: pick the most suitable
   // node by current load (no latency samples exist yet — see

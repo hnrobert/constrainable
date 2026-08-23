@@ -36,14 +36,11 @@ function resolveKatexPlugin(ns: unknown): (md: InstanceType<typeof MarkdownIt>) 
   return p as (md: InstanceType<typeof MarkdownIt>) => void
 }
 
-const md = new MarkdownIt({ html: false, breaks: true, linkify: true }).use(
-  resolveKatexPlugin(markdownItKatex),
-)
+const md = new MarkdownIt({ html: false, breaks: true, linkify: true }).use(resolveKatexPlugin(markdownItKatex))
 
 // Markdown links open in a new tab (guide links shouldn't navigate the app away).
 const defaultLinkOpen =
-  md.renderer.rules.link_open ??
-  ((tokens, idx, options, env, self) => self.renderToken(tokens, idx, options))
+  md.renderer.rules.link_open ?? ((tokens, idx, options, env, self) => self.renderToken(tokens, idx, options))
 md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
   const token = tokens[idx]
   if (token) {

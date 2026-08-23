@@ -58,7 +58,10 @@ function goSignIn(): void {
     <Card v-else-if="joined" class="border-ok/50">
       <CardHeader><CardTitle>You're in 🎉</CardTitle></CardHeader>
       <CardContent class="space-y-3">
-        <p>You joined the group <strong>{{ joined.groupName }}</strong>.</p>
+        <p>
+          You joined the group <strong>{{ joined.groupName }}</strong
+          >.
+        </p>
         <p class="text-sm text-muted-foreground">Events restricted to this group will now appear on your dashboard.</p>
         <Button as-child><NuxtLink to="/dashboard">Go to dashboard</NuxtLink></Button>
       </CardContent>
@@ -68,7 +71,9 @@ function goSignIn(): void {
     <Card v-else-if="user">
       <CardHeader><CardTitle>Join a group</CardTitle></CardHeader>
       <CardContent class="space-y-3">
-        <p>Signed in as <strong>{{ user.email }}</strong> — claim this invite to join its group.</p>
+        <p>
+          Signed in as <strong>{{ user.email }}</strong> — claim this invite to join its group.
+        </p>
         <Button :disabled="claiming" @click="claim">
           {{ claiming ? 'Claiming…' : 'Join group' }}
         </Button>

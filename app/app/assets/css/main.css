@@ -1,5 +1,5 @@
-@import "tailwindcss";
-@import "tw-animate-css";
+@import 'tailwindcss';
+@import 'tw-animate-css';
 /* prose classes for RichText (admin-authored Markdown) */
 @plugin "@tailwindcss/typography";
 
@@ -97,8 +97,15 @@
   body {
     @apply bg-background text-foreground antialiased;
     /* Keep the CJK-capable font stack from the previous theme. */
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
-      "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-family:
+      system-ui,
+      -apple-system,
+      'Segoe UI',
+      Roboto,
+      'Helvetica Neue',
+      'PingFang SC',
+      'Microsoft YaHei',
+      sans-serif;
     font-size: 14px;
     line-height: 1.5;
   }

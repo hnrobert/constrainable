@@ -104,7 +104,10 @@ export default defineEventHandler(async (event) => {
         event,
         ['-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', '-f', 'matroska', 'pipe:1'],
         'video/x-matroska',
-        `${segs[0]!.split('/').pop()!.replace(/\.mkv$/, '')}_merged.mkv`,
+        `${segs[0]!
+          .split('/')
+          .pop()!
+          .replace(/\.mkv$/, '')}_merged.mkv`,
       )
     }
     return pipeFfmpeg(
@@ -133,11 +136,7 @@ export default defineEventHandler(async (event) => {
   setHeader(event, 'accept-ranges', 'bytes')
   setHeader(event, 'cache-control', 'private, max-age=0')
   if (isDownload) {
-    setHeader(
-      event,
-      'content-disposition',
-      `attachment; filename="${encodeURIComponent(f.filename)}"`,
-    )
+    setHeader(event, 'content-disposition', `attachment; filename="${encodeURIComponent(f.filename)}"`)
   }
   const range = getRequestHeader(event, 'range')
   if (range) {

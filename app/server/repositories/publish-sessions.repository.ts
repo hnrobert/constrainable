@@ -5,11 +5,7 @@
  */
 import { and, desc, eq, inArray, isNull } from 'drizzle-orm'
 import { db } from '../database/db'
-import {
-  publishSessions,
-  type PublishSession,
-  type NewPublishSession,
-} from '../database/schema'
+import { publishSessions, type PublishSession, type NewPublishSession } from '../database/schema'
 
 export const PublishSessionsRepository = {
   findById(id: number): PublishSession | undefined {
@@ -75,10 +71,7 @@ export const PublishSessionsRepository = {
       })
       .from(publishSessions)
       .where(
-        and(
-          isNull(publishSessions.endedAt),
-          inArray(publishSessions.status, ['allowed', 'compliant', 'violating']),
-        ),
+        and(isNull(publishSessions.endedAt), inArray(publishSessions.status, ['allowed', 'compliant', 'violating'])),
       )
       .all()
   },
@@ -118,9 +111,6 @@ export const PublishSessionsRepository = {
     db.update(publishSessions).set(patch).where(eq(publishSessions.id, id)).run()
   },
   markEnded(id: number, status: PublishSession['status'], endedAt: Date): void {
-    db.update(publishSessions)
-      .set({ endedAt, status })
-      .where(eq(publishSessions.id, id))
-      .run()
+    db.update(publishSessions).set({ endedAt, status }).where(eq(publishSessions.id, id)).run()
   },
 }

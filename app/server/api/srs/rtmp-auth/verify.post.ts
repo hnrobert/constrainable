@@ -22,7 +22,9 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
   }
   const body = await readBody<{ email?: string; opaque?: string; challenge?: string; response?: string }>(event)
-  const email = String(body?.email ?? '').trim().toLowerCase()
+  const email = String(body?.email ?? '')
+    .trim()
+    .toLowerCase()
   const user = email ? UsersRepository.findByEmail(email) : undefined
   if (!user?.authmodVerifier) {
     // Unknown username: `known: false` lets the gateway treat this as placeholder

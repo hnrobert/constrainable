@@ -100,7 +100,10 @@ export default defineEventHandler(async (event) => {
       actor: email,
       detail: { error: err instanceof Error ? err.message : String(err) },
     })
-    throw createError({ statusCode: 502, statusMessage: 'Failed to send verification code, please try again later or contact the admin' })
+    throw createError({
+      statusCode: 502,
+      statusMessage: 'Failed to send verification code, please try again later or contact the admin',
+    })
   }
 
   audit('info', 'auth', `verification code sent: ${email}`, { actor: email })

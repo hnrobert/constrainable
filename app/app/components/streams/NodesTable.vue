@@ -114,7 +114,9 @@ function fmtDuration(ms: number): string {
       <button class="flex flex-col text-left" @click="toggle(row)">
         <span class="font-medium underline decoration-dotted underline-offset-4">{{ row.nodeId }}</span>
         <span class="font-mono text-[10px] text-muted-foreground">
-          {{ expanded.has(row.nodeId) ? '▾' : '▸' }} {{ row.assignedUsers }} user{{ row.assignedUsers === 1 ? '' : 's' }}
+          {{ expanded.has(row.nodeId) ? '▾' : '▸' }} {{ row.assignedUsers }} user{{
+            row.assignedUsers === 1 ? '' : 's'
+          }}
         </span>
       </button>
     </template>
@@ -127,10 +129,9 @@ function fmtDuration(ms: number): string {
     </template>
     <template #cell-quota="{ row }">
       <div class="flex items-center gap-1.5">
-        <span
-          class="tabular-nums"
-          :class="row.assignedUsers > row.maxUsers ? 'font-semibold text-destructive' : ''"
-        >{{ row.assignedUsers }}</span>
+        <span class="tabular-nums" :class="row.assignedUsers > row.maxUsers ? 'font-semibold text-destructive' : ''">{{
+          row.assignedUsers
+        }}</span>
         <span class="text-muted-foreground">/</span>
         <Input
           type="number"
@@ -146,7 +147,8 @@ function fmtDuration(ms: number): string {
           class="h-8"
           :disabled="capOf(row) === row.maxUsers || savingId === row.nodeId"
           @click="saveCap(row)"
-        >Set</Button>
+          >Set</Button
+        >
       </div>
     </template>
     <template #cell-connectedAt="{ row }">{{ fmtDuration(row.connectedAt) }}</template>
@@ -163,12 +165,18 @@ function fmtDuration(ms: number): string {
           <div class="flex items-center gap-1.5">
             <Select
               :disabled="movingId === u.id"
-              @update:model-value="(v: any) => v !== undefined && v !== row.nodeId && moveUser(u, v === AUTO ? null : String(v))"
+              @update:model-value="
+                (v: any) => v !== undefined && v !== row.nodeId && moveUser(u, v === AUTO ? null : String(v))
+              "
             >
               <SelectTrigger class="h-8 w-44"><SelectValue placeholder="Move to…" /></SelectTrigger>
               <SelectContent>
                 <SelectItem :value="AUTO">auto (lowest latency)</SelectItem>
-                <SelectItem v-for="n in props.nodes.filter((x) => x.nodeId !== row.nodeId)" :key="n.nodeId" :value="n.nodeId">
+                <SelectItem
+                  v-for="n in props.nodes.filter((x) => x.nodeId !== row.nodeId)"
+                  :key="n.nodeId"
+                  :value="n.nodeId"
+                >
                   {{ n.nodeId }}
                 </SelectItem>
               </SelectContent>

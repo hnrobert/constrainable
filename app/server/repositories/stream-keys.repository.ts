@@ -5,23 +5,12 @@
  */
 import { and, asc, eq } from 'drizzle-orm'
 import { db } from '../database/db'
-import {
-  streamKeys,
-  eventEnrollments,
-  students,
-  type StreamKey,
-  type NewStreamKey,
-} from '../database/schema'
+import { streamKeys, eventEnrollments, students, type StreamKey, type NewStreamKey } from '../database/schema'
 
 export const StreamKeysRepository = {
   /** on_publish hot path: all keys for a stream name (a reissue rotates in place). */
   findAllByStreamName(streamName: string): StreamKey[] {
-    return db
-      .select()
-      .from(streamKeys)
-      .where(eq(streamKeys.streamName, streamName))
-      .orderBy(asc(streamKeys.id))
-      .all()
+    return db.select().from(streamKeys).where(eq(streamKeys.streamName, streamName)).orderBy(asc(streamKeys.id)).all()
   },
   findByEventAndName(eventId: number, streamName: string): StreamKey | undefined {
     return db

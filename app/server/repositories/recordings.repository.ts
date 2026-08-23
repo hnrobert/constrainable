@@ -11,12 +11,7 @@ export const RecordingsRepository = {
     return db.select().from(recordings).orderBy(desc(recordings.startedAt)).all()
   },
   findByEvent(eventId: number): Recording[] {
-    return db
-      .select()
-      .from(recordings)
-      .where(eq(recordings.eventId, eventId))
-      .orderBy(desc(recordings.startedAt))
-      .all()
+    return db.select().from(recordings).where(eq(recordings.eventId, eventId)).orderBy(desc(recordings.startedAt)).all()
   },
   /**
    * Merge target: the most recent recording row for the same event + stream

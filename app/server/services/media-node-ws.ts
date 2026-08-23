@@ -131,10 +131,13 @@ export function onWsClose(peer: WsPeer): void {
     byNode.delete(conn.nodeId)
     // registry disconnect (lazy import: registry → handlers has no ws edge,
     // but keep this module importable from anywhere without cycles)
-    import('./media-node-registry').then(({ disconnect }) => {
-      disconnect(peer.id)
-      return import('./media-node-snapshot')
-    }).then(({ emitNodesChanged }) => emitNodesChanged()).catch(() => {})
+    import('./media-node-registry')
+      .then(({ disconnect }) => {
+        disconnect(peer.id)
+        return import('./media-node-snapshot')
+      })
+      .then(({ emitNodesChanged }) => emitNodesChanged())
+      .catch(() => {})
   }
   console.log(`[media-ws] peer closed: ${peer.id} (node ${conn.nodeId ?? '?'})`)
 }
@@ -187,44 +190,56 @@ export async function onWsMessage(peer: WsPeer, data: Uint8Array): Promise<void>
         prev.peer.close(4000, 'superseded by new connection')
       }
       byNode.set(r.nodeId, conn)
-      enqueue(conn, create(EnvelopeSchema, {
-        kind: { case: 'helloAck', value: create(HelloAckSchema, { nodeId: r.nodeId }) },
-      }))
-      enqueue(conn, create(EnvelopeSchema, {
-        kind: {
-          case: 'event',
-          value: create(EventSchema, {
-            body: {
-              case: 'limitsConfig',
-              value: create(LimitsConfigSchema, {
-                global: create(LimitsSchema, r.limitsConfig.global),
-                events: [],
-              }),
-            },
-          }),
-        },
-      }))
+      enqueue(
+        conn,
+        create(EnvelopeSchema, {
+          kind: { case: 'helloAck', value: create(HelloAckSchema, { nodeId: r.nodeId }) },
+        }),
+      )
+      enqueue(
+        conn,
+        create(EnvelopeSchema, {
+          kind: {
+            case: 'event',
+            value: create(EventSchema, {
+              body: {
+                case: 'limitsConfig',
+                value: create(LimitsConfigSchema, {
+                  global: create(LimitsSchema, r.limitsConfig.global),
+                  events: [],
+                }),
+              },
+            }),
+          },
+        }),
+      )
       return
     }
 
     case 'heartbeat': {
-      enqueue(conn, create(EnvelopeSchema, {
-        kind: {
-          case: 'heartbeatAck',
-          value: create(HeartbeatAckSchema, { echoedSentAtMs: kind.value.sentAtMs }),
-        },
-      }))
+      enqueue(
+        conn,
+        create(EnvelopeSchema, {
+          kind: {
+            case: 'heartbeatAck',
+            value: create(HeartbeatAckSchema, { echoedSentAtMs: kind.value.sentAtMs }),
+          },
+        }),
+      )
       return
     }
 
     case 'rpcRequest': {
       void handleRpcRequest(conn, kind.value).then((body) => {
-        enqueue(conn, create(EnvelopeSchema, {
-          kind: {
-            case: 'rpcResponse',
-            value: create(RpcResponseSchema, { seq: kind.value.seq, body }),
-          },
-        }))
+        enqueue(
+          conn,
+          create(EnvelopeSchema, {
+            kind: {
+              case: 'rpcResponse',
+              value: create(RpcResponseSchema, { seq: kind.value.seq, body }),
+            },
+          }),
+        )
       })
       return
     }
@@ -311,12 +326,15 @@ async function handleRpcRequest(_conn: WsConn, req: RpcRequest): Promise<RpcResp
       const v = body.value
       return {
         case: 'authVerify',
-        value: create(AuthVerifyResponseSchema, handleAuthVerify(_conn.nodeId, {
-          email: v.email,
-          opaque: v.opaque,
-          challenge: v.challenge,
-          response: v.response,
-        })),
+        value: create(
+          AuthVerifyResponseSchema,
+          handleAuthVerify(_conn.nodeId, {
+            email: v.email,
+            opaque: v.opaque,
+            challenge: v.challenge,
+            response: v.response,
+          }),
+        ),
       }
     }
     case 'authPolicy': {
@@ -434,9 +452,12 @@ function rpcCall(conn: WsConn, body: RpcRequest['body'], timeoutMs: number): Pro
         reject(err)
       },
     })
-    enqueue(conn, create(EnvelopeSchema, {
-      kind: { case: 'rpcRequest', value: create(RpcRequestSchema, { seq, body }) },
-    }))
+    enqueue(
+      conn,
+      create(EnvelopeSchema, {
+        kind: { case: 'rpcRequest', value: create(RpcRequestSchema, { seq, body }) },
+      }),
+    )
   })
 }
 

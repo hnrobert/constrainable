@@ -68,6 +68,14 @@ jobs:
         working-directory: app
         run: bun install && bun run typecheck
 
+      - name: Format check
+        working-directory: app
+        run: bun run format:check
+
+      - name: Lint
+        working-directory: app
+        run: bun run lint
+
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v6

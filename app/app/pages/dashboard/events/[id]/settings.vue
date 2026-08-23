@@ -74,7 +74,14 @@ const settingsDirty = computed(() => {
     Number(limits.maxFps || 0) !== (lo.maxFps ?? 0) ||
     Number(limits.maxVideoBitrateKbps || 0) !== (lo.maxVideoBitrateKbps ?? 0) ||
     Number(limits.maxAudioBitrateKbps || 0) !== (lo.maxAudioBitrateKbps ?? 0)
-  return scalarChanged || limitsChanged || !sameSet(selectedGroupIds.value, e.groups.map((g) => g.id))
+  return (
+    scalarChanged ||
+    limitsChanged ||
+    !sameSet(
+      selectedGroupIds.value,
+      e.groups.map((g) => g.id),
+    )
+  )
 })
 
 const visibilityLabel: Record<EventVisibility, string> = {
@@ -212,8 +219,6 @@ function discardAndLeave(): void {
   proceed()
 }
 
-
-
 async function copy(text: string, label = 'Copied'): Promise<void> {
   try {
     await navigator.clipboard.writeText(text)
@@ -251,8 +256,7 @@ watch(
 )
 
 const windowIncomplete = computed(
-  () =>
-    settings.value?.status === 'scheduled' && (startsAtLocal.value === '' || endsAtLocal.value === ''),
+  () => settings.value?.status === 'scheduled' && (startsAtLocal.value === '' || endsAtLocal.value === ''),
 )
 const windowReversed = computed(
   () =>
@@ -268,7 +272,6 @@ const statusOptions: { value: EventStatus; label: string }[] = [
   { value: 'ended', label: 'Ended' },
   { value: 'archived', label: 'Archived' },
 ]
-
 </script>
 
 <template>
@@ -309,8 +312,8 @@ const statusOptions: { value: EventStatus; label: string }[] = [
               </SelectContent>
             </Select>
             <p class="text-xs text-muted-foreground">
-              Only <strong>Live</strong> accepts streams. Scheduled opens automatically at the
-              start time; both close automatically at the end time (active streams are cut).
+              Only <strong>Live</strong> accepts streams. Scheduled opens automatically at the start time; both close
+              automatically at the end time (active streams are cut).
             </p>
           </div>
           <div class="space-y-1.5">
@@ -323,14 +326,9 @@ const statusOptions: { value: EventStatus; label: string }[] = [
           <div class="space-y-1.5">
             <Label>Ends at {{ ['scheduled', 'live'].includes(settings.status) ? '*' : '' }}</Label>
             <Input v-model="endsAtLocal" type="datetime-local" />
-            <p v-if="windowIncomplete" class="text-xs text-destructive">
-              Scheduled events need both times.
-            </p>
+            <p v-if="windowIncomplete" class="text-xs text-destructive">Scheduled events need both times.</p>
             <p v-else-if="windowReversed" class="text-xs text-destructive">End must be after start.</p>
-            <p
-              v-else-if="settings.status === 'live' && endsAtLocal"
-              class="text-xs text-muted-foreground"
-            >
+            <p v-else-if="settings.status === 'live' && endsAtLocal" class="text-xs text-muted-foreground">
               At this time the event flips to <strong>ended</strong> and all its streams are cut.
             </p>
           </div>
@@ -353,9 +351,13 @@ const statusOptions: { value: EventStatus; label: string }[] = [
                    the exact multi-select semantics without changing script logic. -->
               <label v-for="g in allGroups" :key="g.id" class="flex items-center gap-2 text-sm">
                 <input type="checkbox" :value="g.id" v-model="selectedGroupIds" class="size-4" />
-                <span>{{ g.name }} <span class="text-muted-foreground">({{ g.memberCount }})</span></span>
+                <span
+                  >{{ g.name }} <span class="text-muted-foreground">({{ g.memberCount }})</span></span
+                >
               </label>
-              <p v-if="!allGroups.length" class="text-xs text-muted-foreground">No groups exist yet — create some on the Groups page first.</p>
+              <p v-if="!allGroups.length" class="text-xs text-muted-foreground">
+                No groups exist yet — create some on the Groups page first.
+              </p>
             </div>
           </div>
           <div class="space-y-1.5 sm:col-span-2">
@@ -384,18 +386,17 @@ const statusOptions: { value: EventStatus; label: string }[] = [
           <Label for="record-enabled" class="cursor-pointer">Enable recording for this event</Label>
         </div>
         <p class="text-xs text-muted-foreground">
-          Compliant publishes are archived in real time as MKV — no processing happens when a stream stops.
-          A user's re-publishes append to the same recording.
+          Compliant publishes are archived in real time as MKV — no processing happens when a stream stops. A user's
+          re-publishes append to the same recording.
         </p>
         <div class="flex items-start gap-2">
           <Checkbox v-model="settings.strictLimits" id="strict-limits" class="mt-1" />
           <Label for="strict-limits" class="cursor-pointer">
             Strict limits
             <span class="block text-xs font-normal text-muted-foreground">
-              A stream whose DECLARED settings (checked at connect) violate the limits below is
-              rejected immediately — the publisher gets an OBS error before a single frame is
-              relayed and can reconnect as soon as their settings comply. No ban is recorded.
-              Without this, breaches are only flagged on the dashboard.
+              A stream whose DECLARED settings (checked at connect) violate the limits below is rejected immediately —
+              the publisher gets an OBS error before a single frame is relayed and can reconnect as soon as their
+              settings comply. No ban is recorded. Without this, breaches are only flagged on the dashboard.
             </span>
           </Label>
         </div>
@@ -404,9 +405,9 @@ const statusOptions: { value: EventStatus; label: string }[] = [
           <Label for="enforce-measured" class="cursor-pointer">
             Also enforce on measured data
             <span class="block text-xs font-normal text-muted-foreground">
-              Keep checking the ACTUAL stream (5s averages) after connect — catches mid-stream
-              setting changes and forged declarations. Without this, only the encoder's declared
-              values are checked once at connect (and only enforced when strict limits is on).
+              Keep checking the ACTUAL stream (5s averages) after connect — catches mid-stream setting changes and
+              forged declarations. Without this, only the encoder's declared values are checked once at connect (and
+              only enforced when strict limits is on).
             </span>
           </Label>
         </div>
@@ -432,7 +433,8 @@ const statusOptions: { value: EventStatus; label: string }[] = [
             <Input v-model="limits.maxAudioBitrateKbps" type="number" min="0" placeholder="Inherit global" />
           </div>
           <p class="text-xs text-muted-foreground sm:col-span-2">
-            Streams above these caps are flagged (or kicked, per the enforcement mode); blank fields inherit the global config.
+            Streams above these caps are flagged (or kicked, per the enforcement mode); blank fields inherit the global
+            config.
           </p>
         </div>
       </CardContent>
@@ -443,8 +445,8 @@ const statusOptions: { value: EventStatus; label: string }[] = [
       <CardHeader>
         <CardTitle class="text-destructive">Danger zone</CardTitle>
         <CardDescription>
-          Deleting removes the event with its roster, stream keys, publish sessions, audit history,
-          event-scoped recordings and bans. There is no undo.
+          Deleting removes the event with its roster, stream keys, publish sessions, audit history, event-scoped
+          recordings and bans. There is no undo.
         </CardDescription>
       </CardHeader>
       <CardContent>

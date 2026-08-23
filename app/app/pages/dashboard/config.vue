@@ -49,8 +49,18 @@ const sections: Section[] = [
       { path: 'limits.maxWidth', label: 'Max width (px)', kind: 'number', hint: '0 = no limit' },
       { path: 'limits.maxHeight', label: 'Max height (px)', kind: 'number', hint: '0 = no limit' },
       { path: 'limits.maxFps', label: 'Max framerate (fps)', kind: 'number', hint: '0 = no limit' },
-      { path: 'limits.maxVideoBitrateKbps', label: 'Max video bitrate (kbps)', kind: 'number', hint: '0 = no limit; matches the OBS Video Bitrate field (audio not counted)' },
-      { path: 'limits.maxAudioBitrateKbps', label: 'Max audio bitrate (kbps)', kind: 'number', hint: '0 = no limit; matches OBS Output → Audio bitrate' },
+      {
+        path: 'limits.maxVideoBitrateKbps',
+        label: 'Max video bitrate (kbps)',
+        kind: 'number',
+        hint: '0 = no limit; matches the OBS Video Bitrate field (audio not counted)',
+      },
+      {
+        path: 'limits.maxAudioBitrateKbps',
+        label: 'Max audio bitrate (kbps)',
+        kind: 'number',
+        hint: '0 = no limit; matches OBS Output → Audio bitrate',
+      },
     ],
   },
   {
@@ -60,21 +70,29 @@ const sections: Section[] = [
       { path: 'probe.retries', label: 'Retry count on failure', kind: 'number' },
       { path: 'probe.retryIntervalMs', label: 'Retry interval (ms)', kind: 'number' },
       { path: 'probe.timeoutMs', label: 'Single probe timeout (ms)', kind: 'number' },
-      { path: 'probe.pollIntervalMs', label: 'Polling interval (ms)', kind: 'number', hint: 'Interval between probes for active sessions' },
+      {
+        path: 'probe.pollIntervalMs',
+        label: 'Polling interval (ms)',
+        kind: 'number',
+        hint: 'Interval between probes for active sessions',
+      },
     ],
   },
   {
     title: 'Concurrency',
-    fields: [
-      { path: 'concurrency.probeMax', label: 'ffprobe max concurrency', kind: 'number' },
-    ],
+    fields: [{ path: 'concurrency.probeMax', label: 'ffprobe max concurrency', kind: 'number' }],
   },
   {
     title: 'Recording',
     fields: [
       { path: 'record.enabled', label: 'Enable recording', kind: 'bool' },
       { path: 'record.maxConcurrency', label: 'ffmpeg recording max concurrency', kind: 'number' },
-      { path: 'record.retentionDays', label: 'Recording retention days', kind: 'number', hint: '0 = retain forever; takes effect on next cleanup' },
+      {
+        path: 'record.retentionDays',
+        label: 'Recording retention days',
+        kind: 'number',
+        hint: '0 = retain forever; takes effect on next cleanup',
+      },
       { path: 'record.remuxTimeoutMs', label: 'FLV→MP4 remux timeout (ms)', kind: 'number' },
     ],
   },
@@ -82,7 +100,12 @@ const sections: Section[] = [
     title: 'SRS Connection (Advanced)',
     fields: [
       { path: 'srs.apiBase', label: 'SRS HTTP API', kind: 'text' },
-      { path: 'srs.rtmpHost', label: 'SRS RTMP host', kind: 'text', hint: 'Server pull address (in-container hostname)' },
+      {
+        path: 'srs.rtmpHost',
+        label: 'SRS RTMP host',
+        kind: 'text',
+        hint: 'Server pull address (in-container hostname)',
+      },
     ],
   },
 ]
@@ -138,10 +161,7 @@ const announcementPoolText = computed<string>({
 })
 
 const dirty = computed(
-  () =>
-    form.value != null &&
-    data.value != null &&
-    JSON.stringify(form.value) !== JSON.stringify(data.value),
+  () => form.value != null && data.value != null && JSON.stringify(form.value) !== JSON.stringify(data.value),
 )
 
 async function save(): Promise<boolean> {
@@ -185,14 +205,19 @@ function discardAndLeave(): void {
     <div class="flex flex-wrap items-center justify-between gap-4">
       <div class="space-y-1">
         <h1 class="text-2xl font-semibold">Runtime Configuration</h1>
-        <p class="text-muted-foreground">Hot-reloads on save: new sessions use the new values immediately; active sessions pick them up on the next probe.</p>
+        <p class="text-muted-foreground">
+          Hot-reloads on save: new sessions use the new values immediately; active sessions pick them up on the next
+          probe.
+        </p>
       </div>
       <Badge v-if="dirty" variant="warning">Unsaved changes</Badge>
     </div>
 
     <div v-if="form" class="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] items-stretch gap-4">
       <Card v-for="s in sections" :key="s.title">
-        <CardHeader><CardTitle>{{ s.title }}</CardTitle></CardHeader>
+        <CardHeader
+          ><CardTitle>{{ s.title }}</CardTitle></CardHeader
+        >
         <CardContent class="space-y-3">
           <FieldRow
             v-for="f in s.fields"
@@ -217,11 +242,7 @@ function discardAndLeave(): void {
               :model-value="getPath(form, f.path)"
               @update:model-value="onInput(f.path, f.kind, $event)"
             />
-            <Checkbox
-              v-else
-              :model-value="getPath(form, f.path)"
-              @update:model-value="setPath(form, f.path, $event)"
-            />
+            <Checkbox v-else :model-value="getPath(form, f.path)" @update:model-value="setPath(form, f.path, $event)" />
           </FieldRow>
         </CardContent>
       </Card>
@@ -237,9 +258,8 @@ function discardAndLeave(): void {
               placeholder="e.g. Maintenance window Saturday 02:00–03:00 —&#10;recording may pause briefly."
             />
             <template #hint>
-              Shown to every signed-in user on their dashboard home, alongside their own private
-              note. Markdown supported (formulas, mermaid). Leave empty to hide the card.
-              Hot-reloads on save.
+              Shown to every signed-in user on their dashboard home, alongside their own private note. Markdown
+              supported (formulas, mermaid). Leave empty to hide the card. Hot-reloads on save.
             </template>
           </FieldRow>
           <FieldRow label="Login popup notice (markdown)">
@@ -250,9 +270,8 @@ function discardAndLeave(): void {
               placeholder="e.g. **Contest starts Saturday 09:00** —&#10;finish your OBS setup tonight (see your event guide)."
             />
             <template #hint>
-              Shown as a popup exactly ONCE, right after a user signs in or
-              registers (cookie-restored sessions never trigger it). Markdown
-              supported (formulas, mermaid). Leave empty to disable.
+              Shown as a popup exactly ONCE, right after a user signs in or registers (cookie-restored sessions never
+              trigger it). Markdown supported (formulas, mermaid). Leave empty to disable.
             </template>
           </FieldRow>
           <FieldRow label="New-user announcement pool (one per line, newest on top)">
@@ -263,9 +282,8 @@ function discardAndLeave(): void {
               placeholder="Room 3-201 — arrive 30 minutes early&#10;Room 4-105 — bring your own headset"
             />
             <template #hint>
-              Every NEW registration pops the TOP line: it becomes that user's dashboard
-              announcement and the line is consumed (removed here). Empty pool = new users start
-              without an announcement.
+              Every NEW registration pops the TOP line: it becomes that user's dashboard announcement and the line is
+              consumed (removed here). Empty pool = new users start without an announcement.
             </template>
           </FieldRow>
         </CardContent>
@@ -283,8 +301,8 @@ function discardAndLeave(): void {
             />
             <template #hint>
               Markdown supported — line breaks, lists, LaTeX formulas (<code>$x^2$</code>) and
-              <code>mermaid</code> diagrams. Rendered as a panel atop the register form; leave
-              empty to hide it. Hot-reloads on save.
+              <code>mermaid</code> diagrams. Rendered as a panel atop the register form; leave empty to hide it.
+              Hot-reloads on save.
             </template>
           </FieldRow>
         </CardContent>
@@ -293,16 +311,32 @@ function discardAndLeave(): void {
       <Card>
         <CardHeader><CardTitle>Registration Email Restrictions</CardTitle></CardHeader>
         <CardContent class="space-y-3">
-          <FieldRow label="Enable email whitelist" inline hint="When enabled, only emails matching the wildcards below may register; leave empty to allow all">
+          <FieldRow
+            label="Enable email whitelist"
+            inline
+            hint="When enabled, only emails matching the wildcards below may register; leave empty to allow all"
+          >
             <Checkbox v-model="form.registration.emailWhitelist.enabled" />
           </FieldRow>
           <FieldRow label="Allowed email wildcards (one per line)">
-            <Textarea v-model="whitelistText" rows="4" class="w-full" placeholder="*@nottingham.edu.cn&#10;*@*.nottingham.edu.cn" />
-            <template #hint>picomatch wildcards, e.g. <code class="rounded bg-muted px-1 text-[0.85em]">*@nottingham.edu.cn</code>. The first admin registration is exempt.</template>
+            <Textarea
+              v-model="whitelistText"
+              rows="4"
+              class="w-full"
+              placeholder="*@nottingham.edu.cn&#10;*@*.nottingham.edu.cn"
+            />
+            <template #hint
+              >picomatch wildcards, e.g. <code class="rounded bg-muted px-1 text-[0.85em]">*@nottingham.edu.cn</code>.
+              The first admin registration is exempt.</template
+            >
           </FieldRow>
           <FieldRow label="Disallowed email patterns (one per line)">
             <Textarea v-model="disallowedText" rows="3" class="w-full" placeholder="student&#10;staff" />
-            <template #hint>Emails containing these words (case-insensitive) are always rejected, e.g. institutional mailing lists <code class="rounded bg-muted px-1 text-[0.85em]">student</code> / <code class="rounded bg-muted px-1 text-[0.85em]">staff</code>.</template>
+            <template #hint
+              >Emails containing these words (case-insensitive) are always rejected, e.g. institutional mailing lists
+              <code class="rounded bg-muted px-1 text-[0.85em]">student</code> /
+              <code class="rounded bg-muted px-1 text-[0.85em]">staff</code>.</template
+            >
           </FieldRow>
         </CardContent>
       </Card>

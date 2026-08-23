@@ -12,12 +12,7 @@ export const StreamBansRepository = {
     return db.select().from(streamBans).orderBy(desc(streamBans.createdAt)).all()
   },
   listByEvent(eventId: number): StreamBan[] {
-    return db
-      .select()
-      .from(streamBans)
-      .where(eq(streamBans.eventId, eventId))
-      .orderBy(desc(streamBans.createdAt))
-      .all()
+    return db.select().from(streamBans).where(eq(streamBans.eventId, eventId)).orderBy(desc(streamBans.createdAt)).all()
   },
   /** Site-wide bans (eventId NULL). */
   listSiteWide(): StreamBan[] {
@@ -37,7 +32,11 @@ export const StreamBansRepository = {
     if (eventId != null) {
       conds.push(and(eq(streamBans.email, email), eq(streamBans.eventId, eventId)))
     }
-    return db.select().from(streamBans).where(or(...conds)).all()
+    return db
+      .select()
+      .from(streamBans)
+      .where(or(...conds))
+      .all()
   },
   /** Ban covering (email, event) — site-wide OR this specific event. (gateway publish check) */
   findBlocking(email: string, eventId: number | null | undefined): StreamBan | undefined {
@@ -56,7 +55,14 @@ export const StreamBansRepository = {
       .where(eq(streamBans.bannedBy, 'system:strict-limits'))
       .all()
     if (stale.length > 0) {
-      db.delete(streamBans).where(inArray(streamBans.id, stale.map((r) => r.id))).run()
+      db.delete(streamBans)
+        .where(
+          inArray(
+            streamBans.id,
+            stale.map((r) => r.id),
+          ),
+        )
+        .run()
     }
     return stale.length
   },

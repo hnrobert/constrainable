@@ -58,10 +58,7 @@ export function assignmentView(userId: number): AssignmentView {
  * and only if — the user has no node yet, this is their one-time automatic
  * assignment. Returns the user's nodeId after the (possible) backfill.
  */
-export function recordVisit(
-  userId: number,
-  latencies: { nodeId: string; latencyMs: number }[],
-): string | null {
+export function recordVisit(userId: number, latencies: { nodeId: string; latencyMs: number }[]): string | null {
   const known = new Set(listNodes().map((n) => n.nodeId))
   for (const l of latencies) {
     // clamp: bogus client values can't poison the table
@@ -99,9 +96,7 @@ export function allocate(userId: number): string | null {
   const nodes = listNodes()
   if (nodes.length === 0) return null
 
-  const measured = new Map(
-    NodeLatenciesRepository.forUser(userId).map((l) => [l.nodeId, l.latencyMs]),
-  )
+  const measured = new Map(NodeLatenciesRepository.forUser(userId).map((l) => [l.nodeId, l.latencyMs]))
   const candidates = nodes.map((n) => {
     const max = NodeSettingsRepository.getMaxUsers(n.nodeId)
     const assigned = NodeSettingsRepository.assignedCount(n.nodeId)
@@ -114,9 +109,7 @@ export function allocate(userId: number): string | null {
   })
 
   // under-quota by latency (ties → lower load ratio); measured beats unmeasured
-  const free = candidates
-    .filter((c) => c.underQuota)
-    .sort((a, b) => a.latency - b.latency || a.ratio - b.ratio)
+  const free = candidates.filter((c) => c.underQuota).sort((a, b) => a.latency - b.latency || a.ratio - b.ratio)
   if (free.length > 0) return free[0]!.nodeId
 
   // everything at capacity → least-overloaded (minimal overshoot per node)

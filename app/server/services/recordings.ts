@@ -76,9 +76,7 @@ export function listRecordings(filters: RecordingFilters = {}): RecordingView[] 
   if (filters.q) {
     const q = filters.q.toLowerCase()
     rows = rows.filter(
-      (r) =>
-        r.streamName.toLowerCase().includes(q) ||
-        (r.studentLabel ?? '').toLowerCase().includes(q),
+      (r) => r.streamName.toLowerCase().includes(q) || (r.studentLabel ?? '').toLowerCase().includes(q),
     )
   }
   return rows.map(toView)
@@ -214,7 +212,7 @@ export function dispatchRecEnd(payload: { reqId?: string; error?: string }): voi
   const entry = pendingPulls.get(payload?.reqId ?? '')
   if (entry) {
     entry.onEnd(payload)
-    pendingPulls.delete(payload?.reqId!)
+    pendingPulls.delete(payload?.reqId ?? '')
   }
 }
 
@@ -304,11 +302,9 @@ export async function materializeRemoteSegments(
           finish(e instanceof Error ? e : new Error('node did not start the file transfer'))
         })
       } else {
-        socket!
-          .timeout(REC_PULL_START_TIMEOUT_MS)
-          .emit('node:rec:pull', { reqId, relPath: safe }, (err: unknown) => {
-            if (err) finish(new Error('node did not start the file transfer (old firmware?) — update the node'))
-          })
+        socket!.timeout(REC_PULL_START_TIMEOUT_MS).emit('node:rec:pull', { reqId, relPath: safe }, (err: unknown) => {
+          if (err) finish(new Error('node did not start the file transfer (old firmware?) — update the node'))
+        })
       }
     })
   }

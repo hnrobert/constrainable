@@ -38,9 +38,7 @@ function toView(b: {
 }
 
 export function listBans(eventId?: number | null): StreamBanView[] {
-  return (eventId != null ? StreamBansRepository.listByEvent(eventId) : StreamBansRepository.listAll()).map(
-    toView,
-  )
+  return (eventId != null ? StreamBansRepository.listByEvent(eventId) : StreamBansRepository.listAll()).map(toView)
 }
 
 export function isSiteWideBanned(email: string): boolean {
@@ -76,9 +74,10 @@ export function ban(input: {
   const email = input.email.trim().toLowerCase()
   if (!email) throw createError({ statusCode: 400, statusMessage: 'email is required' })
   const eventId = input.eventId ?? null
-  const existing = eventId == null
-    ? StreamBansRepository.findSiteWide(email)
-    : StreamBansRepository.listByEvent(eventId).find((b) => b.email === email)
+  const existing =
+    eventId == null
+      ? StreamBansRepository.findSiteWide(email)
+      : StreamBansRepository.listByEvent(eventId).find((b) => b.email === email)
   if (existing) {
     return toView(existing)
   }

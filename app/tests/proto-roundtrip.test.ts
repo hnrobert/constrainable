@@ -17,9 +17,7 @@ describe('control.v1 envelope', () => {
     expect(req?.body?.case).toBe('whepRelay')
     const whep = req?.body?.case === 'whepRelay' ? req.body.value : undefined
     expect(whep?.streamName).toBe('demo')
-    expect(Buffer.from(whep?.offerSdp ?? []).toString('hex')).toBe(
-      '763d300d0a6f666665722d7364702d627974657300ff',
-    )
+    expect(Buffer.from(whep?.offerSdp ?? []).toString('hex')).toBe('763d300d0a6f666665722d7364702d627974657300ff')
 
     const re = toBinary(EnvelopeSchema, env)
     expect(Buffer.compare(Buffer.from(bin), Buffer.from(re))).toBe(0)

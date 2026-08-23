@@ -66,7 +66,8 @@ async function onDeleted(): Promise<void> {
     <div class="space-y-1">
       <h2 class="text-lg font-semibold">Recordings</h2>
       <p class="text-muted-foreground">
-        Archived recordings of compliant streams for this event. A user's re-publishes are merged into one chronological file.
+        Archived recordings of compliant streams for this event. A user's re-publishes are merged into one chronological
+        file.
       </p>
     </div>
 

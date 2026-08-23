@@ -5,7 +5,6 @@
  */
 import { listAudit } from '../../services/audit'
 import { AUDIT_CATEGORIES, AUDIT_LEVELS } from '#shared/audit'
-import type { AuditCategory, AuditLevel } from '#shared/events'
 
 /** Coerce a raw query value into one of the allowed enum values, else null. */
 function pick<T extends string>(v: string | null | undefined, allowed: readonly T[]): T | null {

@@ -14,9 +14,7 @@ export default defineNitroPlugin(() => {
     try {
       const r = runEventLifecycle()
       if (r.started || r.ended || r.killed) {
-        console.log(
-          `[event-lifecycle] started=${r.started} ended=${r.ended} streamsCut=${r.killed}`,
-        )
+        console.log(`[event-lifecycle] started=${r.started} ended=${r.ended} streamsCut=${r.killed}`)
       }
     } catch (err) {
       console.error('[event-lifecycle] tick failed:', err)

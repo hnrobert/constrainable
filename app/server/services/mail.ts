@@ -100,7 +100,7 @@ async function sendViaPost(c: MailConfig, input: SendMailInput): Promise<string>
   } catch (e) {
     // email-poster formats HTTP failures as "Webhook returned <status>: <detail>";
     // surface that verbatim, fall back for non-Error throws.
-    throw new Error(e instanceof Error ? e.message : 'Webhook send failed')
+    throw new Error(e instanceof Error ? e.message : 'Webhook send failed', { cause: e })
   }
 }
 

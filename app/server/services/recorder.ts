@@ -13,7 +13,7 @@ import { env } from '../utils/env'
 import { getConfig } from '../utils/config-store'
 import { safeName } from '../utils/filename'
 import { buildFlvPullUrl } from '../utils/srs-url'
-import { awaitExitOrKill, quitFfmpeg, readStream, type AnyProc } from '../utils/process'
+import { quitFfmpeg, type AnyProc } from '../utils/process'
 import { RecordingsRepository } from '../repositories/recordings.repository'
 import { emit } from '../utils/bus'
 
@@ -31,12 +31,7 @@ interface Handle {
 const handles = new Map<string, Handle>()
 
 /** Push-start: begin recording to a temp FLV immediately on publish. */
-export function startRecording(
-  streamName: string,
-  app: string,
-  vhost: string,
-  clientId: string,
-): void {
+export function startRecording(streamName: string, app: string, vhost: string, clientId: string): void {
   const cfg = getConfig()
   if (!cfg.record.enabled) return
   // bounded concurrency: once at cap, new streams are not recorded (existing
@@ -152,8 +147,7 @@ async function finalizeRecording(
     // ignore
   }
 
-  const prev =
-    eventId != null ? RecordingsRepository.findMergeTarget(eventId, streamName) : undefined
+  const prev = eventId != null ? RecordingsRepository.findMergeTarget(eventId, streamName) : undefined
   if (prev) {
     const segs: string[] = prev.segments ? JSON.parse(prev.segments) : [prev.filePath]
     segs.push(rel)

@@ -7,7 +7,9 @@
  * the NEW password from that moment.
  */
 definePageMeta({ layout: 'default' })
-useAuth().fetchSession().catch(() => null)
+useAuth()
+  .fetchSession()
+  .catch(() => null)
 
 const { user, logout } = useAuth()
 const toast = useToast()
@@ -18,9 +20,7 @@ const saving = ref(false)
 
 const mismatch = computed(() => confirm.value !== '' && newPassword.value !== confirm.value)
 const tooShort = computed(() => newPassword.value !== '' && newPassword.value.length < 6)
-const sameAsCurrent = computed(
-  () => newPassword.value !== '' && newPassword.value === currentPassword.value,
-)
+const sameAsCurrent = computed(() => newPassword.value !== '' && newPassword.value === currentPassword.value)
 const canSave = computed(
   () =>
     currentPassword.value !== '' &&
@@ -68,8 +68,8 @@ async function changePassword(): Promise<void> {
       <CardHeader>
         <CardTitle>Change password</CardTitle>
         <CardDescription>
-          Requires your current password. The new one applies to the website AND to OBS'
-          "Use authentication" sign-in immediately.
+          Requires your current password. The new one applies to the website AND to OBS' "Use authentication" sign-in
+          immediately.
         </CardDescription>
       </CardHeader>
       <CardContent class="max-w-md space-y-4">
@@ -81,9 +81,7 @@ async function changePassword(): Promise<void> {
           <Label for="new">New password</Label>
           <Input id="new" v-model="newPassword" type="password" autocomplete="new-password" />
           <p v-if="tooShort" class="text-xs text-destructive">At least 6 characters.</p>
-          <p v-else-if="sameAsCurrent" class="text-xs text-destructive">
-            Must differ from the current password.
-          </p>
+          <p v-else-if="sameAsCurrent" class="text-xs text-destructive">Must differ from the current password.</p>
         </div>
         <div class="space-y-1.5">
           <Label for="conf">Confirm new password</Label>

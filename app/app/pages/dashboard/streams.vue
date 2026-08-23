@@ -17,9 +17,7 @@ function watchStream(name: string): void {
   watching.value = name.trim() || null
 }
 
-const list = computed(() =>
-  [...sessions.value.values()].sort((a, b) => b.startedAt - a.startedAt),
-)
+const list = computed(() => [...sessions.value.values()].sort((a, b) => b.startedAt - a.startedAt))
 const eventLabels = computed<Record<number, string>>(() =>
   Object.fromEntries((events.value ?? []).map((e) => [e.id, e.name])),
 )
@@ -44,9 +42,7 @@ onMounted(() => {
   socket.on('session:stop', (s: SessionSnapshot) => {
     sessions.value.delete(s.sessionId)
   })
-  socket.on('recording:ready', (r: RecordingSnapshot) =>
-    toast.success(`Recording ready: ${r.streamName}`),
-  )
+  socket.on('recording:ready', (r: RecordingSnapshot) => toast.success(`Recording ready: ${r.streamName}`))
   socket.on('config:changed', () => toast.info('Runtime config hot-reloaded'))
 })
 
@@ -149,7 +145,8 @@ watch([pageSize, sortBy], () => (pageNo.value = 1))
       <CardHeader>
         <CardTitle>Watch Live</CardTitle>
         <CardDescription>
-          Click "Watch" in the table above, or enter a stream name to play manually. The browser connects directly to SRS.
+          Click "Watch" in the table above, or enter a stream name to play manually. The browser connects directly to
+          SRS.
         </CardDescription>
       </CardHeader>
       <CardContent class="space-y-3">
@@ -172,7 +169,9 @@ watch([pageSize, sortBy], () => (pageNo.value = 1))
         <strong>Last violation:</strong>
         {{ lastViolation.streamName }} —
         {{ lastViolation.reasons.join('; ') }}
-        <span class="text-muted-foreground">({{ new Date(lastViolation.startedAt).toLocaleTimeString('en-US', { hour12: false }) }})</span>
+        <span class="text-muted-foreground"
+          >({{ new Date(lastViolation.startedAt).toLocaleTimeString('en-US', { hour12: false }) }})</span
+        >
       </CardContent>
     </Card>
   </div>

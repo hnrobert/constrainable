@@ -29,8 +29,8 @@ import (
 )
 
 const (
-	wsHelloTimeout    = 10 * time.Second
-	wsHeartbeatEvery  = 25 * time.Second // mirrors engine.io pingInterval
+	wsHelloTimeout   = 10 * time.Second
+	wsHeartbeatEvery = 25 * time.Second // mirrors engine.io pingInterval
 )
 
 // WsClient manages the persistent WebSocket control connection. Its external
@@ -179,11 +179,11 @@ func (c *WsClient) connectOnce() error {
 		Version:    reg.Version,
 		AuthToken:  c.token,
 		Endpoints: &controlv1.PublicEndpoints{
-			PublicOrigin:     reg.PublicOrigin,
-			PublicRtmpPort:   int32(reg.PublicRTMPPort),
+			PublicOrigin:       reg.PublicOrigin,
+			PublicRtmpPort:     int32(reg.PublicRTMPPort),
 			PublicProbeUdpPort: int32(reg.PublicProbeUDPPort),
-			PublicSrsUdpPort: int32(reg.PublicSrsUDPPort),
-			SrsFlvBase:       reg.SRSFlvBase,
+			PublicSrsUdpPort:   int32(reg.PublicSrsUDPPort),
+			SrsFlvBase:         reg.SRSFlvBase,
 		},
 	}
 	if err := c.sendEnvelope(&controlv1.Envelope{Kind: &controlv1.Envelope_Hello{Hello: hello}}); err != nil {

@@ -35,14 +35,20 @@ function parseArgs(): Args {
   const a: Args = { base: 'https://ingest.hnrobert.space', ramp: [60], hold: 60, think: [1500, 5000] }
   const argv = process.argv.slice(2)
   for (let i = 0; i < argv.length; i++) {
-    const k = argv[i]; const v = argv[++i]
+    const k = argv[i]
+    const v = argv[++i]
     if (k === '--base') a.base = v.replace(/\/$/, '')
     else if (k === '--count') a.ramp = [Number(v)]
-    else if (k === '--ramp') a.ramp = String(v).split(',').map((s) => Number(s.trim()))
+    else if (k === '--ramp')
+      a.ramp = String(v)
+        .split(',')
+        .map((s) => Number(s.trim()))
     else if (k === '--hold') a.hold = Number(v)
     else if (k === '--think') a.think = String(v).split(',').map(Number) as [number, number]
     else if (k === '--help' || k === '-h') {
-      console.log('Usage: bun run scripts/stress-http.ts [--base URL] [--ramp 10,30,60] [--hold SEC] [--think MIN,MAX ms]')
+      console.log(
+        'Usage: bun run scripts/stress-http.ts [--base URL] [--ramp 10,30,60] [--hold SEC] [--think MIN,MAX ms]',
+      )
       process.exit(0)
     }
   }
@@ -54,7 +60,10 @@ const rand = (lo: number, hi: number) => lo + Math.random() * (hi - lo)
 const pick = () => {
   const total = ENDPOINTS.reduce((s, e) => s + e.weight, 0)
   let r = Math.random() * total
-  for (const e of ENDPOINTS) { r -= e.weight; if (r <= 0) return e }
+  for (const e of ENDPOINTS) {
+    r -= e.weight
+    if (r <= 0) return e
+  }
   return ENDPOINTS[0]!
 }
 
@@ -107,19 +116,25 @@ async function runStage(base: string, n: number, holdSec: number): Promise<void>
   const dur = (Date.now() - t0) / 1000
   const lat = mine.map((r) => r.ms).sort((a, b) => a - b)
   const errs = mine.filter((r) => !r.ok)
-  console.log(`  reqs=${mine.length} rps=${(mine.length / dur).toFixed(1)} ` +
-    `p50=${percentile(lat, 50)}ms p95=${percentile(lat, 95)}ms p99=${percentile(lat, 99)}ms ` +
-    `max=${Math.round(lat[lat.length - 1] ?? 0)}ms errors=${errs.length}(${((errs.length / Math.max(1, mine.length)) * 100).toFixed(1)}%)`)
+  console.log(
+    `  reqs=${mine.length} rps=${(mine.length / dur).toFixed(1)} ` +
+      `p50=${percentile(lat, 50)}ms p95=${percentile(lat, 95)}ms p99=${percentile(lat, 99)}ms ` +
+      `max=${Math.round(lat[lat.length - 1] ?? 0)}ms errors=${errs.length}(${((errs.length / Math.max(1, mine.length)) * 100).toFixed(1)}%)`,
+  )
   // per-endpoint breakdown
   const byPath = new Map<string, { n: number; ms: number[]; errs: number }>()
   for (const r of mine) {
     const e = byPath.get(r.path) ?? { n: 0, ms: [], errs: 0 }
-    e.n++; e.ms.push(r.ms); if (!r.ok) e.errs++
+    e.n++
+    e.ms.push(r.ms)
+    if (!r.ok) e.errs++
     byPath.set(r.path, e)
   }
   for (const [path, e] of [...byPath].sort((a, b) => b[1].n - a[1].n)) {
     const s = e.ms.sort((a, b) => a - b)
-    console.log(`    ${path.padEnd(24)} n=${String(e.n).padStart(5)} p50=${percentile(s, 50)}ms p95=${percentile(s, 95)}ms errs=${e.errs}`)
+    console.log(
+      `    ${path.padEnd(24)} n=${String(e.n).padStart(5)} p50=${percentile(s, 50)}ms p95=${percentile(s, 95)}ms errs=${e.errs}`,
+    )
   }
   if (errs.length) {
     const byStatus = new Map<string, number>()
@@ -131,11 +146,16 @@ async function runStage(base: string, n: number, holdSec: number): Promise<void>
 async function main() {
   const args = parseArgs()
   think = args.think
-  console.log(`stress-http: base=${args.base} ramp=${args.ramp.join(',')} hold=${args.hold}s think=${think.join('-')}ms`)
+  console.log(
+    `stress-http: base=${args.base} ramp=${args.ramp.join(',')} hold=${args.hold}s think=${think.join('-')}ms`,
+  )
   // warm DNS/TLS so stage-1 numbers aren't skewed by cold connect
   await oneGet(args.base, '/api/health')
   for (const n of args.ramp) await runStage(args.base, n, args.hold)
   console.log('\nstress-http: done.')
 }
 
-main().catch((e) => { console.error('fatal:', e); process.exit(1) })
+main().catch((e) => {
+  console.error('fatal:', e)
+  process.exit(1)
+})

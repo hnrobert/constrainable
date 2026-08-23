@@ -8,7 +8,9 @@
  */
 definePageMeta({ layout: 'default' })
 const { user } = useAuth()
-useAuth().fetchSession().catch(() => null)
+useAuth()
+  .fetchSession()
+  .catch(() => null)
 
 const streamName = computed(() => user.value?.email ?? '')
 </script>
@@ -18,16 +20,14 @@ const streamName = computed(() => user.value?.email ?? '')
     <div class="space-y-1">
       <h1 class="text-2xl font-semibold">My Live View</h1>
       <p class="text-muted-foreground">
-        Your own stream, live over WebRTC — exactly as the server receives it. Start streaming in
-        OBS and the picture connects by itself.
+        Your own stream, live over WebRTC — exactly as the server receives it. Start streaming in OBS and the picture
+        connects by itself.
       </p>
     </div>
 
     <StreamsPlayer v-if="streamName" :stream-name="streamName" />
     <Card v-else>
-      <CardContent class="pt-6 text-sm text-muted-foreground">
-        Sign in to see your own stream.
-      </CardContent>
+      <CardContent class="pt-6 text-sm text-muted-foreground"> Sign in to see your own stream. </CardContent>
     </Card>
   </div>
 </template>

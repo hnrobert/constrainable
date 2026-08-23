@@ -176,9 +176,7 @@ const columns: DataTableColumn[] = [
       </CardContent>
     </Card>
     <div v-else>
-      <Button variant="outline" size="sm" @click="startEdit">
-        <Plus :size="14" /> Add a personal note
-      </Button>
+      <Button variant="outline" size="sm" @click="startEdit"> <Plus :size="14" /> Add a personal note </Button>
     </div>
 
     <Card v-if="isAdmin">

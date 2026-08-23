@@ -18,7 +18,9 @@ export default defineEventHandler(async (event) => {
   requireAdmin(event)
   const clientId = getRouterParam(event, 'clientId')
   if (!clientId) throw createError({ statusCode: 400, statusMessage: 'clientId is required' })
-  const email = String(getQuery(event).email || '').trim().toLowerCase()
+  const email = String(getQuery(event).email || '')
+    .trim()
+    .toLowerCase()
   const reason = String(getQuery(event).reason || '').trim() || null
 
   if (!email) {
@@ -36,8 +38,7 @@ export default defineEventHandler(async (event) => {
   // Remote sessions key off the stream name (their SRS client id is the node's
   // relay, unknown to this backend); local sessions off the SRS client id.
   const session =
-    PublishSessionsRepository.findActiveByStream(email) ??
-    PublishSessionsRepository.findActiveByClientId(clientId)
+    PublishSessionsRepository.findActiveByStream(email) ?? PublishSessionsRepository.findActiveByClientId(clientId)
   if (session?.nodeId) {
     // Remote media-node session — tell the node to end it over the control
     // channel (protobuf WS, or legacy socket.io for old firmware)

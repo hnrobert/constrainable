@@ -17,13 +17,7 @@ async function loadKey(): Promise<CryptoKey> {
   if (inflight) return inflight
   inflight = (async () => {
     const { jwk } = await $fetch<{ jwk: JsonWebKey }>('/api/auth/pubkey')
-    const key = await crypto.subtle.importKey(
-      'jwk',
-      jwk,
-      { name: 'RSA-OAEP', hash: 'SHA-256' },
-      false,
-      ['encrypt'],
-    )
+    const key = await crypto.subtle.importKey('jwk', jwk, { name: 'RSA-OAEP', hash: 'SHA-256' }, false, ['encrypt'])
     cachedKey = key
     return key
   })()

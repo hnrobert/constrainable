@@ -52,7 +52,8 @@ function cancelEdit(): void {
   editId.value = null
 }
 const editDirty = computed(
-  () => editId.value !== null && (editName.value !== editOrig.value.name || editDesc.value !== editOrig.value.description),
+  () =>
+    editId.value !== null && (editName.value !== editOrig.value.name || editDesc.value !== editOrig.value.description),
 )
 const saving = ref(false)
 const saved = ref(false)
@@ -226,8 +227,8 @@ const inviteColumns: DataTableColumn[] = [
     <div class="space-y-1">
       <h1 class="text-2xl font-semibold">Groups &amp; invites</h1>
       <p class="text-muted-foreground">
-        Organize users into groups, then restrict events to specific groups. Invite links let new
-        registrants or existing users join a group automatically.
+        Organize users into groups, then restrict events to specific groups. Invite links let new registrants or
+        existing users join a group automatically.
       </p>
     </div>
 
@@ -264,7 +265,12 @@ const inviteColumns: DataTableColumn[] = [
         </DataTable>
 
         <div class="flex flex-wrap items-center gap-2">
-          <Input v-model="newGroupName" placeholder="New group name" class="min-w-45 flex-1" @keyup.enter="createGroup" />
+          <Input
+            v-model="newGroupName"
+            placeholder="New group name"
+            class="min-w-45 flex-1"
+            @keyup.enter="createGroup"
+          />
           <Input v-model="newGroupDesc" placeholder="Description (optional)" class="min-w-45 flex-1" />
           <Button :disabled="creatingGroup" @click="createGroup">
             {{ creatingGroup ? 'Adding…' : 'Add group' }}
@@ -312,7 +318,9 @@ const inviteColumns: DataTableColumn[] = [
           </template>
           <template #cell-actions="{ row }">
             <div class="flex justify-end gap-2">
-              <Button variant="link" class="h-auto p-0 text-xs" @click="copyInvite(inviteUrl(row.code))">Copy link</Button>
+              <Button variant="link" class="h-auto p-0 text-xs" @click="copyInvite(inviteUrl(row.code))"
+                >Copy link</Button
+              >
               <Button size="sm" variant="destructive" @click="removeInvite(row)">Delete</Button>
             </div>
           </template>

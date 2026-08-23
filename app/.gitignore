@@ -4,6 +4,7 @@ node_modules/
 data/
 records/
 .env
+.env.*
+!.env.example
 dist/
 .DS_Store
-dist

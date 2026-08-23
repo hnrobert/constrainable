@@ -122,17 +122,25 @@ async function startWebrtc(): Promise<void> {
           let diag = ''
           try {
             const stats = await pc.getStats()
-            let vBytes = 0, vFrames: number | string = '-', aBytes = 0
+            let vBytes = 0,
+              vFrames: number | string = '-',
+              aBytes = 0
             stats.forEach((r) => {
               const x = r as unknown as Record<string, unknown>
               if (x.type !== 'inbound-rtp') return
-              if (x.kind === 'video') { vBytes = Number(x.bytesReceived ?? 0); vFrames = Number(x.framesDecoded ?? 0) }
+              if (x.kind === 'video') {
+                vBytes = Number(x.bytesReceived ?? 0)
+                vFrames = Number(x.framesDecoded ?? 0)
+              }
               if (x.kind === 'audio') aBytes = Number(x.bytesReceived ?? 0)
             })
             diag = ` [recv: video ${vBytes}B/${vFrames}f, audio ${aBytes}B]`
-          } catch { /* stats unavailable */ }
+          } catch {
+            /* stats unavailable */
+          }
           fail(
-            'connected but no video frames' + diag +
+            'connected but no video frames' +
+              diag +
               ' — if video bytes flow with 0 frames decoded, the publisher uses B-frames: set bf=0 in OBS (Output → Advanced → x264 options) and keyframe interval 2s; if nothing arrives, the node is still bridging — retry',
             a,
           )
@@ -192,15 +200,36 @@ watch(
     <CardContent class="flex flex-col gap-2 p-4">
       <div class="flex flex-wrap items-center gap-2">
         <Badge variant="secondary" class="font-mono text-xs">{{ props.streamName }}</Badge>
-        <Badge :variant="status === 'playing' ? 'success' : status === 'loading' ? 'warning' : status === 'error' ? 'destructive' : 'secondary'">
-          {{ status === 'playing' ? 'Playing · WebRTC' : status === 'loading' ? 'Connecting…' : status === 'error' ? 'Error' : 'Idle' }}
+        <Badge
+          :variant="
+            status === 'playing'
+              ? 'success'
+              : status === 'loading'
+                ? 'warning'
+                : status === 'error'
+                  ? 'destructive'
+                  : 'secondary'
+          "
+        >
+          {{
+            status === 'playing'
+              ? 'Playing · WebRTC'
+              : status === 'loading'
+                ? 'Connecting…'
+                : status === 'error'
+                  ? 'Error'
+                  : 'Idle'
+          }}
         </Badge>
-        <Button v-if="status === 'error'" size="sm" variant="outline" class="ml-auto" @click="startWebrtc">Retry</Button>
+        <Button v-if="status === 'error'" size="sm" variant="outline" class="ml-auto" @click="startWebrtc"
+          >Retry</Button
+        >
       </div>
       <video ref="videoEl" class="w-full aspect-video rounded-lg bg-black" autoplay muted playsinline controls />
       <Badge v-if="errorMsg" variant="destructive">{{ errorMsg }}</Badge>
       <p class="text-xs text-muted-foreground">
-        Media flows directly from the ingest node over UDP (WebRTC); the connection setup is authorized by your session. Playback needs UDP open to the node's host.
+        Media flows directly from the ingest node over UDP (WebRTC); the connection setup is authorized by your session.
+        Playback needs UDP open to the node's host.
       </p>
     </CardContent>
   </Card>

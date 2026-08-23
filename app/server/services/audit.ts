@@ -16,12 +16,7 @@ export interface AuditInput {
   detail?: unknown
 }
 
-export function audit(
-  level: AuditLevel,
-  category: AuditCategory,
-  message: string,
-  opts: AuditInput = {},
-): void {
+export function audit(level: AuditLevel, category: AuditCategory, message: string, opts: AuditInput = {}): void {
   const row = AuditLogRepository.insert({
     level,
     category,

@@ -104,7 +104,8 @@ async function submit(): Promise<void> {
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : HOME
     await navigateTo(redirect, { replace: true })
   } catch (e: any) {
-    error.value = e?.data?.statusMessage || e?.message || (mode.value === 'login' ? 'Sign in failed' : 'Registration failed')
+    error.value =
+      e?.data?.statusMessage || e?.message || (mode.value === 'login' ? 'Sign in failed' : 'Registration failed')
   } finally {
     loading.value = false
   }
@@ -133,20 +134,12 @@ onUnmounted(() => {
         </div>
 
         <!-- admin-authored notice (Config → Registration Notice); register mode only -->
-        <div
-          v-if="mode === 'register' && registerNotice"
-          class="space-y-1.5 rounded-md border bg-muted/50 p-3"
-        >
-          <p class="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-            <Info :size="14" /> Notice
-          </p>
+        <div v-if="mode === 'register' && registerNotice" class="space-y-1.5 rounded-md border bg-muted/50 p-3">
+          <p class="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><Info :size="14" /> Notice</p>
           <RichText :source="registerNotice" />
         </div>
 
-        <div
-          v-if="inviteCode"
-          class="rounded-md border border-ok/50 bg-ok/10 p-2.5 text-xs text-ok"
-        >
+        <div v-if="inviteCode" class="rounded-md border border-ok/50 bg-ok/10 p-2.5 text-xs text-ok">
           Joining via invite — your account will be added to the invite's group.
         </div>
 
@@ -156,7 +149,9 @@ onUnmounted(() => {
             type="button"
             :class="[
               'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-              mode === 'login' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+              mode === 'login'
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground',
             ]"
             @click="switchMode('login')"
           >
@@ -166,7 +161,9 @@ onUnmounted(() => {
             type="button"
             :class="[
               'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-              mode === 'register' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+              mode === 'register'
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground',
             ]"
             @click="switchMode('register')"
           >
@@ -192,7 +189,13 @@ onUnmounted(() => {
           <div v-if="mode === 'register' && !bootstrap" class="flex items-end gap-2">
             <div class="flex-1 space-y-1.5">
               <Label for="login-code">Email verification code</Label>
-              <Input id="login-code" v-model="code" inputmode="numeric" autocomplete="one-time-code" placeholder="6-digit code" />
+              <Input
+                id="login-code"
+                v-model="code"
+                inputmode="numeric"
+                autocomplete="one-time-code"
+                placeholder="6-digit code"
+              />
             </div>
             <Button type="button" variant="outline" :disabled="sendingCode || cooldown > 0" @click="doSendCode">
               {{ cooldown > 0 ? `${cooldown}s` : sendingCode ? 'Sending…' : 'Get code' }}
@@ -201,7 +204,8 @@ onUnmounted(() => {
 
           <!-- bootstrap hint only — regular registrations need no extra explanation -->
           <p v-if="mode === 'register' && bootstrap" class="text-xs leading-relaxed text-muted-foreground">
-            No admin exists yet: the first registered user becomes the super admin (no email verification code required). Please use a personal email you can receive mail at.
+            No admin exists yet: the first registered user becomes the super admin (no email verification code
+            required). Please use a personal email you can receive mail at.
           </p>
 
           <p v-if="error" class="text-sm font-medium text-destructive">{{ error }}</p>

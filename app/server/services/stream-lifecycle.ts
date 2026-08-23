@@ -24,11 +24,7 @@ import { authorizePublish } from './access-control'
 import { audit } from './audit'
 import { emit } from '../utils/bus'
 import type { Limits } from '#shared/config'
-import type {
-  SessionSnapshot,
-  SessionStatus,
-  ViolationSnapshot,
-} from '#shared/events'
+import type { SessionSnapshot, SessionStatus, ViolationSnapshot } from '#shared/events'
 
 /** Caps concurrent ffprobe checks (Phase 4 hot-reload calls setMax). */
 export const probeSemaphore = new AsyncSemaphore(getConfig().concurrency.probeMax)
@@ -69,9 +65,7 @@ export interface PublishContext {
 }
 
 /** on_publish: authorize, record the session, allow, kick off monitoring. */
-export async function handlePublish(
-  ctx: PublishContext,
-): Promise<{ allow: true } | { allow: false; reason: string }> {
+export async function handlePublish(ctx: PublishContext): Promise<{ allow: true } | { allow: false; reason: string }> {
   // Authorize before anything else: a rejected publisher never starts monitoring.
   const auth = await authorizePublish({ stream: ctx.stream, param: ctx.param })
   if (!auth.allow) {
@@ -140,7 +134,15 @@ export async function handlePublish(
 
   emit(
     'session:start',
-    snapshot(session, { width: null, height: null, fps: null, videoBitrateKbps: null, audioBitrateKbps: null, status: 'allowed', compliant: false }),
+    snapshot(session, {
+      width: null,
+      height: null,
+      fps: null,
+      videoBitrateKbps: null,
+      audioBitrateKbps: null,
+      status: 'allowed',
+      compliant: false,
+    }),
   )
   audit('info', 'publish', `publish started: ${ctx.stream}`, {
     actor: ctx.stream,
@@ -156,11 +158,7 @@ export async function handlePublish(
 }
 
 /** on_unpublish: finalize, archive/discard recording, emit stop. */
-export async function handleUnpublish(ctx: {
-  app: string
-  stream: string
-  vhost: string
-}): Promise<void> {
+export async function handleUnpublish(ctx: { app: string; stream: string; vhost: string }): Promise<void> {
   const session = active.get(ctx.stream)
   if (session) {
     session.active = false
@@ -169,12 +167,7 @@ export async function handleUnpublish(ctx: {
 
   if (session) {
     const prev = PublishSessionsRepository.findById(session.sessionId)
-    const finalStatus: SessionStatus =
-      prev?.status === 'killed'
-        ? 'killed'
-        : prev?.compliant
-          ? 'compliant'
-          : 'ended'
+    const finalStatus: SessionStatus = prev?.status === 'killed' ? 'killed' : prev?.compliant ? 'compliant' : 'ended'
     const endedAt = new Date()
     PublishSessionsRepository.markEnded(session.sessionId, finalStatus, endedAt)
     emit(
@@ -193,18 +186,13 @@ export async function handleUnpublish(ctx: {
         endedAt.getTime(),
       ),
     )
-    await recorder.stopRecording(
-      session.streamName,
-      session.eventId,
-      session.sessionId,
-      null,
-    )
+    await recorder.stopRecording(session.streamName, session.eventId, session.sessionId, null)
   }
   audit('info', 'publish', `publish ended: ${ctx.stream}`, { actor: ctx.stream, streamName: ctx.stream })
 }
 
 /** Background probe + limit loop for one session. */
-async function monitorSession(s: ActiveSession, studentLabel: string | null): Promise<void> {
+async function monitorSession(s: ActiveSession, _studentLabel: string | null): Promise<void> {
   const event = s.eventId ? (EventsRepository.findById(s.eventId) ?? null) : null
 
   recorder.startRecording(s.streamName, s.app, s.vhost, s.clientId)
@@ -289,12 +277,7 @@ function persistMetrics(sessionId: number, m: Metrics): void {
   })
 }
 
-function persistStatus(
-  sessionId: number,
-  status: SessionStatus,
-  endedAt?: Date,
-  compliant?: boolean,
-): void {
+function persistStatus(sessionId: number, status: SessionStatus, endedAt?: Date, compliant?: boolean): void {
   PublishSessionsRepository.updateStatus(sessionId, status, { endedAt, compliant })
 }
 

@@ -16,7 +16,10 @@ export const EventsRepository = {
   /** Used for slug-uniqueness checks; pass exceptId to exclude the row itself. */
   findBySlugExcept(slug: string, exceptId?: number): Event | undefined {
     const q = exceptId
-      ? db.select().from(events).where(and(eq(events.slug, slug), ne(events.id, exceptId)))
+      ? db
+          .select()
+          .from(events)
+          .where(and(eq(events.slug, slug), ne(events.id, exceptId)))
       : db.select().from(events).where(eq(events.slug, slug))
     return q.get()
   },

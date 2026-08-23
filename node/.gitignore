@@ -2,3 +2,4 @@ media-node
 *.test
 /tmp/
 /records/
+/srs.conf

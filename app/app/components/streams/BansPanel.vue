@@ -34,9 +34,7 @@ const { data: bans, refresh } = useFetch<BanRow[]>('/api/bans', {
 })
 
 const visible = computed(() =>
-  (bans.value ?? []).filter((b) =>
-    props.eventId != null ? b.eventId === props.eventId || b.eventId === null : true,
-  ),
+  (bans.value ?? []).filter((b) => (props.eventId != null ? b.eventId === props.eventId || b.eventId === null : true)),
 )
 
 async function addBan(): Promise<void> {
@@ -118,12 +116,7 @@ const columns: DataTableColumn[] = [
       </div>
     </div>
 
-    <DataTable
-      :columns="columns"
-      :rows="visible"
-      :row-key="(b: BanRow) => b.id"
-      empty="No streaming bans."
-    >
+    <DataTable :columns="columns" :rows="visible" :row-key="(b: BanRow) => b.id" empty="No streaming bans.">
       <template #cell-scope="{ row }">
         <Badge :variant="row.eventId === null ? 'destructive' : 'warning'">
           {{ row.eventId === null ? 'Site-wide' : 'This event' }}

@@ -7,7 +7,7 @@
  */
 import type { Server as SocketIOServer } from 'socket.io'
 import { env } from '../utils/env'
-import { register, disconnect } from './media-node-registry'
+import { disconnect } from './media-node-registry'
 import { emitNodesChanged } from './media-node-snapshot'
 import { dispatchRecChunk, dispatchRecEnd } from './recordings'
 import {

@@ -18,7 +18,7 @@
  */
 import { spawn } from 'node:child_process'
 import { constants, createPublicKey, publicEncrypt } from 'node:crypto'
-import { rmSync, existsSync } from 'node:fs'
+import { rmSync } from 'node:fs'
 import { Database } from 'bun:sqlite'
 import { SignJWT, jwtVerify } from 'jose'
 
@@ -142,7 +142,11 @@ async function main(): Promise<void> {
   check('Unauthed GET /api/events → 401', unauthEvents.status === 401, `got ${unauthEvents.status}`)
 
   const unauthDash = await req('/dashboard')
-  check('Unauthed GET /dashboard → 302 to /login', unauthDash.status === 302 && (unauthDash.headers.get('location') || '').includes('/login'), `got ${unauthDash.status} → ${unauthDash.headers.get('location')}`)
+  check(
+    'Unauthed GET /dashboard → 302 to /login',
+    unauthDash.status === 302 && (unauthDash.headers.get('location') || '').includes('/login'),
+    `got ${unauthDash.status} → ${unauthDash.headers.get('location')}`,
+  )
 
   // 3. Bootstrap super-admin registration (RSA-encrypted password, no code).
   const adminPw = await encryptPassword(jwk, 'admin-pass-123')
@@ -150,7 +154,11 @@ async function main(): Promise<void> {
     method: 'POST',
     body: { email: 'admin@example.com', password: adminPw },
   })
-  check('Bootstrap register → 200 role=admin', reg.status === 200 && reg.body?.role === 'admin', `got ${reg.status} ${JSON.stringify(reg.body)}`)
+  check(
+    'Bootstrap register → 200 role=admin',
+    reg.status === 200 && reg.body?.role === 'admin',
+    `got ${reg.status} ${JSON.stringify(reg.body)}`,
+  )
   const adminCookie = cookieJar(reg.headers)
   check('Register sets a sid cookie', !!adminCookie)
 
@@ -161,7 +169,10 @@ async function main(): Promise<void> {
   // 5. JWT actually verifies under the shared secret (stateless).
   const sid = adminCookie.split('=')[1] ?? ''
   const verified = await jwtVerify(sid, new TextEncoder().encode(JWT_SECRET))
-  check('sid cookie is a verifiable HS256 JWT with uid+role', verified.payload.role === 'admin' && typeof verified.payload.uid === 'number')
+  check(
+    'sid cookie is a verifiable HS256 JWT with uid+role',
+    verified.payload.role === 'admin' && typeof verified.payload.uid === 'number',
+  )
 
   // 6. Admin: create groups A + B.
   const gA = await req('/api/groups', { method: 'POST', body: { name: 'Cohort A' }, cookie: adminCookie })
@@ -172,34 +183,75 @@ async function main(): Promise<void> {
   const groupBId = gB.body?.id as number
 
   // 7. Admin: invite link for group A.
-  const inv = await req('/api/invite-links', { method: 'POST', body: { groupId: groupAId, note: 'smoke' }, cookie: adminCookie })
+  const inv = await req('/api/invite-links', {
+    method: 'POST',
+    body: { groupId: groupAId, note: 'smoke' },
+    cookie: adminCookie,
+  })
   check('Admin create invite link → 200 with code', inv.status === 200 && !!inv.body?.code, `got ${inv.status}`)
   const inviteCode = inv.body?.code as string
 
   // 8. Admin: events of every visibility.
-  const eGroup = await req('/api/events', { method: 'POST', body: { name: 'Group Event', visibility: 'groups', groupIds: [groupAId] }, cookie: adminCookie })
-  check('Create groups-scoped event → 200', eGroup.status === 200 && eGroup.body?.visibility === 'groups', `got ${eGroup.status}`)
-  const ePub = await req('/api/events', { method: 'POST', body: { name: 'Public Event', visibility: 'public' }, cookie: adminCookie })
+  const eGroup = await req('/api/events', {
+    method: 'POST',
+    body: { name: 'Group Event', visibility: 'groups', groupIds: [groupAId] },
+    cookie: adminCookie,
+  })
+  check(
+    'Create groups-scoped event → 200',
+    eGroup.status === 200 && eGroup.body?.visibility === 'groups',
+    `got ${eGroup.status}`,
+  )
+  const ePub = await req('/api/events', {
+    method: 'POST',
+    body: { name: 'Public Event', visibility: 'public' },
+    cookie: adminCookie,
+  })
   check('Create public event → 200', ePub.status === 200 && ePub.body?.visibility === 'public', `got ${ePub.status}`)
-  const eReg = await req('/api/events', { method: 'POST', body: { name: 'Registered Event', visibility: 'registered' }, cookie: adminCookie })
-  check('Create registered event → 200', eReg.status === 200 && eReg.body?.visibility === 'registered', `got ${eReg.status}`)
-  const eGroupB = await req('/api/events', { method: 'POST', body: { name: 'Group B Event', visibility: 'groups', groupIds: [groupBId] }, cookie: adminCookie })
+  const eReg = await req('/api/events', {
+    method: 'POST',
+    body: { name: 'Registered Event', visibility: 'registered' },
+    cookie: adminCookie,
+  })
+  check(
+    'Create registered event → 200',
+    eReg.status === 200 && eReg.body?.visibility === 'registered',
+    `got ${eReg.status}`,
+  )
+  const eGroupB = await req('/api/events', {
+    method: 'POST',
+    body: { name: 'Group B Event', visibility: 'groups', groupIds: [groupBId] },
+    cookie: adminCookie,
+  })
   check('Create group-B event → 200', eGroupB.status === 200, `got ${eGroupB.status}`)
 
   // 9. Public catalog: only the public event.
   const pubList = await req('/api/events/public')
   const pubNames = (pubList.body as any[]).map((e) => e.name)
   check('Public catalog includes Public Event', pubNames.includes('Public Event'), `got ${pubNames.join(', ')}`)
-  check('Public catalog EXCLUDES groups/registered events', !pubNames.includes('Group Event') && !pubNames.includes('Registered Event') && !pubNames.includes('Group B Event'))
+  check(
+    'Public catalog EXCLUDES groups/registered events',
+    !pubNames.includes('Group Event') && !pubNames.includes('Registered Event') && !pubNames.includes('Group B Event'),
+  )
 
   // 10. Admin sees all events.
   const adminList = await req('/api/events', { cookie: adminCookie })
   const adminNames = (adminList.body as any[]).map((e) => e.name)
-  check('Admin sees all 4 events', adminNames.includes('Group Event') && adminNames.includes('Public Event') && adminNames.includes('Registered Event') && adminNames.includes('Group B Event'), `got ${adminNames.join(', ')}`)
+  check(
+    'Admin sees all 4 events',
+    adminNames.includes('Group Event') &&
+      adminNames.includes('Public Event') &&
+      adminNames.includes('Registered Event') &&
+      adminNames.includes('Group B Event'),
+    `got ${adminNames.join(', ')}`,
+  )
 
   // 11. Homepage (public) renders the public event.
   const home = await req('/')
-  check('Homepage renders (200) and lists Public Event', home.status === 200 && String(home.body).includes('Public Event'))
+  check(
+    'Homepage renders (200) and lists Public Event',
+    home.status === 200 && String(home.body).includes('Public Event'),
+  )
 
   // 12. Removed routes 404 even when authenticated (the middleware gate would
   //     otherwise intercept an unauthed hit with 302/401 before Nuxt's 404).
@@ -211,9 +263,15 @@ async function main(): Promise<void> {
   // 13. Password hash stored as saltHex:hashHex (argon2id), NOT plaintext/PHC.
   const db = new Database(DB_PATH, { readonly: true })
   db.exec('PRAGMA busy_timeout = 5000;')
-  const row = db.query('SELECT password_hash AS h FROM users WHERE email = ?').get('admin@example.com') as { h: string } | null
+  const row = db.query('SELECT password_hash AS h FROM users WHERE email = ?').get('admin@example.com') as {
+    h: string
+  } | null
   const hash = row?.h ?? ''
-  check('Stored password is saltHex:hashHex (two hex halves)', /^[0-9a-f]{32}:[0-9a-f]+$/.test(hash), `got ${hash.slice(0, 20)}…`)
+  check(
+    'Stored password is saltHex:hashHex (two hex halves)',
+    /^[0-9a-f]{32}:[0-9a-f]+$/.test(hash),
+    `got ${hash.slice(0, 20)}…`,
+  )
   check('Stored password is NOT the plaintext', hash !== 'admin-pass-123')
 
   // 14. Create a regular 'user' directly in SQLite (register path is mail-gated)
@@ -237,21 +295,43 @@ async function main(): Promise<void> {
   // 15. Before joining, the user sees public + registered but NOT either group event.
   const preList = await req('/api/events', { cookie: userCookie })
   const preNames = (preList.body as any[]).map((e) => e.name)
-  check('Pre-join user sees Public + Registered events', preNames.includes('Public Event') && preNames.includes('Registered Event'), `got ${preNames.join(', ')}`)
-  check('Pre-join user does NOT see group events', !preNames.includes('Group Event') && !preNames.includes('Group B Event'), `got ${preNames.join(', ')}`)
+  check(
+    'Pre-join user sees Public + Registered events',
+    preNames.includes('Public Event') && preNames.includes('Registered Event'),
+    `got ${preNames.join(', ')}`,
+  )
+  check(
+    'Pre-join user does NOT see group events',
+    !preNames.includes('Group Event') && !preNames.includes('Group B Event'),
+    `got ${preNames.join(', ')}`,
+  )
 
   // 16. Claim the group-A invite as the existing user.
-  const claim = await req(`/api/invite-links/${encodeURIComponent(inviteCode)}/claim`, { method: 'POST', cookie: userCookie })
-  check('Claim invite → 200 joined Cohort A', claim.status === 200 && claim.body?.groupName === 'Cohort A', `got ${claim.status} ${JSON.stringify(claim.body)}`)
+  const claim = await req(`/api/invite-links/${encodeURIComponent(inviteCode)}/claim`, {
+    method: 'POST',
+    cookie: userCookie,
+  })
+  check(
+    'Claim invite → 200 joined Cohort A',
+    claim.status === 200 && claim.body?.groupName === 'Cohort A',
+    `got ${claim.status} ${JSON.stringify(claim.body)}`,
+  )
 
   // 17. Now the user sees group-A's event too, but still NOT group-B's.
   const postList = await req('/api/events', { cookie: userCookie })
   const postNames = (postList.body as any[]).map((e) => e.name)
   check('Post-join user now sees Group Event', postNames.includes('Group Event'), `got ${postNames.join(', ')}`)
-  check('Post-join user still does NOT see Group B Event', !postNames.includes('Group B Event'), `got ${postNames.join(', ')}`)
+  check(
+    'Post-join user still does NOT see Group B Event',
+    !postNames.includes('Group B Event'),
+    `got ${postNames.join(', ')}`,
+  )
 
   // 18. Idempotent re-claim is a success (no double-count, no error).
-  const claim2 = await req(`/api/invite-links/${encodeURIComponent(inviteCode)}/claim`, { method: 'POST', cookie: userCookie })
+  const claim2 = await req(`/api/invite-links/${encodeURIComponent(inviteCode)}/claim`, {
+    method: 'POST',
+    cookie: userCookie,
+  })
   check('Re-claim (idempotent) → 200', claim2.status === 200, `got ${claim2.status}`)
 
   // 19. Regular user cannot reach admin endpoints (requireAdmin → 403).
@@ -262,13 +342,23 @@ async function main(): Promise<void> {
 
   // 20. Login works with the RSA-encrypted password (round-trip).
   const loginPw = await encryptPassword(jwk, 'admin-pass-123')
-  const login = await req('/api/auth/login', { method: 'POST', body: { email: 'admin@example.com', password: loginPw } })
-  check('Login with RSA-encrypted password → 200 admin', login.status === 200 && login.body?.role === 'admin', `got ${login.status} ${JSON.stringify(login.body)}`)
+  const login = await req('/api/auth/login', {
+    method: 'POST',
+    body: { email: 'admin@example.com', password: loginPw },
+  })
+  check(
+    'Login with RSA-encrypted password → 200 admin',
+    login.status === 200 && login.body?.role === 'admin',
+    `got ${login.status} ${JSON.stringify(login.body)}`,
+  )
   check('Login sets a fresh sid cookie', !!cookieJar(login.headers))
 
   // 21. Wrong password fails (anti-enumeration: generic 401).
   const badPw = await encryptPassword(jwk, 'wrong-password-999')
-  const badLogin = await req('/api/auth/login', { method: 'POST', body: { email: 'admin@example.com', password: badPw } })
+  const badLogin = await req('/api/auth/login', {
+    method: 'POST',
+    body: { email: 'admin@example.com', password: badPw },
+  })
   check('Login with wrong password → 401', badLogin.status === 401, `got ${badLogin.status}`)
 }
 

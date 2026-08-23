@@ -163,7 +163,10 @@ function discardAndLeave(): void {
     <div class="flex flex-wrap items-center justify-between gap-4">
       <div class="space-y-1">
         <h1 class="text-2xl font-semibold">Mail Configuration</h1>
-        <p class="text-muted-foreground">Used to send registration verification codes and system notifications. Configuration is stored in the database (not environment variables).</p>
+        <p class="text-muted-foreground">
+          Used to send registration verification codes and system notifications. Configuration is stored in the database
+          (not environment variables).
+        </p>
       </div>
       <Badge v-if="dirty" variant="warning">Unsaved changes</Badge>
     </div>
@@ -212,7 +215,12 @@ function discardAndLeave(): void {
             <Input v-model="form.senderDomain" placeholder="example.com" />
           </FieldRow>
           <FieldRow label="SMTP password">
-            <Input v-model="senderPassword" type="password" autocomplete="new-password" placeholder="Leave blank to keep unchanged" />
+            <Input
+              v-model="senderPassword"
+              type="password"
+              autocomplete="new-password"
+              placeholder="Leave blank to keep unchanged"
+            />
             <template v-if="hasPassword" #hint>(set; leave blank to keep unchanged)</template>
           </FieldRow>
         </CardContent>
@@ -237,7 +245,12 @@ function discardAndLeave(): void {
             </Select>
           </FieldRow>
           <FieldRow label="Bearer Token (auth, optional)">
-            <Input v-model="postAuthToken" type="password" autocomplete="new-password" placeholder="Leave blank to keep unchanged" />
+            <Input
+              v-model="postAuthToken"
+              type="password"
+              autocomplete="new-password"
+              placeholder="Leave blank to keep unchanged"
+            />
             <template v-if="hasPostAuthToken" #hint>(set; leave blank to keep unchanged)</template>
           </FieldRow>
         </CardContent>
@@ -246,7 +259,9 @@ function discardAndLeave(): void {
       <Card>
         <CardHeader><CardTitle>Send Test</CardTitle></CardHeader>
         <CardContent class="space-y-3">
-          <p class="text-sm text-muted-foreground">Send a test email to the specified address using the current configuration (limit: 1/min, 10/day).</p>
+          <p class="text-sm text-muted-foreground">
+            Send a test email to the specified address using the current configuration (limit: 1/min, 10/day).
+          </p>
           <div class="space-y-1.5">
             <Label>Test recipient</Label>
             <Input v-model="testTo" type="email" placeholder="you@example.com" />

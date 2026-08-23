@@ -54,10 +54,7 @@ function requireEventExists(eventId: number): void {
   }
 }
 
-export async function generateKeyForEvent(
-  eventId: number,
-  input: GenerateKeyInput,
-): Promise<GeneratedKey> {
+export async function generateKeyForEvent(eventId: number, input: GenerateKeyInput): Promise<GeneratedKey> {
   requireEventExists(eventId)
 
   const studentNumber = input.studentNumber.trim()

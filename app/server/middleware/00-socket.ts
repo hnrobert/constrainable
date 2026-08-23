@@ -81,10 +81,7 @@ export default defineEventHandler((event) => {
     // origins WITH credentials — the admin socket rides the session cookie.
     // Same-origin default: permissive (browser same-origin policy already
     // gates the handshake).
-    cors:
-      env.corsOrigins.length > 0
-        ? { origin: env.corsOrigins, credentials: true }
-        : { origin: '*' },
+    cors: env.corsOrigins.length > 0 ? { origin: env.corsOrigins, credentials: true } : { origin: '*' },
     serveClient: false,
   })
   server.__socketIoAttached = true

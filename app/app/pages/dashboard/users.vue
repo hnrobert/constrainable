@@ -10,7 +10,8 @@ const confirm = useConfirm()
 const { data: users, refresh } = useFetch<UserWithGroupsView[]>('/api/users')
 const { data: groups } = useFetch<GroupView[]>('/api/groups')
 /** registered media nodes (for the assignment select) */
-const { data: mediaNodes, refresh: refreshNodes } = useFetch<{ nodeId: string; hostname: string; assignedUsers: number; maxUsers: number }[]>('/api/media-nodes')
+const { data: mediaNodes, refresh: refreshNodes } =
+  useFetch<{ nodeId: string; hostname: string; assignedUsers: number; maxUsers: number }[]>('/api/media-nodes')
 
 // Editable per-user working copies (role + selected group ids), populated
 // lazily on first edit. The template reads the live user values as a fallback
@@ -64,7 +65,13 @@ function dirty(u: UserWithGroupsView): boolean {
   if (!d) return false
   if (d.role !== u.role) return true
   if ((d.nodeId ?? null) !== (u.nodeId ?? null)) return true
-  return d.groupIds.slice().sort().join(',') !== u.groups.map((g) => g.id).sort().join(',')
+  return (
+    d.groupIds.slice().sort().join(',') !==
+    u.groups
+      .map((g) => g.id)
+      .sort()
+      .join(',')
+  )
 }
 
 const saving = ref(false)
@@ -163,16 +170,20 @@ async function saveAnnouncement(next: string | null): Promise<void> {
 
 /** Delete a user (server guards: not yourself, not the last admin). */
 function deleteUser(u: UserWithGroupsView): void {
-  confirm.ask(`Delete ${u.email}? Their group memberships and latency data go with the account; historical sessions and audit entries stay.`, async () => {
-    try {
-      await $fetch(`/api/users/${u.id}`, { method: 'DELETE' })
-      delete draft.value[u.id]
-      toast.info(`${u.email} deleted`)
-      await Promise.all([refresh(), refreshNodes()])
-    } catch (e: any) {
-      toast.error('Delete failed: ' + (e?.data?.statusMessage || e?.message || ''))
-    }
-  }, { actionLabel: 'Delete', destructive: true })
+  confirm.ask(
+    `Delete ${u.email}? Their group memberships and latency data go with the account; historical sessions and audit entries stay.`,
+    async () => {
+      try {
+        await $fetch(`/api/users/${u.id}`, { method: 'DELETE' })
+        delete draft.value[u.id]
+        toast.info(`${u.email} deleted`)
+        await Promise.all([refresh(), refreshNodes()])
+      } catch (e: any) {
+        toast.error('Delete failed: ' + (e?.data?.statusMessage || e?.message || ''))
+      }
+    },
+    { actionLabel: 'Delete', destructive: true },
+  )
 }
 </script>
 
@@ -180,7 +191,9 @@ function deleteUser(u: UserWithGroupsView): void {
   <div class="space-y-6 pb-24">
     <div class="space-y-1">
       <h1 class="text-2xl font-semibold">Users</h1>
-      <p class="text-muted-foreground">Manage roles and group membership. The first registered account is the super admin.</p>
+      <p class="text-muted-foreground">
+        Manage roles and group membership. The first registered account is the super admin.
+      </p>
     </div>
 
     <Card>
@@ -203,11 +216,7 @@ function deleteUser(u: UserWithGroupsView): void {
         >
           <template #cell-role="{ row }">
             <div class="flex items-center gap-2">
-              <Select
-                :model-value="roleOf(row)"
-                :disabled="saving"
-                @update:model-value="setRole(row, $event)"
-              >
+              <Select :model-value="roleOf(row)" :disabled="saving" @update:model-value="setRole(row, $event)">
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="user">user</SelectItem>
@@ -231,11 +240,7 @@ function deleteUser(u: UserWithGroupsView): void {
           </template>
           <template #cell-node="{ row }">
             <div class="flex max-w-65 flex-col gap-1.5">
-              <Select
-                :model-value="nodeOf(row)"
-                :disabled="saving"
-                @update:model-value="setNode(row, $event)"
-              >
+              <Select :model-value="nodeOf(row)" :disabled="saving" @update:model-value="setNode(row, $event)">
                 <SelectTrigger class="h-8"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem :value="NONE">unassigned</SelectItem>
@@ -250,7 +255,8 @@ function deleteUser(u: UserWithGroupsView): void {
                   :key="l.nodeId"
                   class="rounded-sm bg-muted px-1 py-0.5 font-mono text-[10px] text-muted-foreground"
                   :class="{ 'text-foreground font-semibold': l.nodeId === nodeOf(row) }"
-                >{{ l.nodeId }} {{ l.ms }}ms</span>
+                  >{{ l.nodeId }} {{ l.ms }}ms</span
+                >
               </div>
               <span v-else class="text-[10px] text-muted-foreground">no latency data yet</span>
             </div>
@@ -307,8 +313,8 @@ function deleteUser(u: UserWithGroupsView): void {
         <AlertDialogHeader>
           <AlertDialogTitle>Announcement for {{ announceTarget?.email }}</AlertDialogTitle>
           <AlertDialogDescription>
-            Shown on this user's dashboard home as "Announcement for you". Markdown supported.
-            Leave empty / clear to remove.
+            Shown on this user's dashboard home as "Announcement for you". Markdown supported. Leave empty / clear to
+            remove.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <Textarea
@@ -318,11 +324,7 @@ function deleteUser(u: UserWithGroupsView): void {
         />
         <AlertDialogFooter>
           <AlertDialogCancel :disabled="announceSaving">Cancel</AlertDialogCancel>
-          <Button
-            variant="outline"
-            :disabled="announceSaving || !announceDraft.trim()"
-            @click="saveAnnouncement(null)"
-          >
+          <Button variant="outline" :disabled="announceSaving || !announceDraft.trim()" @click="saveAnnouncement(null)">
             Clear
           </Button>
           <!-- Plain button on purpose: AlertDialogAction auto-closes the dialog

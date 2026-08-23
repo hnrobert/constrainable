@@ -44,9 +44,7 @@ export default defineEventHandler((event) => {
     complianceRate:
       sessions.length === 0
         ? null
-        : Math.round(
-            (sessions.filter((s) => s.compliant).length / sessions.length) * 1000,
-          ) / 10,
+        : Math.round((sessions.filter((s) => s.compliant).length / sessions.length) * 1000) / 10,
     recordings: {
       count: recordings.length,
       totalBytes: recordings.reduce((a, r) => a + r.sizeBytes, 0),

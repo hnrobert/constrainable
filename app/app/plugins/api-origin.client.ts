@@ -20,8 +20,7 @@ export default defineNuxtPlugin((nuxtApp) => {
   // (cast: lib.dom's `typeof fetch` also carries preconnect; the wrapper only
   // implements the call signature — preconnect is irrelevant for /api/* routing)
   const wrapped = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-    const raw: string =
-      typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+    const raw: string = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
 
     // relative /api/* → absolute on the API origin; same-origin absolute
     // /api/* (Request objects resolve their url at construction) → re-origined

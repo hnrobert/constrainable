@@ -90,7 +90,6 @@ async function findEventByPublishToken(token: string): Promise<Event | null> {
 }
 
 export async function authorizePublish(ctx: AuthContext): Promise<AuthResult> {
-
   const keys = StreamKeysRepository.findAllByStreamName(ctx.stream)
   const token = parseToken(ctx.param)
 
@@ -126,8 +125,7 @@ export async function authorizePublish(ctx: AuthContext): Promise<AuthResult> {
   //       credential; the stream NAME stays unique per contestant (their account
   //       email), so concurrent publishing still works with one shared key.
   if (token) {
-    const event =
-      (await findEventByPublishToken(token)) ?? EventsRepository.findByPublishKey(token) ?? null
+    const event = (await findEventByPublishToken(token)) ?? EventsRepository.findByPublishKey(token) ?? null
     if (event) {
       if (event.status !== 'live') return { allow: false, reason: publishClosedReason(event.status) }
       const windowReason = withinWindow(event)

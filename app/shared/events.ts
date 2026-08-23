@@ -3,14 +3,7 @@
  * over Socket.IO (Phase 5). Kept in shared/ so the Vue client uses the same types.
  */
 
-export type SessionStatus =
-  | 'pending'
-  | 'allowed'
-  | 'rejected'
-  | 'compliant'
-  | 'violating'
-  | 'killed'
-  | 'ended'
+export type SessionStatus = 'pending' | 'allowed' | 'rejected' | 'compliant' | 'violating' | 'killed' | 'ended'
 
 export interface SessionSnapshot {
   sessionId: number
@@ -54,14 +47,7 @@ export interface RecordingSnapshot {
 }
 
 export type AuditLevel = 'info' | 'warn' | 'error'
-export type AuditCategory =
-  | 'auth'
-  | 'publish'
-  | 'access'
-  | 'config'
-  | 'recording'
-  | 'system'
-  | 'admin'
+export type AuditCategory = 'auth' | 'publish' | 'access' | 'config' | 'recording' | 'system' | 'admin'
 
 export interface AuditSnapshot {
   id?: number

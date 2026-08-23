@@ -28,7 +28,9 @@ export const users = sqliteTable('users', {
   authmodSalt: text('authmod_salt'),
   authmodVerifier: text('authmod_verifier'),
   /** admin = full management + watching; user = browse authorized events only. */
-  role: text('role', { enum: ['admin', 'user'] }).notNull().default('user'),
+  role: text('role', { enum: ['admin', 'user'] })
+    .notNull()
+    .default('user'),
   /** media node this user is pinned to for ingest (null = not yet assigned). */
   nodeId: text('node_id'),
   /**
@@ -194,17 +196,14 @@ export const eventSlugAliases = sqliteTable('event_slug_aliases', {
 })
 
 /* -------------------------------- students -------------------------------- */
-export const students = sqliteTable(
-  'students',
-  {
-    id: integer('id').primaryKey({ autoIncrement: true }),
-    /** student ID */
-    studentNumber: text('student_number').notNull().unique(),
-    name: text('name').notNull(),
-    email: text('email'),
-    createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(now),
-  },
-)
+export const students = sqliteTable('students', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  /** student ID */
+  studentNumber: text('student_number').notNull().unique(),
+  name: text('name').notNull(),
+  email: text('email'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(now),
+})
 
 /* ---------------------------- event_enrollments --------------------------- */
 export const eventEnrollments = sqliteTable(
@@ -350,7 +349,9 @@ export const auditLog = sqliteTable(
   {
     id: integer('id').primaryKey({ autoIncrement: true }),
     ts: integer('ts', { mode: 'timestamp' }).notNull().default(now),
-    level: text('level', { enum: ['info', 'warn', 'error'] }).notNull().default('info'),
+    level: text('level', { enum: ['info', 'warn', 'error'] })
+      .notNull()
+      .default('info'),
     category: text('category', {
       enum: ['auth', 'publish', 'access', 'config', 'recording', 'system', 'admin'],
     }).notNull(),

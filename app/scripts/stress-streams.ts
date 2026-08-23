@@ -63,18 +63,43 @@ function parseArgs(): Args {
     const k = argv[i]
     const v = argv[++i]
     switch (k) {
-      case '--count': a.count = Number(v); break
-      case '--ramp': a.ramp = String(v).split(',').map((s) => Number(s.trim())); break
-      case '--mode': a.mode = v === 'open' ? 'open' : 'auth'; break
-      case '--hold': a.hold = Number(v); break
-      case '--clip': a.clip = v; break
-      case '--rtmp': a.rtmp = v; break
-      case '--app': a.app = v.replace(/\/$/, ''); break
-      case '--srs': a.srs = v.replace(/\/$/, ''); break
-      case '--secret': a.secret = v; break
-      case '--uid': a.uid = Number(v); break
-      case '--event': a.eventName = v; break
-      case '--help': case '-h':
+      case '--count':
+        a.count = Number(v)
+        break
+      case '--ramp':
+        a.ramp = String(v)
+          .split(',')
+          .map((s) => Number(s.trim()))
+        break
+      case '--mode':
+        a.mode = v === 'open' ? 'open' : 'auth'
+        break
+      case '--hold':
+        a.hold = Number(v)
+        break
+      case '--clip':
+        a.clip = v
+        break
+      case '--rtmp':
+        a.rtmp = v
+        break
+      case '--app':
+        a.app = v.replace(/\/$/, '')
+        break
+      case '--srs':
+        a.srs = v.replace(/\/$/, '')
+        break
+      case '--secret':
+        a.secret = v
+        break
+      case '--uid':
+        a.uid = Number(v)
+        break
+      case '--event':
+        a.eventName = v
+        break
+      case '--help':
+      case '-h':
         console.log(`Usage: bun run scripts/stress-streams.ts [--count N | --ramp 5,10,20]
   --mode auth|open   auth = per-event publish token (default); open = rejectUnknownPublishers=false
   --hold SEC         seconds to hold streams while sampling (default 15)
@@ -133,7 +158,10 @@ async function srsStreams(srs: string): Promise<any[]> {
 async function containerStats(container = 'ingest-app'): Promise<{ cpu: number; memMiB: number } | null> {
   // Explicit args array: Bun's `$` template mangles the {{.CPUPerc}} braces.
   try {
-    const proc = Bun.spawn(['docker', 'stats', '--no-stream', '--format', '{{.CPUPerc}} {{.MemUsage}}', container], { stdout: 'pipe', stderr: 'pipe' })
+    const proc = Bun.spawn(['docker', 'stats', '--no-stream', '--format', '{{.CPUPerc}} {{.MemUsage}}', container], {
+      stdout: 'pipe',
+      stderr: 'pipe',
+    })
     const out = await new Response(proc.stdout).text()
     await proc.exited
     // "12.34% 123.4MiB / 8GiB"
@@ -155,11 +183,40 @@ async function ensureClip(path: string): Promise<void> {
     return
   }
   console.log(`[clip] generating ${path} (640x360/25fps/30s, H264+AAC)…`)
-  const proc = Bun.spawn(['ffmpeg', '-y', '-hide_banner', '-loglevel', 'error',
-    '-f', 'lavfi', '-i', 'testsrc=size=640x360:rate=25',
-    '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=44100',
-    '-t', '30', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-g', '50',
-    '-c:a', 'aac', '-shortest', '-movflags', '+faststart', path], { stdout: 'ignore', stderr: 'pipe' })
+  const proc = Bun.spawn(
+    [
+      'ffmpeg',
+      '-y',
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-f',
+      'lavfi',
+      '-i',
+      'testsrc=size=640x360:rate=25',
+      '-f',
+      'lavfi',
+      '-i',
+      'sine=frequency=440:sample_rate=44100',
+      '-t',
+      '30',
+      '-c:v',
+      'libx264',
+      '-preset',
+      'ultrafast',
+      '-pix_fmt',
+      'yuv420p',
+      '-g',
+      '50',
+      '-c:a',
+      'aac',
+      '-shortest',
+      '-movflags',
+      '+faststart',
+      path,
+    ],
+    { stdout: 'ignore', stderr: 'pipe' },
+  )
   const code = await proc.exited
   if (code !== 0) throw new Error(`clip generation failed (exit ${code})`)
 }
@@ -168,11 +225,17 @@ async function ensureClip(path: string): Promise<void> {
 async function ensureAuthEvent(args: Args, sid: string): Promise<{ eventId: number; token: string }> {
   const all = await appJson(args.app, sid, '/api/events')
   const found = (all as any[]).find((e) => e.name === args.eventName)
-  const eventId = found ? found.id : (await appJson(args.app, sid, '/api/events', {
-    method: 'POST', body: JSON.stringify({ name: args.eventName, status: 'active', visibility: 'public', recordEnabled: true }),
-  })).id
-  const tok = await appJson(args.app, sid, `/api/events/${eventId}/publish-token`, {
-    method: 'POST', body: '{}',
+  const eventId = found
+    ? found.id
+    : (
+        await appJson(args.app, sid, '/api/events', {
+          method: 'POST',
+          body: JSON.stringify({ name: args.eventName, status: 'active', visibility: 'public', recordEnabled: true }),
+        })
+      ).id
+  const tok = await appJson(args.app, sid, `/api/events/${r.eventId}/publish-token`, {
+    method: 'POST',
+    body: '{}',
   })
   return { eventId, token: tok.token }
 }
@@ -181,7 +244,15 @@ async function ensureAuthEvent(args: Args, sid: string): Promise<{ eventId: numb
 // A single ramp stage
 // ---------------------------------------------------------------------------
 type Sub = { proc: import('bun').Subprocess<'ignore', 'ignore', 'ignore'>; stream: string }
-type Sample = { t: number; srsLive: number; appSessions: number; compliant: number; recording: number; cpu: number | null; memMiB: number | null }
+type Sample = {
+  t: number
+  srsLive: number
+  appSessions: number
+  compliant: number
+  recording: number
+  cpu: number | null
+  memMiB: number | null
+}
 
 async function runStage(args: Args, sid: string, n: number, token: string | null): Promise<void> {
   console.log(`\n===== stage: ${n} concurrent stream(s) [${args.mode}] =====`)
@@ -197,9 +268,28 @@ async function runStage(args: Args, sid: string, n: number, token: string | null
   for (let i = 0; i < n; i++) {
     const { name, url } = urlFor(i)
     try {
-      const proc = Bun.spawn(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-re', '-stream_loop', '-1', '-i', args.clip, '-c', 'copy', '-f', 'flv', url], {
-        stdout: 'ignore', stderr: 'ignore',
-      })
+      const proc = Bun.spawn(
+        [
+          'ffmpeg',
+          '-hide_banner',
+          '-loglevel',
+          'error',
+          '-re',
+          '-stream_loop',
+          '-1',
+          '-i',
+          args.clip,
+          '-c',
+          'copy',
+          '-f',
+          'flv',
+          url,
+        ],
+        {
+          stdout: 'ignore',
+          stderr: 'ignore',
+        },
+      )
       subs.push({ proc, stream: name })
       myStreams.add(name)
     } catch (e) {
@@ -208,7 +298,15 @@ async function runStage(args: Args, sid: string, n: number, token: string | null
   }
 
   const samples: Sample[] = []
-  const killAll = async () => { for (const s of subs) { try { s.proc.kill() } catch {} } }
+  const killAll = async () => {
+    for (const s of subs) {
+      try {
+        s.proc.kill()
+      } catch {
+        /* ignore */
+      }
+    }
+  }
 
   try {
     // ramp-up: wait until SRS sees all n of OUR streams (or 30s). We match by
@@ -218,7 +316,10 @@ async function runStage(args: Args, sid: string, n: number, token: string | null
     while (Date.now() - rampStart < 30_000) {
       const names = new Set((await srsStreams(args.srs)).map((s: any) => String(s.name)))
       const have = [...myStreams].filter((n) => names.has(n)).length
-      if (have >= n) { console.log(`[ramp] all ${n} live on SRS in ${((Date.now() - rampStart) / 1000).toFixed(1)}s`); break }
+      if (have >= n) {
+        console.log(`[ramp] all ${n} live on SRS in ${((Date.now() - rampStart) / 1000).toFixed(1)}s`)
+        break
+      }
       await Bun.sleep(1000)
     }
 
@@ -231,16 +332,35 @@ async function runStage(args: Args, sid: string, n: number, token: string | null
     const holdUntil = Date.now() + args.hold * 1000
     let prevRecv = new Map<string, number>()
     while (Date.now() < holdUntil) {
-      const [streams, sessions, st] = await Promise.all([srsStreams(args.srs), appJson(args.app, sid, '/api/streams').catch(() => []), containerStats()])
-      const curRecv = new Map<string, number>(streams.filter((s: any) => myStreams.has(String(s.name))).map((s: any) => [String(s.name), s.recv_bytes || 0]))
+      const [streams, sessions, st] = await Promise.all([
+        srsStreams(args.srs),
+        appJson(args.app, sid, '/api/streams').catch(() => []),
+        containerStats(),
+      ])
+      const curRecv = new Map<string, number>(
+        streams.filter((s: any) => myStreams.has(String(s.name))).map((s: any) => [String(s.name), s.recv_bytes || 0]),
+      )
       let live = 0
-      for (const [name, rb] of curRecv) { const prev = prevRecv.get(name); if (prev === undefined ? rb > 0 : rb > prev) live++ }
+      for (const [name, rb] of curRecv) {
+        const prev = prevRecv.get(name)
+        if (prev === undefined ? rb > 0 : rb > prev) live++
+      }
       prevRecv = curRecv
       const sessArr = sessions as any[]
       const compliant = sessArr.filter((s) => s.compliant).length
       const recording = sessArr.filter((s) => s.status === 'recording' || s.status === 'compliant').length
-      samples.push({ t: Date.now(), srsLive: live, appSessions: sessArr.length, compliant, recording, cpu: st?.cpu ?? null, memMiB: st?.memMiB ?? null })
-      process.stdout.write(`  live=${live}/${n} streams=${streams.length} sessions=${sessArr.length} compliant=${compliant} cpu=${st?.cpu?.toFixed(0) ?? '?'}% mem=${st?.memMiB?.toFixed(0) ?? '?'}MiB\r`)
+      samples.push({
+        t: Date.now(),
+        srsLive: live,
+        appSessions: sessArr.length,
+        compliant,
+        recording,
+        cpu: st?.cpu ?? null,
+        memMiB: st?.memMiB ?? null,
+      })
+      process.stdout.write(
+        `  live=${live}/${n} streams=${streams.length} sessions=${sessArr.length} compliant=${compliant} cpu=${st?.cpu?.toFixed(0) ?? '?'}% mem=${st?.memMiB?.toFixed(0) ?? '?'}MiB\r`,
+      )
       await Bun.sleep(3000)
     }
     console.log(' '.repeat(80))
@@ -248,7 +368,9 @@ async function runStage(args: Args, sid: string, n: number, token: string | null
     // summary
     const peak = (f: (s: Sample) => number) => Math.max(...samples.map(f))
     const last = samples[samples.length - 1]
-    console.log(`  requested=${n} peakSrsLive=${peak((s) => s.srsLive)} peakSessions=${peak((s) => s.appSessions)} peakCompliant=${peak((s) => s.compliant)} peakCpu=${peak((s) => s.cpu ?? 0).toFixed(0)}% peakMem=${peak((s) => s.memMiB ?? 0).toFixed(0)}MiB`)
+    console.log(
+      `  requested=${n} peakSrsLive=${peak((s) => s.srsLive)} peakSessions=${peak((s) => s.appSessions)} peakCompliant=${peak((s) => s.compliant)} peakCpu=${peak((s) => s.cpu ?? 0).toFixed(0)}% peakMem=${peak((s) => s.memMiB ?? 0).toFixed(0)}MiB`,
+    )
     if (last) console.log(`  final: live=${last.srsLive} sessions=${last.appSessions} compliant=${last.compliant}`)
   } finally {
     await killAll()
@@ -262,22 +384,27 @@ async function runStage(args: Args, sid: string, n: number, token: string | null
 // ---------------------------------------------------------------------------
 async function main() {
   const args = parseArgs()
-  console.log(`stress-streams: mode=${args.mode} ramp=${args.ramp.join(',')} hold=${args.hold}s app=${args.app} srs=${args.srs} rtmp=${args.rtmp}`)
+  console.log(
+    `stress-streams: mode=${args.mode} ramp=${args.ramp.join(',')} hold=${args.hold}s app=${args.app} srs=${args.srs} rtmp=${args.rtmp}`,
+  )
   await ensureClip(args.clip)
   const sid = await mintSid(args.secret, args.uid)
 
   // setup auth/open
-  let eventId: number | null = null
   let token: string | null = null
   let prevReject: boolean | null = null
   if (args.mode === 'auth') {
     const r = await ensureAuthEvent(args, sid)
-    eventId = r.eventId; token = r.token
-    console.log(`[auth] event ${eventId} publish-token=${token.slice(0, 8)}…`)
+
+    token = r.token
+    console.log(`[auth] event ${r.eventId} publish-token=${token.slice(0, 8)}…`)
   } else {
     const cfg = await appJson(args.app, sid, '/api/config')
     prevReject = cfg.access?.rejectUnknownPublishers
-    await appJson(args.app, sid, '/api/config', { method: 'PATCH', body: JSON.stringify({ access: { rejectUnknownPublishers: false } }) })
+    await appJson(args.app, sid, '/api/config', {
+      method: 'PATCH',
+      body: JSON.stringify({ access: { rejectUnknownPublishers: false } }),
+    })
     console.log(`[open] set rejectUnknownPublishers=false (was ${prevReject}); will restore on exit`)
   }
 
@@ -288,12 +415,20 @@ async function main() {
   } finally {
     if (prevReject !== null) {
       try {
-        await appJson(args.app, sid, '/api/config', { method: 'PATCH', body: JSON.stringify({ access: { rejectUnknownPublishers: prevReject } }) })
+        await appJson(args.app, sid, '/api/config', {
+          method: 'PATCH',
+          body: JSON.stringify({ access: { rejectUnknownPublishers: prevReject } }),
+        })
         console.log(`[open] restored rejectUnknownPublishers=${prevReject}`)
-      } catch (e) { console.error(`[open] FAILED to restore config: ${e}`) }
+      } catch (e) {
+        console.error(`[open] FAILED to restore config: ${e}`)
+      }
     }
   }
   console.log('\nstress-streams: done.')
 }
 
-main().catch((e) => { console.error('fatal:', e); process.exit(1) })
+main().catch((e) => {
+  console.error('fatal:', e)
+  process.exit(1)
+})

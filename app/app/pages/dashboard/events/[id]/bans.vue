@@ -14,8 +14,8 @@ const id = Number(route.params.id)
     <div class="space-y-1">
       <h2 class="text-lg font-semibold">Streaming bans</h2>
       <p class="text-muted-foreground">
-        Banned accounts can never publish — in this event (scoped bans) or anywhere on the site
-        (site-wide bans, shown below for context). Bans are permanent until lifted here.
+        Banned accounts can never publish — in this event (scoped bans) or anywhere on the site (site-wide bans, shown
+        below for context). Bans are permanent until lifted here.
       </p>
     </div>
     <Card>

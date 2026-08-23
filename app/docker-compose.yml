@@ -19,7 +19,7 @@ services:
       # host /etc isn't shared; uncomment TZ instead:
       # TZ: ${TZ:-Asia/Shanghai}
       HOST: 0.0.0.0
-      PORT: "31954"
+      PORT: '31954'
       NODE_ENV: production
       DB_PATH: /app/data/app.db
       RECORD_DIR: /app/records
@@ -30,9 +30,9 @@ services:
       - ./data:/app/data
       - ./records:/app/records
       - /etc/localtime:/etc/localtime:ro # host tz (linux; symlink resolves inside)
-      - /etc/timezone:/etc/timezone:ro   # host tz name (debian-style, optional)
+      - /etc/timezone:/etc/timezone:ro # host tz name (debian-style, optional)
     ports:
-      - "31954:31954"
+      - '31954:31954'
     networks:
       - constrainable-ingest
       # - ingest-shared   # external shared network (see header)

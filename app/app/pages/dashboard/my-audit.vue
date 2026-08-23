@@ -93,9 +93,8 @@ function hasDetail(row: AuditView): boolean {
     <div class="space-y-1">
       <h1 class="text-2xl font-semibold">My audit</h1>
       <p class="text-muted-foreground">
-        Everything tied to your account — your sign-ins and node picks, plus your complete
-        streaming trail: publishes, and WHY one was rejected, flagged, banned or disconnected
-        (newest first, paged).
+        Everything tied to your account — your sign-ins and node picks, plus your complete streaming trail: publishes,
+        and WHY one was rejected, flagged, banned or disconnected (newest first, paged).
       </p>
     </div>
 
@@ -138,7 +137,9 @@ function hasDetail(row: AuditView): boolean {
       <CardHeader>
         <div class="flex items-center justify-between">
           <CardTitle>{{ data?.total ?? 0 }} entries</CardTitle>
-          <Button variant="outline" size="sm" :disabled="pending" @click="refresh()">{{ pending ? 'Refreshing…' : 'Refresh' }}</Button>
+          <Button variant="outline" size="sm" :disabled="pending" @click="refresh()">{{
+            pending ? 'Refreshing…' : 'Refresh'
+          }}</Button>
         </div>
       </CardHeader>
       <CardContent>
@@ -154,7 +155,9 @@ function hasDetail(row: AuditView): boolean {
             <Badge :variant="levelVariant[row.level] ?? 'secondary'">{{ row.level }}</Badge>
           </template>
           <template #detail="{ row }">
-            <pre class="m-0 max-h-48 overflow-auto whitespace-pre-wrap wrap-break-word border-t border-dashed bg-muted/40 px-3 py-2 text-xs">{{ prettyDetail(row.detail) }}</pre>
+            <pre
+              class="m-0 max-h-48 overflow-auto whitespace-pre-wrap wrap-break-word border-t border-dashed bg-muted/40 px-3 py-2 text-xs"
+              >{{ prettyDetail(row.detail) }}</pre>
           </template>
         </DataTable>
         <div class="mt-4 border-t pt-3">

@@ -80,10 +80,12 @@ export default defineEventHandler(async (event) => {
             { streamName: stream, offer },
             (err: unknown, res: { answer?: string; error?: string } | undefined) => {
               if (err) {
-                reject(createError({
-                  statusCode: 502,
-                  statusMessage: 'node did not answer the WHEP relay (old firmware?) — update the node',
-                }))
+                reject(
+                  createError({
+                    statusCode: 502,
+                    statusMessage: 'node did not answer the WHEP relay (old firmware?) — update the node',
+                  }),
+                )
               } else if (res?.error) {
                 reject(createError({ statusCode: 502, statusMessage: `node SRS: ${res.error}` }))
               } else if (res?.answer) {

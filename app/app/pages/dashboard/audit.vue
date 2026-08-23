@@ -102,7 +102,10 @@ function hasDetail(row: AuditView): boolean {
   <div class="space-y-6">
     <div class="space-y-1">
       <h1 class="text-2xl font-semibold">Admin Audit</h1>
-      <p class="text-muted-foreground">Append-only record of every auth, publish, access, config, recording, and admin event, across all users. Each user sees only their own trail under “My Audit”.</p>
+      <p class="text-muted-foreground">
+        Append-only record of every auth, publish, access, config, recording, and admin event, across all users. Each
+        user sees only their own trail under “My Audit”.
+      </p>
     </div>
 
     <Card>
@@ -154,7 +157,9 @@ function hasDetail(row: AuditView): boolean {
       <CardHeader>
         <div class="flex items-center justify-between">
           <CardTitle>{{ data?.total ?? 0 }} entries (newest first)</CardTitle>
-          <Button variant="outline" size="sm" :disabled="pending" @click="refresh()">{{ pending ? 'Refreshing…' : 'Refresh' }}</Button>
+          <Button variant="outline" size="sm" :disabled="pending" @click="refresh()">{{
+            pending ? 'Refreshing…' : 'Refresh'
+          }}</Button>
         </div>
       </CardHeader>
       <CardContent>
@@ -175,7 +180,9 @@ function hasDetail(row: AuditView): boolean {
           </template>
           <template #cell-streamName="{ row }">{{ row.streamName ?? '—' }}</template>
           <template #detail="{ row }">
-            <pre class="m-0 max-h-48 overflow-auto whitespace-pre-wrap wrap-break-word border-t border-dashed bg-muted/40 px-3 py-2 text-xs">{{ prettyDetail(row.detail) }}</pre>
+            <pre
+              class="m-0 max-h-48 overflow-auto whitespace-pre-wrap wrap-break-word border-t border-dashed bg-muted/40 px-3 py-2 text-xs"
+              >{{ prettyDetail(row.detail) }}</pre>
           </template>
         </DataTable>
         <div class="mt-4 border-t pt-3">

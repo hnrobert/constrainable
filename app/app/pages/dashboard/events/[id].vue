@@ -42,9 +42,7 @@ const tabs = computed(() => {
 })
 
 const activeTab = computed(
-  () =>
-    tabs.value.find((t) => (t.exact ? route.path === t.to : route.path.startsWith(t.to)))?.label ??
-    'Overview',
+  () => tabs.value.find((t) => (t.exact ? route.path === t.to : route.path.startsWith(t.to)))?.label ?? 'Overview',
 )
 
 function fmtWindow(e: EventView): string {
@@ -67,7 +65,9 @@ const statusVariant: Record<string, 'secondary' | 'warning' | 'success' | 'destr
   <div v-if="event" class="space-y-6">
     <!-- repo-style header -->
     <div class="space-y-1">
-      <NuxtLink to="/dashboard/events" class="text-sm text-muted-foreground hover:text-foreground">← Back to events</NuxtLink>
+      <NuxtLink to="/dashboard/events" class="text-sm text-muted-foreground hover:text-foreground"
+        >← Back to events</NuxtLink
+      >
       <div class="flex flex-wrap items-center gap-3">
         <h1 class="text-2xl font-semibold tracking-tight">{{ event.name }}</h1>
         <Badge :variant="statusVariant[event.status] ?? 'secondary'">{{ event.status }}</Badge>
@@ -79,9 +79,7 @@ const statusVariant: Record<string, 'secondary' | 'warning' | 'success' | 'destr
         <template v-if="event.visibility === 'groups' && event.groups.length">
           · {{ event.groups.map((g) => g.name).join(', ') }}
         </template>
-        <template v-if="fmtWindow(event)">
-          · Window: {{ fmtWindow(event) }}
-        </template>
+        <template v-if="fmtWindow(event)"> · Window: {{ fmtWindow(event) }} </template>
       </p>
     </div>
 

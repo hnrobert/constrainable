@@ -1,0 +1,16 @@
+node_modules
+.nuxt
+.output
+dist
+data
+records
+bun.lock
+shared/proto
+public
+
+# prettier HTML parser cannot handle "<...>" string literals inside {{ }}
+# template expressions in these files — parse limitation, not a style issue
+# (brackets escaped: [id]/[slug] are literal path segments, not glob classes)
+app/pages/dashboard/events/\[id\]/index.vue
+app/pages/dashboard/events/\[id\]/manual.vue
+app/pages/e/\[slug\]/index.vue

@@ -94,7 +94,8 @@ const columns: DataTableColumn[] = [
       <!-- video rate always means the OBS Video Bitrate field; audio (declared
            rate) shows alongside when the node reports it -->
       <span v-if="row.videoBitrateKbps != null">
-        {{ row.videoBitrateKbps }}<span v-if="row.audioBitrateKbps != null" class="text-muted-foreground"> / {{ row.audioBitrateKbps }}</span>
+        {{ row.videoBitrateKbps
+        }}<span v-if="row.audioBitrateKbps != null" class="text-muted-foreground"> / {{ row.audioBitrateKbps }}</span>
         <span class="text-muted-foreground"> kbps</span>
       </span>
       <span v-else>{{ row.audioBitrateKbps != null ? `— / ${row.audioBitrateKbps} kbps` : '—' }}</span>

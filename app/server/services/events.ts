@@ -143,7 +143,6 @@ function validEventKey(slug: string): string {
   return slug
 }
 
-
 /** Scheduled events must carry a full window; end must follow start. */
 function assertWindow(
   status: EventStatus | undefined,
@@ -337,10 +336,7 @@ export function clearPublishToken(id: number): void {
  * with one shared key. Reuses the publish-token charset/length rules so the key
  * round-trips cleanly through OBS → gateway → SRS → parseToken.
  */
-export async function setPublishKey(
-  id: number,
-  custom?: string,
-): Promise<{ key: string; isCustom: boolean }> {
+export async function setPublishKey(id: number, custom?: string): Promise<{ key: string; isCustom: boolean }> {
   const existing = getRow(id)
   let key: string
   let isCustom = false

@@ -72,9 +72,7 @@ async function probeOnce(target: string, timeoutMs: number): Promise<ProbeResult
   const width = Number(s.width) || 0
   const height = Number(s.height) || 0
   const fps = parseFps(s.avg_frame_rate) ?? parseFps(s.r_frame_rate) ?? 0
-  const videoBitrateKbps = Math.floor(
-    (Number(s.bit_rate) || Number(data?.format?.bit_rate) || 0) / 1000,
-  )
+  const videoBitrateKbps = Math.floor((Number(s.bit_rate) || Number(data?.format?.bit_rate) || 0) / 1000)
   return { width, height, fps, videoBitrateKbps }
 }
 
@@ -93,6 +91,6 @@ export async function probeStream(rtmpUrl: string): Promise<ProbeResult | null> 
 }
 
 /** Convenience: build the RTMP pull URL and probe in one call. */
-export function probeAppStream(app: string, stream: string, vhost?: string): Promise<ProbeResult | null> {
+export function probeAppStream(app: string, stream: string, _vhost?: string): Promise<ProbeResult | null> {
   return probeStream(buildFlvPullUrl(stream))
 }

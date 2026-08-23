@@ -91,17 +91,11 @@ export default defineNuxtConfig({
         if (code === 'UNRESOLVED_IMPORT' && msg.includes('bun:sqlite')) return
         // reka-ui ships JSDoc comment annotations (e.g. injectLocal) that
         // Rollup flags as INVALID_ANNOTATION and strips — harmless but noisy.
-        if (
-          code === 'INVALID_ANNOTATION' ||
-          msg.includes('annotation that Rollup cannot interpret')
-        ) {
+        if (code === 'INVALID_ANNOTATION' || msg.includes('annotation that Rollup cannot interpret')) {
           return
         }
         // Keep Nitro's default suppressions otherwise.
-        if (
-          !['CIRCULAR_DEPENDENCY', 'EVAL'].includes(code) &&
-          !msg.includes('Unsupported source map comment')
-        ) {
+        if (!['CIRCULAR_DEPENDENCY', 'EVAL'].includes(code) && !msg.includes('Unsupported source map comment')) {
           warn(warning)
         }
       },
@@ -144,10 +138,7 @@ export default defineNuxtConfig({
     head: {
       htmlAttrs: { lang: 'en' },
       title: 'Constrainable Ingest',
-      meta: [
-        { charset: 'utf-8' },
-        { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      ],
+      meta: [{ charset: 'utf-8' }, { name: 'viewport', content: 'width=device-width, initial-scale=1' }],
       link: [{ rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }],
       // Apply the persisted theme BEFORE paint to avoid a flash of the wrong
       // theme. useColorMode (storageKey 'ci.theme') mirrors this client-side;

@@ -3,7 +3,7 @@
  * browser probes every node on each visit and upserts its measurement, so the
  * table is "latency at the user's most recent visit".
  */
-import { and, eq, sql } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { db } from '../database/db'
 import { nodeLatencies } from '../database/schema'
 

@@ -37,11 +37,7 @@ export function runEventLifecycle(): LifecycleResult {
       })
       continue
     }
-    if (
-      (ev.status === 'live' || ev.status === 'scheduled') &&
-      ev.endsAt &&
-      ev.endsAt.getTime() <= now
-    ) {
+    if ((ev.status === 'live' || ev.status === 'scheduled') && ev.endsAt && ev.endsAt.getTime() <= now) {
       out.killed += cutEventStreams(ev)
       EventsRepository.update(ev.id, { status: 'ended' })
       out.ended++

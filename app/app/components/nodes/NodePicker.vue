@@ -127,10 +127,7 @@ watch(
   { immediate: true },
 )
 
-function rttChip(
-  ms: number | null | undefined,
-  outcome?: 'ms' | 'timeout' | 'n/a',
-): { label: string; cls: string } {
+function rttChip(ms: number | null | undefined, outcome?: 'ms' | 'timeout' | 'n/a'): { label: string; cls: string } {
   if (ms != null) {
     if (ms < 50) return { label: `${ms} ms`, cls: 'text-ok font-semibold' }
     if (ms < 150) return { label: `${ms} ms`, cls: 'text-foreground' }
@@ -181,12 +178,10 @@ const offlineMine = computed(() => {
         <span class="ml-2 text-xs text-muted-foreground">switch anytime by picking another node below</span>
       </span>
       <span v-else-if="offlineMine" class="text-sm text-warn">
-        Your node <strong class="font-medium">{{ offlineMine }}</strong> is currently offline — pick
-        another node below to stream now.
+        Your node <strong class="font-medium">{{ offlineMine }}</strong> is currently offline — pick another node below
+        to stream now.
       </span>
-      <span v-else class="text-sm text-muted-foreground">
-        No ingest node assigned to you yet — choose one below.
-      </span>
+      <span v-else class="text-sm text-muted-foreground"> No ingest node assigned to you yet — choose one below. </span>
       <Button variant="outline" size="sm" class="ml-auto" :disabled="pinging" @click="pingNodes">
         {{ pinging ? 'Testing…' : 'Re-test latency' }}
       </Button>
@@ -212,11 +207,7 @@ const offlineMine = computed(() => {
               <Badge v-if="n.isMine" variant="success" class="ml-2">yours</Badge>
             </td>
             <td class="py-2.5 pr-4 w-full max-w-0">
-              <code
-                v-if="n.rtmpUrl"
-                class="block truncate font-mono text-xs"
-                :title="n.rtmpUrl"
-              >{{ n.rtmpUrl }}</code>
+              <code v-if="n.rtmpUrl" class="block truncate font-mono text-xs" :title="n.rtmpUrl">{{ n.rtmpUrl }}</code>
               <span v-else class="block truncate text-xs text-muted-foreground">via site host</span>
             </td>
             <td class="py-2.5 pr-4 whitespace-nowrap">
@@ -224,11 +215,21 @@ const offlineMine = computed(() => {
                 v-if="rtts"
                 class="rounded-sm bg-muted px-1.5 py-0.5 font-mono text-xs tabular-nums"
                 :class="rttChip(rtts[n.nodeId], outcomes[n.nodeId]).cls"
-                :title="n.publicProbeUdpPort > 0 ? (rtts[n.nodeId] != null ? 'measured from your browser (ICE)' : 'no answer within the probe window (4s)') : 'node firmware has no probe responder — update it to measure'"
-              >{{ rttChip(rtts[n.nodeId], outcomes[n.nodeId]).label }}</span>
+                :title="
+                  n.publicProbeUdpPort > 0
+                    ? rtts[n.nodeId] != null
+                      ? 'measured from your browser (ICE)'
+                      : 'no answer within the probe window (4s)'
+                    : 'node firmware has no probe responder — update it to measure'
+                "
+                >{{ rttChip(rtts[n.nodeId], outcomes[n.nodeId]).label }}</span
+              >
               <span v-else class="text-xs text-muted-foreground">—</span>
             </td>
-            <td class="py-2.5 pr-4 whitespace-nowrap tabular-nums" :class="{ 'text-destructive': n.assigned > n.maxUsers }">
+            <td
+              class="py-2.5 pr-4 whitespace-nowrap tabular-nums"
+              :class="{ 'text-destructive': n.assigned > n.maxUsers }"
+            >
               {{ n.assigned }} / {{ n.maxUsers }}
             </td>
             <td class="py-2.5 text-right">
@@ -239,15 +240,14 @@ const offlineMine = computed(() => {
                 class="w-30"
                 :disabled="selecting === n.nodeId"
                 @click="select(n)"
-              >Use this node</Button>
+                >Use this node</Button
+              >
               <!-- same width as the action buttons above/below, grayed out -->
               <Button v-else size="sm" variant="outline" class="w-30" disabled>selected</Button>
             </td>
           </tr>
           <tr v-if="!(nodes ?? []).length">
-            <td colspan="5" class="py-6 text-center text-muted-foreground">
-              No ingest nodes are online right now.
-            </td>
+            <td colspan="5" class="py-6 text-center text-muted-foreground">No ingest nodes are online right now.</td>
           </tr>
         </tbody>
       </table>

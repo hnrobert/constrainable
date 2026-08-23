@@ -55,8 +55,8 @@ const columns: DataTableColumn[] = [
     <section class="space-y-3">
       <h1 class="text-3xl font-bold tracking-tight">Constrainable Ingest</h1>
       <p class="max-w-2xl leading-relaxed text-muted-foreground">
-        ICPC proctoring stream ingest and event management. Browse public events
-        below, or sign in to access your schedule and details.
+        ICPC proctoring stream ingest and event management. Browse public events below, or sign in to access your
+        schedule and details.
       </p>
       <div>
         <Button as-child>
