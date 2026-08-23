@@ -1,0 +1,281 @@
+// Control protocol between a media node (Go) and the ingest app (Nitro),
+// carried as one Envelope per WebSocket binary message, both directions.
+// Correlated request/response pairs (seq) replace socket.io acks; Heartbeat
+// replaces engine.io ping/pong; SDP offers/answers and DVR file chunks travel
+// as raw bytes, so there is no base64 inflation anywhere.
+syntax = "proto3";
+
+package control.v1;
+
+option go_package = "media-node/gen/control/v1;controlv1";
+
+message Envelope {
+  oneof kind {
+    Hello hello = 1;
+    HelloAck hello_ack = 2;
+    Heartbeat heartbeat = 3;
+    HeartbeatAck heartbeat_ack = 4;
+    RpcRequest rpc_request = 5;
+    RpcResponse rpc_response = 6;
+    Event event = 7;
+  }
+}
+
+// First frame node -> app after the WS handshake. Carries the shared token
+// once; the app answers HelloAck then pushes Event.limits_config.
+message Hello {
+  string identifier = 1; // NODE_IDENTIFIER (source of the app-assigned node id)
+  string hostname = 2;
+  string version = 3;
+  string auth_token = 4;
+  PublicEndpoints endpoints = 5;
+}
+
+// Advertised public endpoints (was the PUBLIC_MEDIA_NODE_* register payload).
+message PublicEndpoints {
+  string public_origin = 1; // "" = users push via the app host
+  int32 public_rtmp_port = 2;
+  int32 public_probe_udp_port = 3;
+  int32 public_srs_udp_port = 4;
+  string srs_flv_base = 5; // FLV base as reachable from the app backend
+}
+
+message HelloAck {
+  string node_id = 1; // app-assigned node id (was node:registered)
+}
+
+message Heartbeat {
+  int64 sent_at_ms = 1;
+}
+
+message HeartbeatAck {
+  int64 echoed_sent_at_ms = 1;
+}
+
+// Correlated request/response. Node -> app: authorize_publish, judge_spec,
+// auth_*. App -> node: whep_relay, recording_pull. Either side may answer
+// with Error instead of the matching body.
+message RpcRequest {
+  uint32 seq = 1;
+  oneof body {
+    AuthorizePublishRequest authorize_publish = 2;
+    JudgeSpecRequest judge_spec = 3;
+    AuthSaltRequest auth_salt = 4;
+    AuthVerifyRequest auth_verify = 5;
+    AuthPolicyRequest auth_policy = 6;
+    WhepRelayRequest whep_relay = 7;
+    RecordingPullRequest recording_pull = 8;
+  }
+}
+
+message RpcResponse {
+  uint32 seq = 1;
+  oneof body {
+    AuthorizePublishResponse authorize_publish = 2;
+    JudgeSpecResponse judge_spec = 3;
+    AuthSaltResponse auth_salt = 4;
+    AuthVerifyResponse auth_verify = 5;
+    AuthPolicyResponse auth_policy = 6;
+    WhepRelayResponse whep_relay = 7;
+    RecordingPullResponse recording_pull = 8;
+    Error error = 9;
+  }
+}
+
+message Error {
+  string message = 1;
+}
+
+// Publish gate (was the publish:start ack).
+message AuthorizePublishRequest {
+  string node_id = 1;
+  string stream_name = 2;
+  string token = 3;
+  string authed_user = 4;
+  string srs_client_id = 5;
+}
+
+message AuthorizePublishResponse {
+  bool allow = 1;
+  string reason = 2;
+  int64 session_id = 3;
+  optional int64 event_id = 4;
+  string event_key = 5;
+  Limits limits = 6;
+  bool record = 7;
+  bool strict = 8;
+  bool measured = 9;
+}
+
+message Limits {
+  int32 max_width = 1;
+  int32 max_height = 2;
+  int32 max_fps = 3;
+  int32 max_video_bitrate_kbps = 4;
+  int32 max_audio_bitrate_kbps = 5;
+}
+
+// Declared-spec gate (was the publish:spec ack).
+message JudgeSpecRequest {
+  string node_id = 1;
+  string stream_name = 2;
+  optional int32 width = 3;
+  optional int32 height = 4;
+  optional double fps = 5;
+  optional double video_kbps = 6;
+  optional double audio_bitrate_kbps = 7;
+}
+
+message JudgeSpecResponse {
+  bool allow = 1;
+  string reason = 2;
+}
+
+// RTMP authmod (was the auth:salt / auth:verify / auth:policy acks).
+message AuthSaltRequest {
+  string email = 1;
+}
+
+message AuthSaltResponse {
+  string salt = 1;
+  bool banned = 2;
+}
+
+message AuthVerifyRequest {
+  string email = 1;
+  string opaque = 2;
+  string challenge = 3;
+  string response = 4;
+}
+
+message AuthVerifyResponse {
+  bool allow = 1;
+  bool known = 2;
+}
+
+message AuthPolicyRequest {
+  string token = 1;
+  string stream = 2;
+}
+
+message AuthPolicyResponse {
+  bool publish_key = 1;
+  bool require_account_auth = 2;
+  bool window_open = 3;
+  bool banned = 4;
+}
+
+// WHEP signaling relay (app -> node; was node:whep). The node POSTs the offer
+// to its local SRS and returns the answer; browser media then flows over UDP
+// directly to the node's SRS.
+message WhepRelayRequest {
+  string stream_name = 1;
+  bytes offer_sdp = 2;
+}
+
+message WhepRelayResponse {
+  bytes answer_sdp = 1;
+  string error = 2;
+}
+
+// Recording file relay (app -> node; was node:rec:pull). The node streams
+// Event.recording_chunk frames (raw bytes) for this req_id until
+// recording_stream_end.
+message RecordingPullRequest {
+  string req_id = 1;
+  string rel_path = 2; // relative to the node RECORD_DIR; node validates
+}
+
+message RecordingPullResponse {
+  bool started = 1;
+}
+
+// Fire-and-forget notifications, either direction.
+message Event {
+  oneof body {
+    LimitsConfig limits_config = 1; // app -> node (on connect + config change)
+    KickStream kick_stream = 2; // app -> node
+    RecordingCancel recording_cancel = 3; // app -> node (was node:rec:stop)
+    RecordingDelete recording_delete = 4; // app -> node (was recording:delete)
+    PublishMetrics publish_metrics = 5; // node -> app (5s cadence = liveness)
+    PublishViolation publish_violation = 6;
+    PublishEnded publish_ended = 7;
+    RecordingReady recording_ready = 8;
+    RecordingChunk recording_chunk = 9;
+    RecordingStreamEnd recording_stream_end = 10;
+  }
+}
+
+message LimitsConfig {
+  Limits global = 1;
+  repeated EventLimits events = 2;
+}
+
+message EventLimits {
+  int64 event_id = 1;
+  Limits limits = 2;
+}
+
+message KickStream {
+  string stream_name = 1;
+  string reason = 2;
+}
+
+message RecordingCancel {
+  string req_id = 1;
+}
+
+// Tells the node to delete the given recording segment files on its disk.
+message RecordingDelete {
+  repeated string rel_paths = 1;
+}
+
+message PublishMetrics {
+  int64 session_id = 1;
+  optional int32 width = 2;
+  optional int32 height = 3;
+  optional double fps = 4;
+  optional int32 video_bitrate_kbps = 5;
+  optional int32 audio_bitrate_kbps = 6;
+}
+
+message PublishViolation {
+  int64 session_id = 1;
+  repeated string reasons = 2;
+  PublishMetrics metrics = 3;
+}
+
+message PublishEnded {
+  int64 session_id = 1;
+  int64 ended_at_ms = 2;
+  int32 duration_sec = 3;
+}
+
+message RecordingReady {
+  string node_id = 1;
+  string stream_name = 2;
+  optional int64 event_id = 3;
+  optional int64 session_id = 4;
+  repeated RecordingSegment segments = 5;
+  int64 size_bytes = 6;
+  int32 duration_sec = 7;
+  optional double avg_fps = 8;
+  optional int32 width = 9;
+  optional int32 height = 10;
+}
+
+message RecordingSegment {
+  string rel_path = 1;
+  int64 size_bytes = 2;
+  int32 duration_sec = 3;
+}
+
+message RecordingChunk {
+  string req_id = 1;
+  bytes data = 2;
+}
+
+message RecordingStreamEnd {
+  string req_id = 1;
+  string error = 2;
+}

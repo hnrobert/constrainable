@@ -1,0 +1,16 @@
+{
+  "name": "constrainable",
+  "private": true,
+  "packageManager": "bun@1.3.14",
+  "scripts": {
+    "proto": "bun run proto:go && bun run proto:ts",
+    "proto:go": "buf generate proto --template proto/buf.gen.go.yaml",
+    "proto:ts": "buf generate proto --template proto/buf.gen.ts.yaml",
+    "proto:lint": "buf lint proto",
+    "proto:breaking": "buf breaking proto --against '.git#branch=main,subdir=proto'"
+  },
+  "devDependencies": {
+    "@bufbuild/buf": "^1.66.1",
+    "@bufbuild/protoc-gen-es": "^2.14.0"
+  }
+}
