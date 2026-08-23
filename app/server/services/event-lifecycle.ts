@@ -13,8 +13,7 @@
  */
 import { EventsRepository } from '../repositories/events.repository'
 import { PublishSessionsRepository } from '../repositories/publish-sessions.repository'
-import { emitToNode } from './media-node-registry'
-import { getSocketIO } from '../utils/socket-io'
+import { kickStream } from './media-node-ws'
 import { audit } from './audit'
 import type { Event } from '../database/schema'
 
@@ -57,13 +56,12 @@ export function runEventLifecycle(): LifecycleResult {
 
 /** Kill every ACTIVE publish session belonging to the event. */
 function cutEventStreams(ev: Event): number {
-  const io = getSocketIO()
   let cut = 0
   for (const s of PublishSessionsRepository.findActiveByEvent(ev.id)) {
     const reason = `event ended (window closed): ${ev.name}`
     let dead = false
-    if (io && s.nodeId) {
-      dead = emitToNode(io, s.nodeId, 'node:kick', { streamName: s.streamName, reason })
+    if (s.nodeId) {
+      dead = kickStream(s.nodeId, s.streamName, reason)
     }
     if (!dead) {
       // local session or node offline — mark ended regardless; SRS-side

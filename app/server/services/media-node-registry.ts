@@ -69,9 +69,11 @@ export function deriveNodeId(origin: string): string {
     .toLowerCase()
 }
 
-/** Register (or re-register) a node connection. Returns the nodeId. */
+/** Register (or re-register) a node connection. Returns the nodeId.
+ *  `peer` is anything with a stable connection id — a socket.io Socket or a
+ *  crossws Peer (the protobuf WS transport) both fit. */
 export function register(
-  socket: Socket,
+  peer: { id: string },
   // the public fields are optional at the call site (defaults applied below)
   info: Omit<
     MediaNodeInfo,
@@ -97,7 +99,7 @@ export function register(
   const entry: MediaNodeInfo = {
     ...info,
     nodeId,
-    socketId: socket.id,
+    socketId: peer.id,
     connectedAt: Date.now(),
     activeStreams: existing?.activeStreams ?? 0,
     srsFlvBase: info.srsFlvBase || `http://${info.identifier}:38081`,
@@ -109,7 +111,7 @@ export function register(
   nodes.set(nodeId, entry)
   offlineSince.delete(nodeId)
   everSeen.add(nodeId)
-  socketToNode.set(socket.id, nodeId)
+  socketToNode.set(peer.id, nodeId)
   console.log(
     `[media-nodes] registered: ${nodeId} (${info.hostname}) flv=${entry.srsFlvBase}`,
   )

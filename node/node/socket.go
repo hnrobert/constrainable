@@ -5,17 +5,12 @@ package node
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
-	"net"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -480,76 +475,31 @@ func (c *Client) handleAck(raw string) error {
 }
 
 // streamFile relays one file under RecordDir (path-validated) to the control
-// plane in base64 chunks until EOF, cancellation or a size cap.
+// plane in base64 chunks until EOF, cancellation or a size cap. The file
+// walk lives in relay.go (relayFile), shared with the WS transport; only the
+// base64 JSON chunk framing is socket.io-specific.
 func (c *Client) streamFile(p RecPull) error {
 	if c.RecordDir == "" {
 		return fmt.Errorf("node has no records dir configured")
 	}
-	clean := filepath.Clean(p.RelPath)
-	if filepath.IsAbs(clean) || strings.HasPrefix(clean, "..") || filepath.Base(clean) == "" {
-		return fmt.Errorf("invalid path")
-	}
-	abs := filepath.Join(c.RecordDir, clean)
-	if !strings.HasPrefix(abs, filepath.Clean(c.RecordDir)+string(os.PathSeparator)) {
-		return fmt.Errorf("path escapes records dir")
-	}
-	f, err := os.Open(abs)
-	if err != nil {
-		return fmt.Errorf("open %s: %w", clean, err)
-	}
-	st, _ := f.Stat()
-	log.Printf("[rec] streaming %s (%d bytes)", clean, st.Size())
-	defer f.Close()
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	c.recPulls.Store(p.ReqID, context.CancelFunc(cancel))
 	defer c.recPulls.Delete(p.ReqID)
-
-	buf := make([]byte, 256*1024)
-	total := 0
-	for total < 2*1024*1024*1024 {
-		n, err := f.Read(buf)
-		if n > 0 {
-			total += n
-			if e := c.Emit("node:rec:data", RecChunk{ReqID: p.ReqID, Data: base64.StdEncoding.EncodeToString(buf[:n])}); e != nil {
-				log.Printf("[rec] chunk emit failed after %d bytes: %v", total, e)
-				return nil
-			}
-		}
-		if err != nil {
-			if ctx.Err() != nil {
-				return nil // stopped by the app — normal teardown
-			}
-			if err == io.EOF {
-				return nil
-			}
-			return fmt.Errorf("read: %w", err)
-		}
-	}
-	return nil
+	return relayFile(c.RecordDir, p.RelPath, func(b []byte) error {
+		return c.Emit("node:rec:data", RecChunk{ReqID: p.ReqID, Data: base64.StdEncoding.EncodeToString(b)})
+	}, func() bool { return ctx.Err() != nil })
 }
 
 // relayWhep forwards a browser's WHEP offer to this node's colocated SRS and
-// returns the ack payload: {answer} on 201, {error} otherwise.
+// returns the ack payload: {answer} on 201, {error} otherwise. The HTTP
+// round trip lives in relay.go (whepRelayHTTP), shared with the WS transport.
 func (c *Client) relayWhep(r WhepRelay) map[string]string {
-	if c.SRSWhepBase == "" {
-		return map[string]string{"error": "node has no SRS API base configured"}
+	answer, errStr := whepRelayHTTP(c.SRSWhepBase, r.StreamName, []byte(r.Offer))
+	if errStr != "" {
+		return map[string]string{"error": errStr}
 	}
-	q := url.Values{}
-	q.Set("app", "live")
-	q.Set("stream", r.StreamName)
-	target := strings.TrimRight(c.SRSWhepBase, "/") + "/rtc/v1/whep/?" + q.Encode()
-	resp, err := http.Post(target, "application/sdp", strings.NewReader(r.Offer))
-	if err != nil {
-		return map[string]string{"error": "srs unreachable: " + err.Error()}
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != 201 {
-		return map[string]string{"error": fmt.Sprintf("srs whep responded %d: %.200s", resp.StatusCode, string(body))}
-	}
-	return map[string]string{"answer": string(body)}
+	return map[string]string{"answer": answer}
 }
 
 // Emit sends a fire-and-forget event (namespaced: 42<nsp>,["event",payload]).
@@ -621,49 +571,10 @@ func (c *Client) EmitWithAck(event string, payload any, result any, timeout time
 	}
 }
 
-// wsDial dials the WebSocket with the ENTIRE handshake under a deadline:
-// we own the TCP conn, bound it with SetDeadline (covers the HTTP 101
-// upgrade read too — websocket.Dial would block forever on a server that
-// accepts TCP but never speaks), then hand it to websocket.NewClient and
-// clear the deadline so readLoop can apply its own per-read bounds.
+// wsDial dials the WebSocket with the entire handshake under a deadline
+// (implementation in wsdial.go, shared with the WS transport client).
 func (c *Client) wsDial(wsURL string) (*websocket.Conn, error) {
-	u, err := url.Parse(wsURL)
-	if err != nil {
-		return nil, err
-	}
-	hostPort := u.Host
-	if u.Port() == "" {
-		defPort := "80"
-		if u.Scheme == "wss" {
-			defPort = "443"
-		}
-		hostPort = net.JoinHostPort(u.Hostname(), defPort)
-	}
-
-	dialer := &net.Dialer{Timeout: connectAckTimeout}
-	var conn net.Conn
-	if u.Scheme == "wss" {
-		conn, err = tls.DialWithDialer(dialer, "tcp", hostPort, &tls.Config{ServerName: u.Hostname()})
-	} else {
-		conn, err = dialer.Dial("tcp", hostPort)
-	}
-	if err != nil {
-		return nil, err
-	}
-	_ = conn.SetDeadline(time.Now().Add(connectAckTimeout))
-
-	cfg, err := websocket.NewConfig(wsURL, c.apiOrigin)
-	if err != nil {
-		_ = conn.Close()
-		return nil, err
-	}
-	ws, err := websocket.NewClient(cfg, conn)
-	if err != nil {
-		_ = conn.Close()
-		return nil, err
-	}
-	_ = conn.SetDeadline(time.Time{}) // per-read deadlines take over
-	return ws, nil
+	return dialWebsocket(c.apiOrigin, wsURL)
 }
 
 // wsURL converts the node origin to a WebSocket URL with the socket.io path.

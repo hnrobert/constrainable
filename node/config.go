@@ -6,6 +6,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"strings"
 )
@@ -13,9 +14,11 @@ import (
 // Config holds every tunable for one media-node instance.
 type Config struct {
 	// Control plane (constrainable-app)
-	APIOrigin      string // e.g. http://constrainable-app:31954 — for socket.io
-	AuthToken      string // shared secret with Node (socket auth)
-	NodeIdentifier string // stable unique identity (drives nodeId: user
+	APIOrigin        string // e.g. http://constrainable-app:31954 — control channel origin
+	AuthToken        string // shared secret with Node (socket auth / Hello frame)
+	ControlTransport string // "socketio" (default, legacy) | "ws" (protobuf WebSocket)
+	ControlWsOrigin  string // dial origin of the control WebSocket ("" = derived from API_ORIGIN, port → 31955)
+	NodeIdentifier   string // stable unique identity (drives nodeId: user
 	// assignments, session ownership, quotas). NOT an address.
 	// ADVERTISED identity ONLY (sent to the app in node:register; the app
 	// renders it into OBS URLs / ICE / probe targets for BROWSERS). These
@@ -73,6 +76,7 @@ func LoadConfig() (*Config, error) {
 	c := &Config{
 		APIOrigin:          envOr("API_ORIGIN", "http://localhost:31954"),
 		AuthToken:          os.Getenv("MEDIA_NODE_AUTH_TOKEN"),
+		ControlTransport:   envOr("CONTROL_TRANSPORT", "socketio"),
 		NodeIdentifier:     envOr("NODE_IDENTIFIER", "media-node"),
 		PublicOrigin:       envOr("PUBLIC_MEDIA_NODE_ORIGIN", ""),
 		PublicRTMPPort:     envOrInt("PUBLIC_MEDIA_NODE_RTMP_PORT", envOrInt("RTMP_PORT", 1935)),
@@ -101,6 +105,20 @@ func LoadConfig() (*Config, error) {
 
 	c.APIOrigin = strings.TrimRight(c.APIOrigin, "/")
 	c.SRSApiBase = strings.TrimRight(c.SRSApiBase, "/")
+
+	switch c.ControlTransport {
+	case "socketio", "ws":
+	default:
+		return nil, fmt.Errorf("invalid CONTROL_TRANSPORT %q (want \"socketio\" or \"ws\")", c.ControlTransport)
+	}
+
+	// Control WS origin: the Bun-runtime app serves the protobuf WebSocket on
+	// its own Bun-native port (node:http upgrades are broken under Bun), so
+	// the default swaps API_ORIGIN's port for it.
+	c.ControlWsOrigin = envOr("CONTROL_WS_ORIGIN", "")
+	if c.ControlTransport == "ws" && c.ControlWsOrigin == "" {
+		c.ControlWsOrigin = deriveControlWsOrigin(c.APIOrigin)
+	}
 
 	// Public origin is a BARE HOST (a full URL is tolerated and reduced).
 	if c.PublicOrigin != "" {
@@ -153,6 +171,29 @@ func envOrInt(key string, def int) int {
 		}
 	}
 	return def
+}
+
+// controlWsDefaultPort is the app's Bun-native control WebSocket port
+// (app env MEDIA_NODE_WS_PORT; must match when overridden there).
+const controlWsDefaultPort = "31955"
+
+// deriveControlWsOrigin maps the app HTTP origin onto the control WS origin.
+func deriveControlWsOrigin(apiOrigin string) string {
+	scheme := "ws"
+	host := apiOrigin
+	if strings.HasPrefix(host, "https://") {
+		scheme = "wss"
+		host = strings.TrimPrefix(host, "https://")
+	} else if strings.HasPrefix(host, "http://") {
+		host = strings.TrimPrefix(host, "http://")
+	}
+	if i := strings.IndexAny(host, "/"); i >= 0 {
+		host = host[:i]
+	}
+	if i := strings.LastIndex(host, ":"); i >= 0 && !strings.Contains(host, "]") { // strip old port
+		host = host[:i]
+	}
+	return scheme + "://" + net.JoinHostPort(host, controlWsDefaultPort)
 }
 
 // originHost strips scheme, path and port from an origin URL, leaving the host.

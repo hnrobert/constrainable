@@ -67,7 +67,9 @@ export default defineNuxtConfig({
   // `listen` hook is NOT emitted by this preset, so we can't attach at startup.
   nitro: {
     preset: 'node-server',
-    experimental: { tasks: false },
+    // websocket: crossws upgrade listener at boot — serves /ws/media-node
+    // (protobuf control channel). Coexists with socket.io's /socket.
+    experimental: { tasks: false, websocket: true },
     // Build-time gzip+brotli for everything in public/ (the /_nuxt bundle).
     // The reverse proxy (Caddy/nginx) serves the precompressed files when the
     // client sends Accept-Encoding — measured 373KB main bundle → ~100KB.

@@ -167,12 +167,20 @@ export function resolveRecordingFile(id: number): ResolvedFile {
 export function deleteRecording(id: number): void {
   const row = RecordingsRepository.findById(id)
   if (!row) throw createError({ statusCode: 404, statusMessage: 'recording not found' })
-  for (const rel of row.segments ? JSON.parse(row.segments) : [row.filePath]) {
+  const segs: string[] = row.segments ? JSON.parse(row.segments) : [row.filePath]
+  for (const rel of segs) {
     try {
       rmSync(join(env.recordDir, rel), { force: true })
     } catch {
       // file already gone — still drop the row
     }
+  }
+  // Node-hosted rows: the files live on the node's disk (not ours) — tell the
+  // node to delete them over the control channel. Best-effort: an offline
+  // node keeps its files (logged); the row is dropped either way.
+  const hostNode = hostingNodeIdOf(row)
+  if (hostNode && !sendRecordingDelete(hostNode, segs)) {
+    console.warn(`[recordings] node ${hostNode} offline — segment files left on node disk for ${row.streamName}`)
   }
   RecordingsRepository.remove(id)
   audit('warn', 'recording', `recording deleted: ${row.streamName}`, {
@@ -186,20 +194,20 @@ export function deleteRecording(id: number): void {
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { getSocket } from './media-node-registry'
 import { getSocketIO } from '../utils/socket-io'
+import { wsConnected, wsRpcRecordingPull, cancelRecordingPull, sendRecordingDelete } from './media-node-ws'
 
 /**
- * Delivery hub: node:rec:data / node:rec:end events are consumed at the
- * NAMESPACE level (media-node-events.ts, like every other node→server event)
- * and dispatched here by reqId. Attaching listeners directly to the socket
- * from a request handler proved unreliable (same sid, onAny saw the event,
- * per-request listener never fired) — the namespace-level route is the
- * pattern every other node event already uses.
+ * Delivery hub: chunk/end notifications are consumed at the TRANSPORT level
+ * (media-node-events.ts for socket.io, media-node-ws.ts for the protobuf WS)
+ * and dispatched here by reqId. Chunks arrive as raw bytes — the legacy
+ * socket.io boundary base64-decodes before dispatch, the WS transport passes
+ * protobuf bytes straight through.
  */
-type RecChunkHandler = (payload: { reqId?: string; data?: string }) => void
+type RecChunkHandler = (payload: { reqId?: string; data?: Uint8Array }) => void
 type RecEndHandler = (payload: { reqId?: string; error?: string }) => void
 const pendingPulls = new Map<string, { onData: RecChunkHandler; onEnd: RecEndHandler }>()
 
-export function dispatchRecChunk(payload: { reqId?: string; data?: string }): void {
+export function dispatchRecChunk(payload: { reqId?: string; data?: Uint8Array }): void {
   pendingPulls.get(payload?.reqId ?? '')?.onData(payload)
 }
 export function dispatchRecEnd(payload: { reqId?: string; error?: string }): void {
@@ -221,21 +229,27 @@ export interface MaterializedSegments {
 }
 
 /**
- * Pull a node-hosted recording's segments over the socket control channel
- * ('node:rec:pull' → chunks of 'node:rec:data' → 'node:rec:stop') into a temp
- * dir under RECORD_DIR/_remote. The existing local serve pipeline (ffmpeg
- * concat) then runs unchanged against the copies. Sequential per segment;
- * sizes are recording-sized (tens–hundreds of MB) so this is a download-time
- * cost, not a listing one.
+ * Pull a node-hosted recording's segments over the control channel into a
+ * temp dir under RECORD_DIR/_remote. Transport: protobuf WS (recording_pull
+ * RPC + raw-bytes recording_chunk events) when the node is connected there,
+ * else the legacy socket.io relay ('node:rec:pull' → base64 'node:rec:data').
+ * The existing local serve pipeline (ffmpeg concat) then runs unchanged
+ * against the copies. Sequential per segment; sizes are recording-sized
+ * (tens–hundreds of MB) so this is a download-time cost, not a listing one.
  */
 export async function materializeRemoteSegments(
   nodeId: string,
   segs: string[],
   recordingId: number,
 ): Promise<MaterializedSegments> {
-  const io = getSocketIO()
-  const socket = io ? getSocket(io, nodeId) : null
-  if (!socket) throw createError({ statusCode: 502, statusMessage: 'hosting node is offline' })
+  const viaWs = wsConnected(nodeId)
+  const socket = viaWs
+    ? null
+    : (() => {
+        const io = getSocketIO()
+        return io ? getSocket(io, nodeId) : null
+      })()
+  if (!viaWs && !socket) throw createError({ statusCode: 502, statusMessage: 'hosting node is offline' })
 
   const dir = join(env.recordDir, '_remote', nodeId.replace(/[^\w.-]/g, '_'), String(recordingId))
   mkdirSync(dir, { recursive: true })
@@ -256,7 +270,7 @@ export async function materializeRemoteSegments(
       }
       const stallTimer = setInterval(() => {
         if (Date.now() - lastActivity > REC_PULL_TIMEOUT_MS) {
-          socket.emit('node:rec:stop', { reqId })
+          cancelRecordingPull(nodeId, reqId)
           finish(new Error('node file transfer stalled'))
         }
       }, 2_000)
@@ -267,9 +281,7 @@ export async function materializeRemoteSegments(
         if (err) reject(err)
         else {
           try {
-            const out = Buffer.concat(chunks)
-            console.log('[rec-dbg] writing', abs, 'from', chunks.length, 'chunks =', out.length, 'bytes, head:', out.subarray(0, 4).toString('hex'))
-            writeFileSync(abs, out)
+            writeFileSync(abs, Buffer.concat(chunks))
             absPaths.push(abs)
             resolve()
           } catch (e) {
@@ -277,24 +289,27 @@ export async function materializeRemoteSegments(
           }
         }
       }
-      function onData(payload: { reqId?: string; data?: string }): void {
-        if (payload?.reqId !== reqId || !payload.data) {
-          console.log('[rec-relay] data filtered', payload?.reqId, 'want', reqId, 'len', payload?.data?.length)
-          return
-        }
+      function onData(payload: { reqId?: string; data?: Uint8Array }): void {
+        if (payload?.reqId !== reqId || !payload.data) return
         lastActivity = Date.now()
-        chunks.push(Buffer.from(payload.data, 'base64'))
+        chunks.push(Buffer.from(payload.data))
       }
       function onEnd(payload: { reqId?: string; error?: string }): void {
         if (payload?.reqId !== reqId) return
         finish(payload.error ? new Error(`node: ${payload.error}`) : null)
       }
       pendingPulls.set(reqId, { onData, onEnd })
-      socket
-        .timeout(REC_PULL_START_TIMEOUT_MS)
-        .emit('node:rec:pull', { reqId, relPath: safe }, (err: unknown) => {
-          if (err) finish(new Error('node did not start the file transfer (old firmware?) — update the node'))
+      if (viaWs) {
+        wsRpcRecordingPull(nodeId, reqId, safe).catch((e: unknown) => {
+          finish(e instanceof Error ? e : new Error('node did not start the file transfer'))
         })
+      } else {
+        socket!
+          .timeout(REC_PULL_START_TIMEOUT_MS)
+          .emit('node:rec:pull', { reqId, relPath: safe }, (err: unknown) => {
+            if (err) finish(new Error('node did not start the file transfer (old firmware?) — update the node'))
+          })
+      }
     })
   }
   return { absPaths, dir }

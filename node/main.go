@@ -23,7 +23,7 @@ import (
 	"media-node/rtmp"
 )
 
-const version = "0.4.0"
+const version = "0.5.0"
 
 // startSRS renders the config template and starts SRS. The RENDER always
 // happens: when SRS runs as a sidecar container (SRS_BIN empty), the rendered
@@ -76,7 +76,10 @@ func startSRS(cfg *Config) *exec.Cmd {
 // wrote during the session and reports them to the control plane
 // (recording:ready). Runs in its own goroutine with a short delay — SRS
 // finalizes (closes) the DVR file only after it sees the relay go away.
-func reportRecording(cfg *Config, c *node.Client, s *media.Session) {
+// Delivery is RETRIED for up to 15 minutes: a single emit can be lost to an
+// app restart mid-roll (production incident 2026-08: files on disk, no DB
+// rows), so keep re-reporting until it lands.
+func reportRecording(cfg *Config, c node.ControlClient, s *media.Session) {
 	go func() {
 		time.Sleep(2 * time.Second)
 
@@ -125,21 +128,32 @@ func reportRecording(cfg *Config, c *node.Client, s *media.Session) {
 		if len(segs) == 0 {
 			return
 		}
-		endedAt := time.Now()
-		dur := int(endedAt.Sub(s.StartedAt).Seconds())
-		_ = c.Emit("recording:ready", node.RecordingReady{
-			NodeID:      c.NodeID(),
-			StreamName:  s.StreamName,
-			EventID:     s.EventID,
-			SessionID:   s.SessionID,
-			Segments:    segs,
-			SizeBytes:   total,
-			DurationSec: dur,
-			AvgFps:      s.Fps,
-			Width:       s.Width,
-			Height:      s.Height,
-		})
-		log.Printf("[dvr] reported %d segment(s) for %s (%d bytes)", len(segs), s.StreamName, total)
+		dur := int(time.Since(s.StartedAt).Seconds())
+		deadline := time.Now().Add(15 * time.Minute)
+		for {
+			rep := node.RecordingReady{
+				NodeID:      c.NodeID(),
+				StreamName:  s.StreamName,
+				EventID:     s.EventID,
+				SessionID:   s.SessionID,
+				Segments:    segs,
+				SizeBytes:   total,
+				DurationSec: dur,
+				AvgFps:      s.Fps,
+				Width:       s.Width,
+				Height:      s.Height,
+			}
+			if err := c.Emit("recording:ready", rep); err == nil {
+				log.Printf("[dvr] reported %d segment(s) for %s (%d bytes)", len(segs), s.StreamName, total)
+				return
+			}
+			if time.Now().After(deadline) {
+				log.Printf("[dvr] reporting %s FAILED after 15min — %d segment(s) stay on disk for manual recovery",
+					s.StreamName, len(segs))
+				return
+			}
+			time.Sleep(10 * time.Second)
+		}
 	}()
 }
 
@@ -175,7 +189,11 @@ func main() {
 		}
 	}()
 
-	socketClient := node.NewClient(cfg.APIOrigin, cfg.AuthToken, node.RegisterPayload{
+	// Control-plane client — CONTROL_TRANSPORT picks the wire: "ws" (protobuf
+	// Envelope over a raw WebSocket) or "socketio" (legacy, the default
+	// during the fleet cutover). Both implement node.ControlClient, so the
+	// rest of the node is transport-agnostic.
+	registerPayload := node.RegisterPayload{
 		Identifier:         cfg.NodeIdentifier,
 		PublicOrigin:       cfg.PublicOrigin,
 		PublicRTMPPort:     cfg.PublicRTMPPort,
@@ -185,12 +203,21 @@ func main() {
 		SRSFlvBase:         cfg.SRSFlvBase,
 		Hostname:           cfg.Hostname,
 		Version:            version,
-	})
-
-	// WHEP relay target: SRSApiBase (…/api/v1) minus the API path prefix
-	socketClient.SRSWhepBase = strings.TrimSuffix(cfg.SRSApiBase, "/api/v1")
-	// Recording-file relay target: this node's records dir (DVR mounts here)
-	socketClient.RecordDir = cfg.RecordDir
+	}
+	var socketClient node.ControlClient
+	if cfg.ControlTransport == "ws" {
+		w := node.NewWsClient(cfg.APIOrigin, cfg.ControlWsOrigin, cfg.AuthToken, registerPayload)
+		w.SRSWhepBase = strings.TrimSuffix(cfg.SRSApiBase, "/api/v1")
+		w.RecordDir = cfg.RecordDir
+		socketClient = w
+		log.Printf("[node] control transport: protobuf websocket (%s/ws/media-node)", cfg.ControlWsOrigin)
+	} else {
+		s := node.NewClient(cfg.APIOrigin, cfg.AuthToken, registerPayload)
+		s.SRSWhepBase = strings.TrimSuffix(cfg.SRSApiBase, "/api/v1")
+		s.RecordDir = cfg.RecordDir
+		socketClient = s
+		log.Printf("[node] control transport: socket.io (legacy)")
+	}
 
 	// Session manager
 	manager := media.NewManager(
@@ -295,22 +322,22 @@ func main() {
 		return true, ""
 	}
 
-	socketClient.OnKick = func(kick node.NodeKick) {
+	socketClient.SetOnKick(func(kick node.NodeKick) {
 		log.Printf("[node] kick: %s", kick.StreamName)
 		// Closing the relay runs the normal unpublish path (session end +
 		// recording report); if the stream is already gone this is a no-op.
 		rtmp.KillStream(kick.StreamName)
-	}
-	socketClient.OnConfig = func(c node.ConfigLimits) {
+	})
+	socketClient.SetOnConfig(func(c node.ConfigLimits) {
 		log.Printf("[node] config:limits received")
-	}
-	socketClient.OnDelete = func(del node.RecordingDelete) error {
-		log.Printf("[node] recording:delete %d", del.RecordingID)
+	})
+	socketClient.SetOnDelete(func(del node.RecordingDelete) error {
+		log.Printf("[node] recording:delete %d segment(s)", len(del.Segments))
 		for _, seg := range del.Segments {
-			_ = os.Remove(fmt.Sprintf("%s/%s", cfg.RecordDir, seg))
+			_ = os.Remove(filepath.Join(cfg.RecordDir, seg))
 		}
 		return nil
-	}
+	})
 
 	go socketClient.Run()
 

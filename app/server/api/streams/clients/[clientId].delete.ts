@@ -11,8 +11,7 @@ import { createError, getRouterParam } from 'h3'
 import { killClient } from '../../../services/srs-client'
 import { ban } from '../../../services/stream-bans'
 import { audit } from '../../../services/audit'
-import { emitToNode } from '../../../services/media-node-registry'
-import { getSocketIO } from '../../../utils/socket-io'
+import { kickStream } from '../../../services/media-node-ws'
 import { PublishSessionsRepository } from '../../../repositories/publish-sessions.repository'
 
 export default defineEventHandler(async (event) => {
@@ -39,15 +38,10 @@ export default defineEventHandler(async (event) => {
   const session =
     PublishSessionsRepository.findActiveByStream(email) ??
     PublishSessionsRepository.findActiveByClientId(clientId)
-  const io = getSocketIO()
   if (session?.nodeId) {
-    // Remote media-node session — tell the node to end it over the socket
-    disconnected =
-      io !== null &&
-      emitToNode(io, session.nodeId, 'node:kick', {
-        streamName: session.streamName,
-        reason: reason ?? 'banned',
-      })
+    // Remote media-node session — tell the node to end it over the control
+    // channel (protobuf WS, or legacy socket.io for old firmware)
+    disconnected = kickStream(session.nodeId, session.streamName, reason ?? 'banned')
   } else {
     // Local session — kill the SRS client directly
     disconnected = await killClient(clientId)
