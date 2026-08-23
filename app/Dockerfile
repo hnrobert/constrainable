@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # constrainable-app: Nuxt full-stack (SSR frontend + API backend + Socket.IO).
-# Pairs with constrainable-media-node (separate repo) for distributed ingest.
+# Pairs with the media node (../node in this monorepo) for distributed ingest.
 #
 # LAYER STRATEGY (pull size per code change ≈ the .output layer only):
 #  - deps / prod-deps stages install from the LOCKFILE — byte-identical while
@@ -13,15 +13,15 @@
 #    changes) → .output + configs (change every build, ~17MB).
 FROM oven/bun:1 AS deps
 WORKDIR /app
-COPY package.json bun.lockb* ./
-RUN bun install --frozen-lockfile || bun install
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
 
 # Production-only tree for the runtime image (drizzle-kit lives in
 # `dependencies` — the server runs it at boot for schema sync).
 FROM oven/bun:1 AS prod-deps
 WORKDIR /app
-COPY package.json bun.lockb* ./
-RUN bun install --production --frozen-lockfile || bun install --production
+COPY package.json bun.lock ./
+RUN bun install --production --frozen-lockfile
 
 FROM oven/bun:1 AS build
 WORKDIR /app
