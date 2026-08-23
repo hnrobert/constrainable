@@ -1,0 +1,45 @@
+# constrainable-app standalone: Nuxt server only (no media-node, no SRS).
+# Runs the prebuilt GHCR image — no local build. To build from source instead,
+# replace the image line with `build: .`.
+# Pair with constrainable-media-node for full ingest.
+#
+# SAME HOST, SEPARATE COMPOSE PROJECTS: service names do not resolve across
+# compose projects by default. To let the media-node compose reach this app by
+# service name, create a shared network once and uncomment the ingest-shared
+# blocks below (do the same in the media-node compose):
+#   docker network create ingest-shared
+services:
+  app:
+    # build: .
+    image: ghcr.io/hnrobert/constrainable-app:latest
+    container_name: constrainable-app
+    environment:
+      # Timezone: on a LINUX host the read-only mounts below make the container
+      # follow the HOST's timezone — leave TZ unset. On macOS (Docker Desktop)
+      # host /etc isn't shared; uncomment TZ instead:
+      # TZ: ${TZ:-Asia/Shanghai}
+      HOST: 0.0.0.0
+      PORT: "31954"
+      NODE_ENV: production
+      DB_PATH: /app/data/app.db
+      RECORD_DIR: /app/records
+      PUBLIC_HOST: ${PUBLIC_HOST:-127.0.0.1}
+      SESSION_SECRET: ${SESSION_SECRET:-changeme-change-me}
+      AUTHMOD_VERIFIER_SECRET: ${AUTHMOD_VERIFIER_SECRET:-change-me-to-a-long-random-string}
+    volumes:
+      - ./data:/app/data
+      - ./records:/app/records
+      - /etc/localtime:/etc/localtime:ro # host tz (linux; symlink resolves inside)
+      - /etc/timezone:/etc/timezone:ro   # host tz name (debian-style, optional)
+    ports:
+      - "31954:31954"
+    networks:
+      - constrainable-ingest
+      # - ingest-shared   # external shared network (see header)
+    restart: unless-stopped
+
+networks:
+  constrainable-ingest:
+    driver: bridge
+  # ingest-shared:
+  #   external: true     # created once via `docker network create ingest-shared`
