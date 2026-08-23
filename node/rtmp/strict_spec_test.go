@@ -33,7 +33,7 @@ func TestSpecViolations(t *testing.T) {
 	if r := SpecViolations(StreamSpec{Width: 4096, Height: 2160, Fps: 60, VideoKbps: 8000}, lim); len(r) != 3 {
 		t.Fatalf("multi: %v", r)
 	}
-	// zero caps = uncapged
+	// zero caps = uncapped
 	if r := SpecViolations(StreamSpec{Width: 99999, Height: 1, Fps: 900, VideoKbps: 1e6}, &GateLimits{}); len(r) != 0 {
 		t.Fatalf("zero limits must not flag: %v", r)
 	}
@@ -163,7 +163,7 @@ func TestSpecRejectCooldownKillsReconnect(t *testing.T) {
 	}
 	c.Close()
 
-	// the auto-reconnect: stage-2 of the dance must be refused FATAALLY —
+	// the auto-reconnect: stage-2 of the dance must be refused FATALLY —
 	// reason=authfailed (a wrong password's terminal form), never needauth
 	c2, cw2, cr2 := openClient(t, addr)
 	defer c2.Close()
