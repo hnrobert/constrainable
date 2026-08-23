@@ -1,0 +1,8 @@
+*
+!go.mod
+!go.sum
+!*.go
+!rtmp/
+!media/
+!node/
+!srs.conf.template

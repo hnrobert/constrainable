@@ -1,0 +1,114 @@
+# Standalone media-node deployment: connects to a remote constrainable-app
+# backend. Two containers: the Go node + its SRS sidecar. The node renders the
+# SRS config (template embedded in its image) onto a shared volume; the SRS
+# container waits for it, then starts — the node stays the config owner.
+#
+# Usage:
+#   API_ORIGIN=https://api.example.com docker compose up -d
+#
+# API_ORIGIN by deployment:
+#   same compose as the app (orchestrator)  → http://app:31954 (service name)
+#   same host, SEPARATE compose projects    → create a shared network once
+#     (`docker network create ingest-shared`), uncomment the ingest-shared
+#     blocks below + the matching block in the app's compose, then
+#     API_ORIGIN=http://app:31954 still works (service names resolve across
+#     projects on a shared network)
+#   remote host                             → https://<api-domain> (needs HTTPS)
+#
+# All SRS wiring (sidecar address, API, config rendering) is binary defaults
+# (srs:1935 / srs:1985 / sidecar mode). Only public-facing identity/routing
+# lives in compose.
+# Runs the prebuilt GHCR image — no local build. To build from source
+# instead, replace the image line with `build: .`.
+services:
+  media-node:
+    # build: .
+    image: ghcr.io/hnrobert/constrainable-media-node:latest
+    container_name: constrainable-media-node
+    environment:
+      # Timezone: on a LINUX host the read-only mounts below make the container
+      # follow the HOST's timezone — leave TZ unset. On macOS (Docker Desktop)
+      # host /etc isn't shared; uncomment TZ instead:
+      #   TZ: ${TZ:-Asia/Shanghai}
+      # The constrainable-app backend URL (Socket.IO + auth)
+      API_ORIGIN: ${API_ORIGIN:-http://localhost:31954}
+      # Stable unique identity of this node (drives nodeId: user assignments,
+      # session ownership, quotas). NOT an address.
+      NODE_IDENTIFIER: ${NODE_IDENTIFIER:-$(hostname)}
+      # Public reachability of this node — reported to the control plane and
+      # handed through to browsers (the OBS ingest URL, the ICE latency-probe
+      # port, the WebRTC media port). PUBLIC_MEDIA_NODE_ORIGIN empty = users push via the
+      # app's own host; it is also the default WebRTC ICE candidate host.
+      PUBLIC_MEDIA_NODE_ORIGIN: ${PUBLIC_MEDIA_NODE_ORIGIN:-}
+      PUBLIC_MEDIA_NODE_RTMP_PORT: ${PUBLIC_MEDIA_NODE_RTMP_PORT:-1935}
+      PUBLIC_MEDIA_NODE_PROBE_UDP_PORT: ${PUBLIC_MEDIA_NODE_PROBE_UDP_PORT:-38111}
+      PUBLIC_MEDIA_NODE_SRS_UDP_PORT: ${PUBLIC_MEDIA_NODE_SRS_UDP_PORT:-38000}
+      # Shared auth token (must match the backend; empty = no auth)
+      MEDIA_NODE_AUTH_TOKEN: ${MEDIA_NODE_AUTH_TOKEN:-}
+    volumes:
+      - ./records:/records
+      - srs-conf:/srs-config
+      - /etc/localtime:/etc/localtime:ro # host tz (linux; symlink resolves inside)
+      - /etc/timezone:/etc/timezone:ro   # host tz name (debian-style, optional)
+    ports:
+      # RTMP ingest (OBS pushes here): public port maps to the fixed 1935
+      - "1935:1935"
+      # Browser ICE latency probe (STUN responder, node/probe.go): the app's
+      # probe SDP carries the PUBLIC port; the responder listens on PROBE_UDP_PORT
+      - "38111:38111/udp"
+    networks:
+      - constrainable-ingest
+      # - ingest-shared   # external shared network (see header)
+    # Linux only — uncomment when using host.docker.internal:
+    # extra_hosts:
+    #   - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  # SRS sidecar: waits for the config the node renders onto the shared volume,
+  # then starts. DVR segments land in ./records. udp is published for
+  # DIRECT WebRTC media (ICE): browsers send UDP straight to this port — it
+  # cannot be path-routed through an HTTP proxy, so the host in
+  # SRS_RTC_CANDIDATE / PUBLIC_MEDIA_NODE_ORIGIN must resolve directly to this
+  # machine (DNS-only, not a CDN proxy edge).
+  # SRS: DVR filenames + logs follow the HOST timezone via the read-only
+  # /etc/localtime mount (macOS Docker Desktop: add `TZ: ${TZ:-Asia/Shanghai}`
+  # under an `environment:` block — host /etc isn't shared there).
+  srs:
+    image: ossrs/srs:6
+    container_name: constrainable-srs
+    command:
+      - sh
+      - -c
+      - "until [ -f /srs-config/srs.conf ]; do sleep 0.2; done; exec /usr/local/srs/objs/srs -c /srs-config/srs.conf"
+    volumes:
+      - ./records:/records
+      - srs-conf:/srs-config
+      - /etc/localtime:/etc/localtime:ro # host tz (linux; symlink resolves inside)
+      - /etc/timezone:/etc/timezone:ro   # host tz name (debian-style, optional)
+    ports:
+      # WebRTC media (direct ICE, browsers). FIXED 38000:38000 — the SDP
+      # candidate carries the listen port in-band, so host port must equal it
+      # (not configurable; host-networking deployments advertise via the
+      # media-node's PUBLIC_MEDIA_NODE_SRS_UDP_PORT instead).
+      - "38000:38000/udp"
+    networks:
+      - constrainable-ingest
+    depends_on:
+      - media-node
+    restart: unless-stopped
+    # SRS's HTTP ports (FLV :38081 / API :1985) are deliberately NOT
+    # published: browsers only ever speak WebRTC to SRS (gated by the
+    # admin-authenticated WHEP signaling the app proxies); the control plane
+    # pulls FLV server-side (http://srs:<SRS_HTTP_PORT>) over the shared
+    # network — the node derives and advertises it from its compiled-in SRS default.
+    # Only the UDP media port is public — WebRTC media carries its own
+    # DTLS-SRTP encryption.
+
+volumes:
+  srs-conf:
+
+networks:
+  constrainable-ingest:
+    driver: bridge
+  # ingest-shared:
+  #   external: true     # created once via `docker network create ingest-shared`
