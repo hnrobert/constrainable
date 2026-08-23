@@ -1,0 +1,10 @@
+node_modules/
+.DS_Store
+
+app/.nuxt/
+app/.output/
+app/data/
+app/records/
+app/.env
+
+node/records/
