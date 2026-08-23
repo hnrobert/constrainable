@@ -24,14 +24,16 @@ bun install                                                   # buf + protoc-gen
 go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12
 ```
 
-After editing anything under `proto/`:
+After cloning (before the first `go build` / `bun run typecheck`) and after
+editing anything under `proto/`:
 
 ```bash
-bun run proto          # regenerate node/gen + app/shared/proto, then commit both
+bun run proto          # regenerate node/gen + app/shared/proto (NOT committed)
 bun run proto:lint     # buf lint (STANDARD)
 ```
 
-Generated code is committed; CI only lints and runs breaking checks.
+Generated code is never committed (gitignored). CI regenerates it before the
+tests and Docker builds of both images.
 
 ## Local development notes
 

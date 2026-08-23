@@ -20,7 +20,7 @@ jobs:
       proto: ${{ steps.filter.outputs.proto }}
     steps:
       - uses: actions/checkout@v7
-      - uses: dorny/paths-filter@v3
+      - uses: dorny/paths-filter@v4
         id: filter
         with:
           filters: |
@@ -64,6 +64,11 @@ jobs:
         with:
           bun-version: '1.3.14'
 
+      - name: Generate proto (TS)
+        # generated code is NOT committed — typecheck, tests, and the Docker
+        # build (context ./app) all read it from the workspace
+        run: bun install && bun run proto:ts
+
       - name: Typecheck
         working-directory: app
         run: bun install && bun run typecheck
@@ -87,7 +92,7 @@ jobs:
             type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       - uses: docker/login-action@v4
         if: github.event_name != 'pull_request'
@@ -96,7 +101,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: ./app
           provenance: false # Disable provenance to avoid unknown/unknown
@@ -120,6 +125,21 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: '1.26'
+          # module lives at node/go.mod in this monorepo — the default cache
+          # lookup fails at the repo root ("go.mod not found")
+          cache-dependency-path: node/go.sum
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+
+      - name: Generate proto (Go)
+        # generated code is NOT committed — tests and the Docker build
+        # (context ./node, .dockerignore re-includes gen/) read it from here
+        run: |
+          bun install
+          GOBIN=/usr/local/bin go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
+          bun run proto:go
 
       - name: Test
         working-directory: node
@@ -136,7 +156,7 @@ jobs:
             type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       - uses: docker/login-action@v4
         if: github.event_name != 'pull_request'
@@ -145,7 +165,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: ./node
           provenance: false # Disable provenance to avoid unknown/unknown

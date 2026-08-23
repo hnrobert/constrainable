@@ -8,3 +8,9 @@ app/records/
 app/.env
 
 node/records/
+
+# protobuf generated code — NEVER committed; `bun run proto` generates
+# (root: bun install once + go install protoc-gen-go once). CI generates
+# before tests/builds; Docker builds pick it up from the workspace.
+node/gen/
+app/shared/proto/
