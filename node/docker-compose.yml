@@ -30,8 +30,17 @@ services:
       # follow the HOST's timezone — leave TZ unset. On macOS (Docker Desktop)
       # host /etc isn't shared; uncomment TZ instead:
       #   TZ: ${TZ:-Asia/Shanghai}
-      # The constrainable-app backend URL (Socket.IO + auth)
+      # The constrainable-app backend URL (control channel origin + auth)
       API_ORIGIN: ${API_ORIGIN:-http://localhost:31954}
+      # Control transport: "ws" = protobuf WebSocket (recommended — dials the
+      # app's Bun-native server at ws://<API_ORIGIN host>:31955/ws/media-node,
+      # derived automatically; same docker network, no published port needed).
+      # "socketio" = legacy transport, kept for old-firmware fleets only.
+      CONTROL_TRANSPORT: ${CONTROL_TRANSPORT:-ws}
+      # Only for REMOTE nodes behind a reverse proxy (public internet):
+      # point the WS dial at the proxied wss:// origin instead of the derived
+      # host:31955.
+      # CONTROL_WS_ORIGIN: wss://api.example.com/ws-media
       # Stable unique identity of this node (drives nodeId: user assignments,
       # session ownership, quotas). NOT an address.
       NODE_IDENTIFIER: ${NODE_IDENTIFIER:-$(hostname)}
