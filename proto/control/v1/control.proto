@@ -3,6 +3,13 @@
 // Correlated request/response pairs (seq) replace socket.io acks; Heartbeat
 // replaces engine.io ping/pong; SDP offers/answers and DVR file chunks travel
 // as raw bytes, so there is no base64 inflation anywhere.
+//
+// Naming conventions (mirrors the mmr agent protos):
+//   - CMsg*                      data/entity types carried inside messages
+//   - XxxRequest / XxxResponse   correlated RPC pairs (seq in RpcRequest/RpcResponse)
+//   - XxxMessage                 fire-and-forget push events (Event oneof bodies)
+//   - protocol frames unprefixed: Envelope, Hello/HelloAck, Heartbeat/
+//     HeartbeatAck, RpcRequest/RpcResponse, Error
 syntax = "proto3";
 
 package control.v1;
@@ -17,7 +24,18 @@ message Envelope {
     HeartbeatAck heartbeat_ack = 4;
     RpcRequest rpc_request = 5;
     RpcResponse rpc_response = 6;
-    Event event = 7;
+    // Fire-and-forget push frames — the oneof case IS the dispatch name
+    // (the protobuf equivalent of a hub method name).
+    LimitsConfigMessage limits_config = 7; // app -> node (on connect + config change)
+    KickStreamMessage kick_stream = 8; // app -> node
+    RecordingCancelMessage recording_cancel = 9; // app -> node (was node:rec:stop)
+    RecordingDeleteMessage recording_delete = 10; // app -> node (was recording:delete)
+    PublishMetricsMessage publish_metrics = 11; // node -> app (5s cadence = liveness)
+    PublishViolationMessage publish_violation = 12;
+    PublishEndedMessage publish_ended = 13;
+    RecordingReadyMessage recording_ready = 14;
+    RecordingChunkMessage recording_chunk = 15;
+    RecordingStreamEndMessage recording_stream_end = 16;
   }
 }
 
@@ -28,11 +46,11 @@ message Hello {
   string hostname = 2;
   string version = 3;
   string auth_token = 4;
-  PublicEndpoints endpoints = 5;
+  CMsgPublicEndpoints endpoints = 5;
 }
 
 // Advertised public endpoints (was the PUBLIC_MEDIA_NODE_* register payload).
-message PublicEndpoints {
+message CMsgPublicEndpoints {
   string public_origin = 1; // "" = users push via the app host
   int32 public_rtmp_port = 2;
   int32 public_probe_udp_port = 3;
@@ -101,13 +119,13 @@ message AuthorizePublishResponse {
   int64 session_id = 3;
   optional int64 event_id = 4;
   string event_key = 5;
-  Limits limits = 6;
+  CMsgLimits limits = 6;
   bool record = 7;
   bool strict = 8;
   bool measured = 9;
 }
 
-message Limits {
+message CMsgLimits {
   int32 max_width = 1;
   int32 max_height = 2;
   int32 max_fps = 3;
@@ -190,47 +208,31 @@ message RecordingPullResponse {
   bool started = 1;
 }
 
-// Fire-and-forget notifications, either direction.
-message Event {
-  oneof body {
-    LimitsConfig limits_config = 1; // app -> node (on connect + config change)
-    KickStream kick_stream = 2; // app -> node
-    RecordingCancel recording_cancel = 3; // app -> node (was node:rec:stop)
-    RecordingDelete recording_delete = 4; // app -> node (was recording:delete)
-    PublishMetrics publish_metrics = 5; // node -> app (5s cadence = liveness)
-    PublishViolation publish_violation = 6;
-    PublishEnded publish_ended = 7;
-    RecordingReady recording_ready = 8;
-    RecordingChunk recording_chunk = 9;
-    RecordingStreamEnd recording_stream_end = 10;
-  }
+message LimitsConfigMessage {
+  CMsgLimits global = 1;
+  repeated CMsgEventLimits events = 2;
 }
 
-message LimitsConfig {
-  Limits global = 1;
-  repeated EventLimits events = 2;
-}
-
-message EventLimits {
+message CMsgEventLimits {
   int64 event_id = 1;
-  Limits limits = 2;
+  CMsgLimits limits = 2;
 }
 
-message KickStream {
+message KickStreamMessage {
   string stream_name = 1;
   string reason = 2;
 }
 
-message RecordingCancel {
+message RecordingCancelMessage {
   string req_id = 1;
 }
 
 // Tells the node to delete the given recording segment files on its disk.
-message RecordingDelete {
+message RecordingDeleteMessage {
   repeated string rel_paths = 1;
 }
 
-message PublishMetrics {
+message PublishMetricsMessage {
   int64 session_id = 1;
   optional int32 width = 2;
   optional int32 height = 3;
@@ -239,24 +241,24 @@ message PublishMetrics {
   optional int32 audio_bitrate_kbps = 6;
 }
 
-message PublishViolation {
+message PublishViolationMessage {
   int64 session_id = 1;
   repeated string reasons = 2;
-  PublishMetrics metrics = 3;
+  PublishMetricsMessage metrics = 3;
 }
 
-message PublishEnded {
+message PublishEndedMessage {
   int64 session_id = 1;
   int64 ended_at_ms = 2;
   int32 duration_sec = 3;
 }
 
-message RecordingReady {
+message RecordingReadyMessage {
   string node_id = 1;
   string stream_name = 2;
   optional int64 event_id = 3;
   optional int64 session_id = 4;
-  repeated RecordingSegment segments = 5;
+  repeated CMsgRecordingSegment segments = 5;
   int64 size_bytes = 6;
   int32 duration_sec = 7;
   optional double avg_fps = 8;
@@ -264,18 +266,18 @@ message RecordingReady {
   optional int32 height = 10;
 }
 
-message RecordingSegment {
+message CMsgRecordingSegment {
   string rel_path = 1;
   int64 size_bytes = 2;
   int32 duration_sec = 3;
 }
 
-message RecordingChunk {
+message RecordingChunkMessage {
   string req_id = 1;
   bytes data = 2;
 }
 
-message RecordingStreamEnd {
+message RecordingStreamEndMessage {
   string req_id = 1;
   string error = 2;
 }

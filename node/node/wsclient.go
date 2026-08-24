@@ -178,7 +178,7 @@ func (c *WsClient) connectOnce() error {
 		Hostname:   reg.Hostname,
 		Version:    reg.Version,
 		AuthToken:  c.token,
-		Endpoints: &controlv1.PublicEndpoints{
+		Endpoints: &controlv1.CMsgPublicEndpoints{
 			PublicOrigin:       reg.PublicOrigin,
 			PublicRtmpPort:     int32(reg.PublicRTMPPort),
 			PublicProbeUdpPort: int32(reg.PublicProbeUDPPort),
@@ -290,65 +290,53 @@ func (c *WsClient) dispatch(env *controlv1.Envelope) {
 	case *controlv1.Envelope_RpcRequest:
 		c.handleIncomingRPC(kind.RpcRequest)
 
-	case *controlv1.Envelope_Event:
-		c.handleEvent(kind.Event)
+	// app → node push frames (flattened into the Envelope oneof — the case
+	// name is the dispatch key, the protobuf equivalent of a hub method name)
+	case *controlv1.Envelope_KickStream:
+		if c.OnKick != nil {
+			go c.OnKick(NodeKick{
+				StreamName: kind.KickStream.StreamName,
+				Reason:     kind.KickStream.Reason,
+			})
+		}
+
+	case *controlv1.Envelope_LimitsConfig:
+		if c.OnConfig != nil {
+			cfg := ConfigLimits{Events: []EventLimits{}}
+			if kind.LimitsConfig.Global != nil {
+				cfg.Global = limitsFromProto(kind.LimitsConfig.Global)
+			}
+			for _, e := range kind.LimitsConfig.Events {
+				el := EventLimits{EventID: e.EventId}
+				if e.Limits != nil {
+					el.Limits = limitsFromProto(e.Limits)
+				}
+				cfg.Events = append(cfg.Events, el)
+			}
+			c.OnConfig(cfg)
+		}
+
+	case *controlv1.Envelope_RecordingDelete:
+		if c.OnDelete != nil {
+			del := RecordingDelete{Segments: kind.RecordingDelete.RelPaths}
+			go func() {
+				if err := c.OnDelete(del); err != nil {
+					log.Printf("[ws] recording delete: %v", err)
+				}
+			}()
+		}
+
+	case *controlv1.Envelope_RecordingCancel:
+		if cancel, ok := c.recPulls.LoadAndDelete(kind.RecordingCancel.ReqId); ok {
+			cancel.(context.CancelFunc)()
+		}
 
 	default:
 		log.Printf("[ws] unexpected envelope kind: %T", env.Kind)
 	}
 }
 
-// handleEvent dispatches app → node events.
-func (c *WsClient) handleEvent(ev *controlv1.Event) {
-	switch body := ev.Body.(type) {
-	case *controlv1.Event_KickStream:
-		if c.OnKick == nil {
-			return
-		}
-		go c.OnKick(NodeKick{
-			StreamName: body.KickStream.StreamName,
-			Reason:     body.KickStream.Reason,
-		})
-
-	case *controlv1.Event_LimitsConfig:
-		if c.OnConfig == nil {
-			return
-		}
-		cfg := ConfigLimits{Events: []EventLimits{}}
-		if body.LimitsConfig.Global != nil {
-			cfg.Global = limitsFromProto(body.LimitsConfig.Global)
-		}
-		for _, e := range body.LimitsConfig.Events {
-			el := EventLimits{EventID: e.EventId}
-			if e.Limits != nil {
-				el.Limits = limitsFromProto(e.Limits)
-			}
-			cfg.Events = append(cfg.Events, el)
-		}
-		c.OnConfig(cfg)
-
-	case *controlv1.Event_RecordingDelete:
-		if c.OnDelete == nil {
-			return
-		}
-		del := RecordingDelete{Segments: body.RecordingDelete.RelPaths}
-		go func() {
-			if err := c.OnDelete(del); err != nil {
-				log.Printf("[ws] recording delete: %v", err)
-			}
-		}()
-
-	case *controlv1.Event_RecordingCancel:
-		if cancel, ok := c.recPulls.LoadAndDelete(body.RecordingCancel.ReqId); ok {
-			cancel.(context.CancelFunc)()
-		}
-
-	default:
-		log.Printf("[ws] unhandled event: %T", ev.Body)
-	}
-}
-
-func limitsFromProto(l *controlv1.Limits) Limits {
+func limitsFromProto(l *controlv1.CMsgLimits) Limits {
 	return Limits{
 		MaxWidth:            int(l.MaxWidth),
 		MaxHeight:           int(l.MaxHeight),
@@ -358,11 +346,11 @@ func limitsFromProto(l *controlv1.Limits) Limits {
 	}
 }
 
-func limitsToProto(l *Limits) *controlv1.Limits {
+func limitsToProto(l *Limits) *controlv1.CMsgLimits {
 	if l == nil {
 		return nil
 	}
-	return &controlv1.Limits{
+	return &controlv1.CMsgLimits{
 		MaxWidth:            int32(l.MaxWidth),
 		MaxHeight:           int32(l.MaxHeight),
 		MaxFps:              int32(l.MaxFps),
@@ -379,21 +367,19 @@ func limitsToProto(l *Limits) *controlv1.Limits {
 func (c *WsClient) Emit(event string, payload any) error {
 	switch p := payload.(type) {
 	case MetricsReport:
-		return c.sendEnvelope(&controlv1.Envelope{Kind: &controlv1.Envelope_Event{Event: &controlv1.Event{
-			Body: &controlv1.Event_PublishMetrics{PublishMetrics: &controlv1.PublishMetrics{
-				SessionId:        p.SessionID,
-				Width:            i32p(p.Width),
-				Height:           i32p(p.Height),
-				Fps:              f64p(p.Fps),
-				VideoBitrateKbps: i32p(p.VideoBitrateKbps),
-				AudioBitrateKbps: i32p(p.AudioBitrateKbps),
-			}},
+		return c.sendEnvelope(&controlv1.Envelope{Kind: &controlv1.Envelope_PublishMetrics{PublishMetrics: &controlv1.PublishMetricsMessage{
+			SessionId:        p.SessionID,
+			Width:            i32p(p.Width),
+			Height:           i32p(p.Height),
+			Fps:              f64p(p.Fps),
+			VideoBitrateKbps: i32p(p.VideoBitrateKbps),
+			AudioBitrateKbps: i32p(p.AudioBitrateKbps),
 		}}})
 
 	case ViolationReport:
-		v := &controlv1.PublishViolation{SessionId: p.SessionID, Reasons: p.Reasons}
+		v := &controlv1.PublishViolationMessage{SessionId: p.SessionID, Reasons: p.Reasons}
 		if p.Metrics != nil {
-			v.Metrics = &controlv1.PublishMetrics{
+			v.Metrics = &controlv1.PublishMetricsMessage{
 				SessionId:        p.Metrics.SessionID,
 				Width:            i32p(p.Metrics.Width),
 				Height:           i32p(p.Metrics.Height),
@@ -402,21 +388,17 @@ func (c *WsClient) Emit(event string, payload any) error {
 				AudioBitrateKbps: i32p(p.Metrics.AudioBitrateKbps),
 			}
 		}
-		return c.sendEnvelope(&controlv1.Envelope{Kind: &controlv1.Envelope_Event{Event: &controlv1.Event{
-			Body: &controlv1.Event_PublishViolation{PublishViolation: v},
-		}}})
+		return c.sendEnvelope(&controlv1.Envelope{Kind: &controlv1.Envelope_PublishViolation{PublishViolation: v}})
 
 	case EndReport:
-		return c.sendEnvelope(&controlv1.Envelope{Kind: &controlv1.Envelope_Event{Event: &controlv1.Event{
-			Body: &controlv1.Event_PublishEnded{PublishEnded: &controlv1.PublishEnded{
-				SessionId:   p.SessionID,
-				EndedAtMs:   p.EndedAt,
-				DurationSec: int32(p.DurationSec),
-			}},
+		return c.sendEnvelope(&controlv1.Envelope{Kind: &controlv1.Envelope_PublishEnded{PublishEnded: &controlv1.PublishEndedMessage{
+			SessionId:   p.SessionID,
+			EndedAtMs:   p.EndedAt,
+			DurationSec: int32(p.DurationSec),
 		}}})
 
 	case RecordingReady:
-		r := &controlv1.RecordingReady{
+		r := &controlv1.RecordingReadyMessage{
 			NodeId:      p.NodeID,
 			StreamName:  p.StreamName,
 			EventId:     p.EventID,
@@ -428,15 +410,13 @@ func (c *WsClient) Emit(event string, payload any) error {
 			Height:      i32p(p.Height),
 		}
 		for _, s := range p.Segments {
-			r.Segments = append(r.Segments, &controlv1.RecordingSegment{
+			r.Segments = append(r.Segments, &controlv1.CMsgRecordingSegment{
 				RelPath:     s.RelPath,
 				SizeBytes:   s.SizeBytes,
 				DurationSec: int32(s.DurationSec),
 			})
 		}
-		return c.sendEnvelope(&controlv1.Envelope{Kind: &controlv1.Envelope_Event{Event: &controlv1.Event{
-			Body: &controlv1.Event_RecordingReady{RecordingReady: r},
-		}}})
+		return c.sendEnvelope(&controlv1.Envelope{Kind: &controlv1.Envelope_RecordingReady{RecordingReady: r}})
 
 	default:
 		return fmt.Errorf("ws transport: unsupported emit payload %T for %s", payload, event)
@@ -688,13 +668,11 @@ func (c *WsClient) handleIncomingRPC(req *controlv1.RpcRequest) {
 		go func() {
 			// ALWAYS end the transfer (clean EOF included) — the app waits
 			// for this to finish the download; silence = stall.
-			end := &controlv1.RecordingStreamEnd{ReqId: p.ReqId}
+			end := &controlv1.RecordingStreamEndMessage{ReqId: p.ReqId}
 			if err := c.streamFileWS(p.ReqId, p.RelPath); err != nil {
 				end.Error = err.Error()
 			}
-			ev := &controlv1.Envelope{Kind: &controlv1.Envelope_Event{Event: &controlv1.Event{
-				Body: &controlv1.Event_RecordingStreamEnd{RecordingStreamEnd: end},
-			}}}
+			ev := &controlv1.Envelope{Kind: &controlv1.Envelope_RecordingStreamEnd{RecordingStreamEnd: end}}
 			if e := c.sendEnvelope(ev); e != nil {
 				log.Printf("[rec] end send failed: %v", e)
 			}
@@ -719,9 +697,9 @@ func (c *WsClient) streamFileWS(reqId, relPath string) error {
 	c.recPulls.Store(reqId, context.CancelFunc(cancel))
 	defer c.recPulls.Delete(reqId)
 	return relayFile(c.RecordDir, relPath, func(b []byte) error {
-		ev := &controlv1.Envelope{Kind: &controlv1.Envelope_Event{Event: &controlv1.Event{
-			Body: &controlv1.Event_RecordingChunk{RecordingChunk: &controlv1.RecordingChunk{ReqId: reqId, Data: b}},
-		}}}
+		ev := &controlv1.Envelope{Kind: &controlv1.Envelope_RecordingChunk{
+			RecordingChunk: &controlv1.RecordingChunkMessage{ReqId: reqId, Data: b},
+		}}
 		return c.sendEnvelope(ev)
 	}, func() bool { return ctx.Err() != nil })
 }

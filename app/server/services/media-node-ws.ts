@@ -18,9 +18,8 @@ import {
   ErrorSchema,
   HelloAckSchema,
   HeartbeatAckSchema,
-  EventSchema,
-  LimitsSchema,
-  LimitsConfigSchema,
+  CMsgLimitsSchema,
+  LimitsConfigMessageSchema,
   AuthorizePublishResponseSchema,
   JudgeSpecResponseSchema,
   AuthSaltResponseSchema,
@@ -29,7 +28,7 @@ import {
   WhepRelayRequestSchema,
   RecordingPullRequestSchema,
 } from '#shared/proto/control/v1/control_pb'
-import type { Envelope, Event, RpcRequest, RpcResponse } from '#shared/proto/control/v1/control_pb'
+import type { Envelope, RpcRequest, RpcResponse } from '#shared/proto/control/v1/control_pb'
 import { env } from '../utils/env'
 import { getSocket } from './media-node-registry'
 import { getSocketIO } from '../utils/socket-io'
@@ -200,15 +199,10 @@ export async function onWsMessage(peer: WsPeer, data: Uint8Array): Promise<void>
         conn,
         create(EnvelopeSchema, {
           kind: {
-            case: 'event',
-            value: create(EventSchema, {
-              body: {
-                case: 'limitsConfig',
-                value: create(LimitsConfigSchema, {
-                  global: create(LimitsSchema, r.limitsConfig.global),
-                  events: [],
-                }),
-              },
+            case: 'limitsConfig',
+            value: create(LimitsConfigMessageSchema, {
+              global: create(CMsgLimitsSchema, r.limitsConfig.global),
+              events: [],
             }),
           },
         }),
@@ -255,10 +249,22 @@ export async function onWsMessage(peer: WsPeer, data: Uint8Array): Promise<void>
       return
     }
 
-    case 'event': {
-      await handleEventIn(conn, kind.value)
+    case 'publishMetrics':
+    case 'publishViolation':
+    case 'publishEnded':
+    case 'recordingReady':
+    case 'recordingChunk':
+    case 'recordingStreamEnd':
+      await handleEventIn(conn, kind)
       return
-    }
+
+    case 'limitsConfig':
+    case 'kickStream':
+    case 'recordingCancel':
+    case 'recordingDelete':
+      // app -> node only; receiving them is a protocol oddity, not fatal
+      console.warn(`[media-ws] node ${conn.nodeId ?? '?'} sent outbound-only frame: ${kind.case}`)
+      return
 
     default:
       // helloAck / heartbeatAck from a node — nothing to do
@@ -295,7 +301,7 @@ async function handleRpcRequest(_conn: WsConn, req: RpcRequest): Promise<RpcResp
           sessionId: BigInt(r.sessionId ?? 0),
           eventId: r.eventId != null ? BigInt(r.eventId) : undefined,
           eventKey: r.eventKey ?? '',
-          limits: r.limits ? create(LimitsSchema, r.limits) : undefined,
+          limits: r.limits ? create(CMsgLimitsSchema, r.limits) : undefined,
           record: r.record ?? false,
           strict: r.strict ?? false,
           measured: r.measured ?? false,
@@ -349,12 +355,12 @@ async function handleRpcRequest(_conn: WsConn, req: RpcRequest): Promise<RpcResp
   }
 }
 
-async function handleEventIn(conn: WsConn, ev: Event): Promise<void> {
-  const body = ev.body
-  if (!body) return
-  switch (body.case) {
+/** node → app fire-and-forget frames (flattened Envelope kinds — the oneof
+ *  case is the dispatch name, the protobuf equivalent of a hub method). */
+async function handleEventIn(conn: WsConn, kind: NonNullable<Envelope['kind']>): Promise<void> {
+  switch (kind.case) {
     case 'publishMetrics': {
-      const v = body.value
+      const v = kind.value
       handleMetrics({
         sessionId: Number(v.sessionId),
         width: v.width ?? undefined,
@@ -366,7 +372,7 @@ async function handleEventIn(conn: WsConn, ev: Event): Promise<void> {
       return
     }
     case 'publishViolation': {
-      const v = body.value
+      const v = kind.value
       handleViolation({
         sessionId: Number(v.sessionId),
         reasons: [...v.reasons],
@@ -384,12 +390,12 @@ async function handleEventIn(conn: WsConn, ev: Event): Promise<void> {
       return
     }
     case 'publishEnded': {
-      const v = body.value
+      const v = kind.value
       handleEnd({ sessionId: Number(v.sessionId), endedAt: Number(v.endedAtMs), durationSec: v.durationSec })
       return
     }
     case 'recordingReady': {
-      const v = body.value
+      const v = kind.value
       handleRecordingReady({
         nodeId: v.nodeId,
         streamName: v.streamName,
@@ -412,18 +418,15 @@ async function handleEventIn(conn: WsConn, ev: Event): Promise<void> {
       // lazy import: recordings.ts imports this module's rpc helpers — a
       // static edge back would be a cycle
       const { dispatchRecChunk } = await import('./recordings')
-      dispatchRecChunk({ reqId: body.value.reqId, data: body.value.data })
+      dispatchRecChunk({ reqId: kind.value.reqId, data: kind.value.data })
       return
     }
     case 'recordingStreamEnd': {
       const { dispatchRecEnd } = await import('./recordings')
-      dispatchRecEnd({ reqId: body.value.reqId, error: body.value.error || undefined })
+      dispatchRecEnd({ reqId: kind.value.reqId, error: kind.value.error || undefined })
       return
     }
     default:
-      // limits_config / kick_stream / recording_cancel / recording_delete
-      // are app → node only; receiving them is a protocol oddity, not fatal
-      console.warn(`[media-ws] node ${conn.nodeId ?? '?'} sent outbound-only event: ${body.case}`)
       return
   }
 }
@@ -491,10 +494,17 @@ export async function wsRpcRecordingPull(nodeId: string, reqId: string, relPath:
   return body.value.started
 }
 
-function wsSendEvent(nodeId: string, event: Event): boolean {
+/** the app → node push frames this module originates (init shapes — create()
+ *  fills the message) */
+type PushKind =
+  | { case: 'kickStream'; value: { streamName: string; reason: string } }
+  | { case: 'recordingCancel'; value: { reqId: string } }
+  | { case: 'recordingDelete'; value: { relPaths: string[] } }
+
+function wsSendKind(nodeId: string, kind: PushKind): boolean {
   const conn = byNode.get(nodeId)
   if (!conn) return false
-  enqueue(conn, create(EnvelopeSchema, { kind: { case: 'event', value: event } }))
+  enqueue(conn, create(EnvelopeSchema, { kind }))
   return true
 }
 
@@ -505,7 +515,7 @@ function legacySocket(nodeId: string) {
 
 /** Kick a stream: WS nodes via kick_stream, socket.io nodes via node:kick. */
 export function kickStream(nodeId: string, streamName: string, reason: string): boolean {
-  if (wsSendEvent(nodeId, create(EventSchema, { body: { case: 'kickStream', value: { streamName, reason } } }))) {
+  if (wsSendKind(nodeId, { case: 'kickStream', value: { streamName, reason } })) {
     return true
   }
   const socket = legacySocket(nodeId)
@@ -516,13 +526,13 @@ export function kickStream(nodeId: string, streamName: string, reason: string): 
 
 /** Cancel an in-flight recording transfer (stall watchdog). */
 export function cancelRecordingPull(nodeId: string, reqId: string): void {
-  if (wsSendEvent(nodeId, create(EventSchema, { body: { case: 'recordingCancel', value: { reqId } } }))) return
+  if (wsSendKind(nodeId, { case: 'recordingCancel', value: { reqId } })) return
   legacySocket(nodeId)?.emit('node:rec:stop', { reqId })
 }
 
 /** Tell a node to delete recording files on its disk (app can't see them). */
 export function sendRecordingDelete(nodeId: string, relPaths: string[]): boolean {
-  if (wsSendEvent(nodeId, create(EventSchema, { body: { case: 'recordingDelete', value: { relPaths } } }))) {
+  if (wsSendKind(nodeId, { case: 'recordingDelete', value: { relPaths } })) {
     return true
   }
   const socket = legacySocket(nodeId)
