@@ -18,6 +18,13 @@ import (
 // whepRelayHTTP forwards a browser's WHEP offer to this node's colocated SRS.
 // Returns (answer, "") on 201, ("", error) otherwise. The SRS API port is
 // deliberately never published — this relay is the only path.
+//
+// The stream name MUST go into the query with a LITERAL '@': SRS does not
+// URL-decode the WHEP query, and stream names are emails — an escaped %40
+// makes the subscriber resolve a DIFFERENT (empty) RTC source than the one
+// the RTMP publisher feeds, and playback shows "connected, 0 bytes" forever
+// (verified against SRS 6.0.191 on 2026-08-25: literal @ reuses the
+// publisher's source, %40 spawns a fresh empty one).
 func whepRelayHTTP(whepBase, streamName string, offer []byte) (string, string) {
 	if whepBase == "" {
 		return "", "node has no SRS API base configured"
@@ -25,7 +32,7 @@ func whepRelayHTTP(whepBase, streamName string, offer []byte) (string, string) {
 	q := url.Values{}
 	q.Set("app", "live")
 	q.Set("stream", streamName)
-	target := strings.TrimRight(whepBase, "/") + "/rtc/v1/whep/?" + q.Encode()
+	target := strings.TrimRight(whepBase, "/") + "/rtc/v1/whep/?" + strings.ReplaceAll(q.Encode(), "%40", "@")
 	resp, err := http.Post(target, "application/sdp", bytes.NewReader(offer))
 	if err != nil {
 		return "", "srs unreachable: " + err.Error()
