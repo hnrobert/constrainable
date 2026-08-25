@@ -14,6 +14,10 @@ import (
 	"golang.org/x/net/websocket"
 )
 
+// connectAckTimeout bounds the ENTIRE dial + 101 handshake — a server that
+// accepts TCP but never speaks must not wedge the client.
+const connectAckTimeout = 10 * time.Second
+
 // dialWebsocket connects to wsURL with `origin` as the WS Origin header.
 func dialWebsocket(origin, wsURL string) (*websocket.Conn, error) {
 	u, err := url.Parse(wsURL)

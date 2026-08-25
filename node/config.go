@@ -1,12 +1,11 @@
 // Package main: media-node — a distributed Go backend that fronts RTMP ingest
-// and reports to the Node control plane via Socket.IO. Recording is handled by
-// SRS's native DVR; metrics come from SRS's HTTP API. Zero external deps.
+// and reports to the Node control plane over a protobuf WebSocket. Recording
+// is handled by SRS's native DVR; metrics come from SRS's HTTP API.
 package main
 
 import (
 	"fmt"
 	"log"
-	"net"
 	"os"
 	"strings"
 )
@@ -14,10 +13,9 @@ import (
 // Config holds every tunable for one media-node instance.
 type Config struct {
 	// Control plane (constrainable-app)
-	APIOrigin        string // e.g. http://constrainable-app:31954 — control channel origin
-	AuthToken        string // shared secret with Node (socket auth / Hello frame)
-	ControlTransport string // "socketio" (default, legacy) | "ws" (protobuf WebSocket)
-	ControlWsOrigin  string // dial origin of the control WebSocket ("" = derived from API_ORIGIN, port → 31955)
+	APIOrigin       string // e.g. http://constrainable-app:31954 — control channel origin
+	AuthToken       string // shared secret with Node (Hello frame)
+	ControlWsOrigin string // dial origin of the control WebSocket ("" = derived from API_ORIGIN: same host+port, scheme swapped)
 	NodeIdentifier   string // stable unique identity (drives nodeId: user
 	// assignments, session ownership, quotas). NOT an address.
 	// ADVERTISED identity ONLY (sent to the app in node:register; the app
@@ -76,7 +74,6 @@ func LoadConfig() (*Config, error) {
 	c := &Config{
 		APIOrigin:          envOr("API_ORIGIN", "http://localhost:31954"),
 		AuthToken:          os.Getenv("MEDIA_NODE_AUTH_TOKEN"),
-		ControlTransport:   envOr("CONTROL_TRANSPORT", "socketio"),
 		NodeIdentifier:     envOr("NODE_IDENTIFIER", "media-node"),
 		PublicOrigin:       envOr("PUBLIC_MEDIA_NODE_ORIGIN", ""),
 		PublicRTMPPort:     envOrInt("PUBLIC_MEDIA_NODE_RTMP_PORT", envOrInt("RTMP_PORT", 1935)),
@@ -106,17 +103,13 @@ func LoadConfig() (*Config, error) {
 	c.APIOrigin = strings.TrimRight(c.APIOrigin, "/")
 	c.SRSApiBase = strings.TrimRight(c.SRSApiBase, "/")
 
-	switch c.ControlTransport {
-	case "socketio", "ws":
-	default:
-		return nil, fmt.Errorf("invalid CONTROL_TRANSPORT %q (want \"socketio\" or \"ws\")", c.ControlTransport)
-	}
-
-	// Control WS origin: the Bun-runtime app serves the protobuf WebSocket on
-	// its own Bun-native port (node:http upgrades are broken under Bun), so
-	// the default swaps API_ORIGIN's port for it.
+	// Control WS origin: the app's gateway fronts HTTP and WS on ONE port, so
+	// the default just swaps the scheme of API_ORIGIN. CONTROL_WS_ORIGIN is an
+	// escape hatch for edges that cannot pass WS upgrades on the main vhost
+	// (point it at a dedicated wss:// subdomain) — unused in every normal
+	// topology.
 	c.ControlWsOrigin = envOr("CONTROL_WS_ORIGIN", "")
-	if c.ControlTransport == "ws" && c.ControlWsOrigin == "" {
+	if c.ControlWsOrigin == "" {
 		c.ControlWsOrigin = deriveControlWsOrigin(c.APIOrigin)
 	}
 
@@ -173,11 +166,8 @@ func envOrInt(key string, def int) int {
 	return def
 }
 
-// controlWsDefaultPort is the app's Bun-native control WebSocket port
-// (app env MEDIA_NODE_WS_PORT; must match when overridden there).
-const controlWsDefaultPort = "31955"
-
-// deriveControlWsOrigin maps the app HTTP origin onto the control WS origin.
+// deriveControlWsOrigin maps the app HTTP origin onto the control WS origin —
+// same host and port, scheme swapped (the app fronts both on one port).
 func deriveControlWsOrigin(apiOrigin string) string {
 	scheme := "ws"
 	host := apiOrigin
@@ -190,10 +180,7 @@ func deriveControlWsOrigin(apiOrigin string) string {
 	if i := strings.IndexAny(host, "/"); i >= 0 {
 		host = host[:i]
 	}
-	if i := strings.LastIndex(host, ":"); i >= 0 && !strings.Contains(host, "]") { // strip old port
-		host = host[:i]
-	}
-	return scheme + "://" + net.JoinHostPort(host, controlWsDefaultPort)
+	return scheme + "://" + host
 }
 
 // originHost strips scheme, path and port from an origin URL, leaving the host.

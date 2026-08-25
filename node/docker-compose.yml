@@ -32,15 +32,13 @@ services:
       #   TZ: ${TZ:-Asia/Shanghai}
       # The constrainable-app backend URL (control channel origin + auth)
       API_ORIGIN: ${API_ORIGIN:-http://localhost:31954}
-      # Control transport: "ws" = protobuf WebSocket (recommended — dials the
-      # app's Bun-native server at ws://<API_ORIGIN host>:31955/ws/media-node,
-      # derived automatically; same docker network, no published port needed).
-      # "socketio" = legacy transport, kept for old-firmware fleets only.
-      CONTROL_TRANSPORT: ${CONTROL_TRANSPORT:-ws}
-      # Only for REMOTE nodes behind a reverse proxy (public internet):
-      # point the WS dial at the proxied wss:// origin instead of the derived
-      # host:31955.
-      # CONTROL_WS_ORIGIN: wss://api.example.com/ws-media
+      # The control channel is the protobuf WebSocket (sole transport since
+      # node v0.6.0): it dials ws://<API_ORIGIN>/ws/media-node — SAME host and
+      # port as the app (the app's gateway fronts HTTP and WS on one port).
+      # Docker-network, LAN-direct, and reverse-proxied remote nodes all work
+      # with zero extra plumbing; CONTROL_WS_ORIGIN overrides for exotic
+      # routings only.
+      # CONTROL_WS_ORIGIN: wss://api.example.com
       # Stable unique identity of this node (drives nodeId: user assignments,
       # session ownership, quotas). NOT an address.
       NODE_IDENTIFIER: ${NODE_IDENTIFIER:-$(hostname)}

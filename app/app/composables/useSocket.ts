@@ -1,42 +1,129 @@
 /**
- * Singleton Socket.IO client. Same-origin by default: the server attaches
- * socket.io to the SAME origin as the app (lazy on first request, same port),
- * so we connect with no explicit host/port. Split deployments (API_ORIGIN
- * set — static frontend elsewhere) connect to the API origin with
- * withCredentials so the session cookie rides the handshake.
+ * Dashboard realtime — native WebSocket against /ws/admin (the Bun gateway),
+ * successor of the socket.io client. Exposes the SAME consumer surface the
+ * socket.io client had (.on(event, cb), synthetic 'connect' / 'disconnect'),
+ * so pages are unchanged; server frames are JSON [eventName, payload].
  *
- * Transports are dev/prod split:
- *  - Dev: polling ONLY. The Nitro dev server runs behind Vite, which proxies
- *    HTTP (so polling reaches engine.io) but does NOT forward WebSocket
- *    upgrades — so a websocket probe fails with a noisy "WebSocket is closed
- *    before the connection is established" console error. Polling alone is
- *    rock-solid in dev and keeps the console clean.
- *  - Prod: polling + websocket. Vite is out of the loop, so engine.io probes
- *    the websocket upgrade and it succeeds (efficient, lower latency).
+ * Connection policy: same-origin by default (the reverse proxy routes /ws/*
+ * to the gateway; the Vite dev server proxies it too — see nuxt.config.ts).
+ * Split deployments (API_ORIGIN set) dial the API origin instead, and the
+ * session cookie rides the handshake automatically (same-origin WS always
+ * sends cookies; cross-origin browsers send them for WebSocket handshakes).
+ *
+ * Liveness: an app-level "ping" every 25s (server replies "pong", drops the
+ * connection after 90s of silence) keeps intermediaries from idling us out.
+ * Reconnect: fixed 3s, forever — pages refetch state on 'connect'.
  *
  * Client-only: call from onMounted / a .client plugin (no window on SSR).
  */
-import { io, type Socket } from 'socket.io-client'
 
-let _socket: Socket | null = null
+type Handler = (payload: never) => void
 
-export function useSocket(): Socket {
-  if (_socket) return _socket
-  // split deployment: talk to the API origin instead of the serving origin
+class LiveSocket {
+  private handlers = new Map<string, Set<Handler>>()
+  private ws: WebSocket | null = null
+  private pingTimer: ReturnType<typeof setInterval> | null = null
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  private closedByUs = false
+
+  constructor(private url: string) {
+    this.connect()
+  }
+
+  private connect(): void {
+    const ws = new WebSocket(this.url)
+    this.ws = ws
+
+    ws.onopen = () => {
+      this.emit('connect')
+      this.pingTimer = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) ws.send('ping')
+      }, 25_000)
+    }
+    ws.onmessage = (ev) => {
+      if (typeof ev.data !== 'string') return
+      if (ev.data === 'pong') return
+      try {
+        const [name, payload] = JSON.parse(ev.data) as [string, unknown]
+        if (typeof name === 'string') this.emit(name, payload)
+      } catch {
+        // non-JSON frame — ignore
+      }
+    }
+    ws.onclose = () => {
+      if (this.pingTimer) {
+        clearInterval(this.pingTimer)
+        this.pingTimer = null
+      }
+      this.emit('disconnect')
+      if (!this.closedByUs) {
+        this.reconnectTimer = setTimeout(() => this.connect(), 3_000)
+      }
+    }
+    ws.onerror = () => {
+      // handshake failures (403) surface as onclose → the reconnect loop
+      // backs off; a permanent 403 just retries harmlessly every 3s
+      try {
+        ws.close()
+      } catch {
+        /* already closed */
+      }
+    }
+  }
+
+  on(event: string, cb: Handler): this {
+    let set = this.handlers.get(event)
+    if (!set) {
+      set = new Set()
+      this.handlers.set(event, set)
+    }
+    set.add(cb)
+    return this
+  }
+
+  off(event: string, cb: Handler): this {
+    this.handlers.get(event)?.delete(cb)
+    return this
+  }
+
+  private emit(event: string, payload?: unknown): void {
+    for (const cb of this.handlers.get(event) ?? []) {
+      try {
+        // `never`-typed parameter makes every handler signature assignable
+        ;(cb as (p: unknown) => void)(payload)
+      } catch (err) {
+        console.error(`[live-socket] handler for ${event} threw:`, err)
+      }
+    }
+  }
+
+  close(): void {
+    this.closedByUs = true
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer)
+    if (this.pingTimer) clearInterval(this.pingTimer)
+    this.ws?.close()
+  }
+}
+
+let _socket: LiveSocket | null = null
+
+function wsUrl(): string {
+  // split deployment: dial the API origin (http→ws), else same-origin
   const apiOrigin = String(useRuntimeConfig().public.apiOrigin || '')
-  _socket = io(apiOrigin || undefined, {
-    path: '/socket',
-    withCredentials: !!apiOrigin,
-    transports: import.meta.dev ? ['polling'] : ['polling', 'websocket'],
-    autoConnect: true,
-    reconnection: true,
-  })
+  if (apiOrigin.startsWith('http')) {
+    return apiOrigin.replace(/^http/, 'ws').replace(/\/+$/, '') + '/ws/admin'
+  }
+  const scheme = location.protocol === 'https:' ? 'wss' : 'ws'
+  return `${scheme}://${location.host}/ws/admin`
+}
+
+export function useSocket(): LiveSocket {
+  if (_socket) return _socket
+  _socket = new LiveSocket(wsUrl())
   return _socket
 }
 
 export function disposeSocket(): void {
-  if (_socket) {
-    _socket.disconnect()
-    _socket = null
-  }
+  _socket?.close()
+  _socket = null
 }

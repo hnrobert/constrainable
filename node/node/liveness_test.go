@@ -10,7 +10,7 @@ import (
 // A server that accepts TCP (and completes NO websocket exchange) must not
 // wedge the client: the handshake read is deadline-bounded, connectOnce
 // errors, and Run() retries. Regression for the silent-half-open case where
-// the old client blocked on Receive forever and never reconnected.
+// the client blocks on Receive forever and never reconnects.
 func TestHandshakeDeadlineOnSilentServer(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -32,7 +32,8 @@ func TestHandshakeDeadlineOnSilentServer(t *testing.T) {
 		}
 	}()
 
-	c := NewClient("http://"+ln.Addr().String(), "", RegisterPayload{Identifier: "t", Hostname: "h", Version: "t"})
+	addr := ln.Addr().String()
+	c := NewWsClient("http://"+addr, "ws://"+addr, "", RegisterPayload{Identifier: "t", Hostname: "h", Version: "t"})
 	start := time.Now()
 	err = c.connectOnce()
 	elapsed := time.Since(start)
@@ -45,10 +46,10 @@ func TestHandshakeDeadlineOnSilentServer(t *testing.T) {
 	t.Logf("silent server detected in %v: %v", elapsed.Round(time.Millisecond), err)
 }
 
-// markDead must clear both flags so Emit fails fast ("not connected")
-// instead of writing to a dead socket.
+// markDead must clear the connected flag so sendEnvelope fails fast
+// ("not connected") instead of writing to a dead socket.
 func TestMarkDeadClearsState(t *testing.T) {
-	c := NewClient("http://127.0.0.1:1", "", RegisterPayload{Identifier: "t"})
+	c := NewWsClient("http://127.0.0.1:1", "ws://127.0.0.1:1", "", RegisterPayload{Identifier: "t"})
 	// simulate a live connection: markDead(nil) with c.ws==nil clears flags only
 	c.mu.Lock()
 	c.connected = true
@@ -58,9 +59,9 @@ func TestMarkDeadClearsState(t *testing.T) {
 	}
 	c.markDead(nil)
 	if c.IsConnected() {
-		t.Fatal("markDead should clear connected")
+		t.Fatal("markDead did not clear connected state")
 	}
-	if err := c.Emit("x", map[string]string{}); err == nil {
-		t.Fatal("Emit on dead client should fail fast")
+	if err := c.sendEnvelope(nil); err == nil {
+		t.Fatal("sendEnvelope on dead client should fail fast")
 	}
 }

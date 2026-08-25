@@ -190,16 +190,12 @@ export function deleteRecording(id: number): void {
 
 /* ------------------- node-hosted recording file relay ------------------- */
 import { mkdirSync, writeFileSync } from 'node:fs'
-import { getSocket } from './media-node-registry'
-import { getSocketIO } from '../utils/socket-io'
 import { wsConnected, wsRpcRecordingPull, cancelRecordingPull, sendRecordingDelete } from './media-node-ws'
 
 /**
  * Delivery hub: chunk/end notifications are consumed at the TRANSPORT level
- * (media-node-events.ts for socket.io, media-node-ws.ts for the protobuf WS)
- * and dispatched here by reqId. Chunks arrive as raw bytes — the legacy
- * socket.io boundary base64-decodes before dispatch, the WS transport passes
- * protobuf bytes straight through.
+ * (media-node-ws.ts, the protobuf WS) and dispatched here by reqId. Chunks
+ * arrive as raw protobuf bytes.
  */
 type RecChunkHandler = (payload: { reqId?: string; data?: Uint8Array }) => void
 type RecEndHandler = (payload: { reqId?: string; error?: string }) => void
@@ -216,7 +212,6 @@ export function dispatchRecEnd(payload: { reqId?: string; error?: string }): voi
   }
 }
 
-const REC_PULL_START_TIMEOUT_MS = 3_000
 const REC_PULL_TIMEOUT_MS = 30_000
 
 export interface MaterializedSegments {
@@ -227,27 +222,19 @@ export interface MaterializedSegments {
 }
 
 /**
- * Pull a node-hosted recording's segments over the control channel into a
- * temp dir under RECORD_DIR/_remote. Transport: protobuf WS (recording_pull
- * RPC + raw-bytes recording_chunk events) when the node is connected there,
- * else the legacy socket.io relay ('node:rec:pull' → base64 'node:rec:data').
- * The existing local serve pipeline (ffmpeg concat) then runs unchanged
- * against the copies. Sequential per segment; sizes are recording-sized
- * (tens–hundreds of MB) so this is a download-time cost, not a listing one.
+ * Pull a node-hosted recording's segments over the control channel
+ * (recording_pull RPC + raw-bytes recording_chunk events on the protobuf WS
+ * transport) into a temp dir under RECORD_DIR/_remote. The existing local
+ * serve pipeline (ffmpeg concat) then runs unchanged against the copies.
+ * Sequential per segment; sizes are recording-sized (tens–hundreds of MB) so
+ * this is a download-time cost, not a listing one.
  */
 export async function materializeRemoteSegments(
   nodeId: string,
   segs: string[],
   recordingId: number,
 ): Promise<MaterializedSegments> {
-  const viaWs = wsConnected(nodeId)
-  const socket = viaWs
-    ? null
-    : (() => {
-        const io = getSocketIO()
-        return io ? getSocket(io, nodeId) : null
-      })()
-  if (!viaWs && !socket) throw createError({ statusCode: 502, statusMessage: 'hosting node is offline' })
+  if (!wsConnected(nodeId)) throw createError({ statusCode: 502, statusMessage: 'hosting node is offline' })
 
   const dir = join(env.recordDir, '_remote', nodeId.replace(/[^\w.-]/g, '_'), String(recordingId))
   mkdirSync(dir, { recursive: true })
@@ -297,15 +284,9 @@ export async function materializeRemoteSegments(
         finish(payload.error ? new Error(`node: ${payload.error}`) : null)
       }
       pendingPulls.set(reqId, { onData, onEnd })
-      if (viaWs) {
-        wsRpcRecordingPull(nodeId, reqId, safe).catch((e: unknown) => {
-          finish(e instanceof Error ? e : new Error('node did not start the file transfer'))
-        })
-      } else {
-        socket!.timeout(REC_PULL_START_TIMEOUT_MS).emit('node:rec:pull', { reqId, relPath: safe }, (err: unknown) => {
-          if (err) finish(new Error('node did not start the file transfer (old firmware?) — update the node'))
-        })
-      }
+      wsRpcRecordingPull(nodeId, reqId, safe).catch((e: unknown) => {
+        finish(e instanceof Error ? e : new Error('node did not start the file transfer'))
+      })
     })
   }
   return { absPaths, dir }

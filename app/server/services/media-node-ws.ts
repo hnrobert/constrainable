@@ -30,8 +30,6 @@ import {
 } from '#shared/proto/control/v1/control_pb'
 import type { Envelope, RpcRequest, RpcResponse } from '#shared/proto/control/v1/control_pb'
 import { env } from '../utils/env'
-import { getSocket } from './media-node-registry'
-import { getSocketIO } from '../utils/socket-io'
 import {
   handleRegister,
   handlePublishStart,
@@ -508,35 +506,17 @@ function wsSendKind(nodeId: string, kind: PushKind): boolean {
   return true
 }
 
-function legacySocket(nodeId: string) {
-  const io = getSocketIO()
-  return io ? getSocket(io, nodeId) : null
-}
-
-/** Kick a stream: WS nodes via kick_stream, socket.io nodes via node:kick. */
+/** Kick a stream (kick_stream frame). False when the node is offline. */
 export function kickStream(nodeId: string, streamName: string, reason: string): boolean {
-  if (wsSendKind(nodeId, { case: 'kickStream', value: { streamName, reason } })) {
-    return true
-  }
-  const socket = legacySocket(nodeId)
-  if (!socket) return false
-  socket.emit('node:kick', { streamName, reason })
-  return true
+  return wsSendKind(nodeId, { case: 'kickStream', value: { streamName, reason } })
 }
 
 /** Cancel an in-flight recording transfer (stall watchdog). */
 export function cancelRecordingPull(nodeId: string, reqId: string): void {
-  if (wsSendKind(nodeId, { case: 'recordingCancel', value: { reqId } })) return
-  legacySocket(nodeId)?.emit('node:rec:stop', { reqId })
+  wsSendKind(nodeId, { case: 'recordingCancel', value: { reqId } })
 }
 
 /** Tell a node to delete recording files on its disk (app can't see them). */
 export function sendRecordingDelete(nodeId: string, relPaths: string[]): boolean {
-  if (wsSendKind(nodeId, { case: 'recordingDelete', value: { relPaths } })) {
-    return true
-  }
-  const socket = legacySocket(nodeId)
-  if (!socket) return false
-  socket.emit('recording:delete', { segments: relPaths })
-  return true
+  return wsSendKind(nodeId, { case: 'recordingDelete', value: { relPaths } })
 }

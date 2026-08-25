@@ -11,25 +11,25 @@
 #    and used to force a full ~100MB re-pull on each deploy.
 #  - Order in runtime: static base → deps layer (changes on dependency
 #    changes) → .output + configs (change every build, ~17MB).
-FROM oven/bun:1.3.14 AS deps
+FROM oven/bun:1.4.0 AS deps
 WORKDIR /app
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 
 # Production-only tree for the runtime image (drizzle-kit lives in
 # `dependencies` — the server runs it at boot for schema sync).
-FROM oven/bun:1.3.14 AS prod-deps
+FROM oven/bun:1.4.0 AS prod-deps
 WORKDIR /app
 COPY package.json bun.lock ./
 RUN bun install --production --frozen-lockfile
 
-FROM oven/bun:1.3.14 AS build
+FROM oven/bun:1.4.0 AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN bun run build
 
-FROM oven/bun:1.3.14 AS runtime
+FROM oven/bun:1.4.0 AS runtime
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg ca-certificates tini \
     && rm -rf /var/lib/apt/lists/*

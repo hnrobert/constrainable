@@ -2,15 +2,16 @@ package node
 
 import (
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
 
 // TestWsClientHandshake is a LIVE integration test against a running app:
 // it skips unless WS_SMOKE_APP is set (e.g. WS_SMOKE_APP=http://127.0.0.1:32954
-// WS_SMOKE_WS=ws://127.0.0.1:31955 go test ./node -run TestWsClientHandshake -v).
-// Validates the full handshake: hello → hello_ack (nodeId) → limits_config
-// event, plus an emit.
+// go test ./node -run TestWsClientHandshake -v). The WS dial defaults to the
+// same host and port as the app (front-mode gateway). Validates the full
+// handshake: hello → hello_ack (nodeId) → limits_config event, plus an emit.
 func TestWsClientHandshake(t *testing.T) {
 	appURL := os.Getenv("WS_SMOKE_APP")
 	if appURL == "" {
@@ -18,7 +19,7 @@ func TestWsClientHandshake(t *testing.T) {
 	}
 	wsURL := os.Getenv("WS_SMOKE_WS")
 	if wsURL == "" {
-		wsURL = "ws://127.0.0.1:31955"
+		wsURL = strings.Replace(strings.Replace(appURL, "https://", "wss://", 1), "http://", "ws://", 1)
 	}
 
 	cfgCh := make(chan struct{}, 1)

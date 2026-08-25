@@ -37,15 +37,15 @@ tests and Docker builds of both images.
 
 ## Local development notes
 
-- The media-node control WebSocket (`/ws/media-node`) needs a built server or
-  docker compose — the Nuxt dev server sits behind the Vite proxy, which does
-  not forward WS upgrades. Run the built app and point the node's `API_ORIGIN`
-  at it:
-
-  ```bash
-  cd app && bun run build && bun .output/server/index.mjs
-  ```
-
+- Production topology ("front mode"): ONE port serves everything — the Bun
+  gateway handles `/ws/media-node` + `/ws/admin` natively, serves
+  `.output/public` statics from disk (precompressed), and reverse-proxies the
+  rest to Nitro on a loopback-only internal port. No separate gateway port,
+  no reverse-proxy changes, works identically for browser panels, LAN nodes,
+  and remote nodes behind an existing HTTPS edge.
+- `nuxt dev` uses a split topology instead (the dev server owns the port):
+  the gateway listens on a dev-only port (31955) and Vite proxies `/ws/*` to
+  it — so dev also needs zero manual config.
 - Deployment (NAS) pulls prebuilt images from GHCR; image names are unchanged
   from the pre-merge repos: `ghcr.io/hnrobert/constrainable-app`,
   `ghcr.io/hnrobert/constrainable-media-node`.

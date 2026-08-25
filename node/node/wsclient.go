@@ -2,14 +2,12 @@
 // Node control plane (proto/control/v1/control.proto: one Envelope per
 // binary frame; correlated RpcRequest/RpcResponse replace socket.io acks,
 // Heartbeat replaces engine.io ping/pong, SDP offers and DVR file chunks
-// travel as raw bytes). Selected with CONTROL_TRANSPORT=ws; the socket.io
-// Client stays the default during the fleet cutover.
+// travel as raw bytes).
 //
 // Concurrency: ALL outbound frames funnel through sendEnvelope under
 // writeMu — x/net/websocket is NOT safe for concurrent Message.Send (a
 // 256KiB recording chunk racing a heartbeat ack interleaves frames and
-// corrupts the stream). This includes EmitWithAck — the socket.io client's
-// historical bypass of the write lock was a bug, not a pattern.
+// corrupts the stream).
 package node
 
 import (
@@ -31,13 +29,14 @@ import (
 const (
 	wsHelloTimeout   = 10 * time.Second
 	wsHeartbeatEvery = 25 * time.Second // mirrors engine.io pingInterval
+	readDeadline     = 90 * time.Second // mirrors the app's IDLE_TIMEOUT_MS
 )
 
-// WsClient manages the persistent WebSocket control connection. Its external
-// surface matches the socket.io Client (see ControlClient).
+// WsClient manages the persistent WebSocket control connection (the only
+// transport since v0.6.0).
 type WsClient struct {
 	apiOrigin string // Origin header source (the app's HTTP origin)
-	wsOrigin  string // dial URL of the control WebSocket (ws://host:31955)
+	wsOrigin  string // dial URL of the control WebSocket (same port as the app)
 	token     string
 	register  RegisterPayload
 
@@ -68,8 +67,8 @@ type WsClient struct {
 
 // NewWsClient creates the protobuf-WS control client. apiOrigin is the app's
 // HTTP origin (WS Origin header source); wsOrigin is the control WebSocket
-// dial URL — under Bun the app serves it on a dedicated Bun-native port
-// (derived from API_ORIGIN with the port swapped, or CONTROL_WS_ORIGIN).
+// dial URL (derived from API_ORIGIN with the scheme swapped, or
+// CONTROL_WS_ORIGIN for exotic routings).
 func NewWsClient(apiOrigin, wsOrigin, token string, reg RegisterPayload) *WsClient {
 	return &WsClient{
 		apiOrigin: apiOrigin,

@@ -37,7 +37,6 @@ const ALLOW_PREFIX = [
   '/favicon.svg',
   '/_nuxt/',
   '/__nuxt',
-  '/socket/',
 ]
 
 export default defineEventHandler(async (event) => {

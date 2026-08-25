@@ -33,9 +33,3 @@ type ControlClient interface {
 	SetOnConfig(f func(ConfigLimits))
 	SetOnDelete(f func(RecordingDelete) error)
 }
-
-// --- socket.io Client setters (field assignment behind the interface) ---
-
-func (c *Client) SetOnKick(f func(NodeKick))                { c.OnKick = f }
-func (c *Client) SetOnConfig(f func(ConfigLimits))          { c.OnConfig = f }
-func (c *Client) SetOnDelete(f func(RecordingDelete) error) { c.OnDelete = f }

@@ -32,12 +32,18 @@ export default defineNuxtConfig({
         '@lucide/vue',
         '@vueuse/core',
         'vue-sonner',
-        'socket.io-client',
         'jose',
         'picomatch',
       ],
     },
     server: {
+      // dev: forward the Bun WS gateway through the Vite dev server so /ws/*
+      // is same-origin in dev exactly like prod (where the reverse proxy
+      // routes it).
+      proxy: {
+        // target MUST match DEV_WS_PORT in server/plugins/03-ws-gateway.ts
+        '/ws': { target: 'http://127.0.0.1:31955', ws: true },
+      },
       // Vite's Host check 403s any caller that isn't localhost/127.0.0.1.
       // Allow `host.docker.internal` so a Dockerized SRS's on_publish hook can
       // call back into the dev app during OBS ingest testing. To actually

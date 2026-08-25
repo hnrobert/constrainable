@@ -16,14 +16,11 @@
  */
 import { createError, getRouterParam } from 'h3'
 import { env } from '../../../utils/env'
-import { resolveFlvBase, getHostingNode, getSocket } from '../../../services/media-node-registry'
-import { getSocketIO } from '../../../utils/socket-io'
-import { wsConnected, wsRpcWhepRelay } from '../../../services/media-node-ws'
+import { resolveFlvBase, getHostingNode } from '../../../services/media-node-registry'
+import { wsRpcWhepRelay } from '../../../services/media-node-ws'
 import { getAuth } from '../../../utils/auth'
 import { UsersRepository } from '../../../repositories/users.repository'
 import { PublishSessionsRepository } from '../../../repositories/publish-sessions.repository'
-
-const NODE_WHEP_TIMEOUT_MS = 8000
 
 export default defineEventHandler(async (event) => {
   // admin: any stream; regular user: only their own (account email = stream
@@ -52,50 +49,18 @@ export default defineEventHandler(async (event) => {
   if (!session) {
     throw createError({ statusCode: 404, statusMessage: 'stream is not live' })
   }
-  // Remote-hosted stream → relay the SDP through the node's control channel.
+  // Remote-hosted stream → relay the SDP through the node's control channel
+  // (whep_relay RPC over the protobuf WS transport; the node POSTs to its
+  // colocated SRS itself — its API port is deliberately never published).
   const host = getHostingNode(stream)
   if (host) {
     let answer: string
-    if (wsConnected(host.nodeId)) {
-      // protobuf WS transport: whep_relay RPC with the raw SDP bytes
-      try {
-        const bin = await wsRpcWhepRelay(host.nodeId, stream, new Uint8Array(Buffer.from(offer, 'utf8')))
-        answer = Buffer.from(bin).toString('utf8')
-      } catch (e) {
-        const message = e instanceof Error ? e.message : 'relay failed'
-        throw createError({ statusCode: 502, statusMessage: message })
-      }
-    } else {
-      // legacy socket.io transport (old firmware)
-      const io = getSocketIO()
-      const socket = io ? getSocket(io, host.nodeId) : null
-      if (!socket) {
-        throw createError({ statusCode: 502, statusMessage: 'hosting node is offline' })
-      }
-      answer = await new Promise<string>((resolve, reject) => {
-        socket
-          .timeout(NODE_WHEP_TIMEOUT_MS)
-          .emit(
-            'node:whep',
-            { streamName: stream, offer },
-            (err: unknown, res: { answer?: string; error?: string } | undefined) => {
-              if (err) {
-                reject(
-                  createError({
-                    statusCode: 502,
-                    statusMessage: 'node did not answer the WHEP relay (old firmware?) — update the node',
-                  }),
-                )
-              } else if (res?.error) {
-                reject(createError({ statusCode: 502, statusMessage: `node SRS: ${res.error}` }))
-              } else if (res?.answer) {
-                resolve(res.answer)
-              } else {
-                reject(createError({ statusCode: 502, statusMessage: 'node returned an empty WHEP answer' }))
-              }
-            },
-          )
-      })
+    try {
+      const bin = await wsRpcWhepRelay(host.nodeId, stream, new Uint8Array(Buffer.from(offer, 'utf8')))
+      answer = Buffer.from(bin).toString('utf8')
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'relay failed'
+      throw createError({ statusCode: 502, statusMessage: message })
     }
     setHeader(event, 'content-type', 'application/sdp')
     setHeader(event, 'cache-control', 'no-store')

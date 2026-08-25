@@ -16,43 +16,6 @@ type RegisterPayload struct {
 	Version            string `json:"version"`            // media-node binary version
 }
 
-// WhepRelay is the control plane's request to relay one WHEP (WebRTC
-// playback) SDP exchange through this node to its colocated SRS — the node's
-// SRS HTTP API is never published, so the app cannot reach it directly.
-type WhepRelay struct {
-	StreamName string `json:"streamName"`
-	Offer      string `json:"offer"`
-}
-
-// RecPull asks this node to stream one recording file (path RELATIVE to its
-// records dir) back over the socket — the files are only reachable this way.
-type RecPull struct {
-	ReqID   string `json:"reqId"`
-	RelPath string `json:"relPath"`
-}
-
-// RecChunk is one base64 chunk of a streamed recording file.
-type RecChunk struct {
-	ReqID string `json:"reqId"`
-	Data  string `json:"data"`
-}
-
-// RecEnd reports a file stream finished ("" = clean EOF / stopped).
-type RecEnd struct {
-	ReqID string `json:"reqId"`
-	Error string `json:"error,omitempty"`
-}
-
-// RecStop cancels an in-flight file stream.
-type RecStop struct {
-	ReqID string `json:"reqId"`
-}
-
-// RegisteredAck is Node's response to a successful registration.
-type RegisteredAck struct {
-	NodeID string `json:"nodeId"`
-}
-
 // PublishStart is sent when a publisher's stream starts (relay succeeded or
 // SRS hook for direct publishers). Node responds with an ack carrying the
 // authorization decision + session assignment.
@@ -134,21 +97,6 @@ type ViolationReport struct {
 }
 
 // --- Node → Go commands ---
-
-// PlayAuth asks the control plane to authorize a DIRECT browser FLV pull.
-// The signature was minted by the app (admin-gated /api/streams/url); the
-// app verifies it — the node never holds the secret.
-type PlayAuth struct {
-	Stream string `json:"stream"`
-	Exp    int64  `json:"exp"`
-	Sig    string `json:"sig"`
-}
-
-// PlayAuthAck is the control plane's verdict on a direct pull.
-type PlayAuthAck struct {
-	Allow  bool   `json:"allow"`
-	Reason string `json:"reason,omitempty"`
-}
 
 // PublishSpec is OBS' DECLARED encoder configuration from onMetaData —
 // arrives right after publish accepts, before the first frame. Instant spec

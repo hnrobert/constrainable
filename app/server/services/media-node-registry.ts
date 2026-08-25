@@ -1,11 +1,10 @@
 /**
  * In-memory registry of connected media nodes (Go backends). Keyed by nodeId
- * (derived from the node-reported identifier). Tracks sockets and active
- * stream counts for load-balanced ingest routing. All state is volatile —
- * nodes re-register on reconnect, and session rows in the DB are the durable
- * record of which node handled which stream.
+ * (derived from the node-reported identifier). Tracks connections and active
+ * stream counts. All state is volatile — nodes re-register on reconnect, and
+ * session rows in the DB are the durable record of which node handled which
+ * stream.
  */
-import type { Server as SocketIOServer, Socket } from 'socket.io'
 import { env } from '../utils/env'
 import { PublishSessionsRepository } from '../repositories/publish-sessions.repository'
 
@@ -38,14 +37,8 @@ export interface MediaNodeInfo {
 
 /** nodeId → info */
 const nodes = new Map<string, MediaNodeInfo>()
-/** socketId → nodeId (reverse lookup for disconnect cleanup) */
+/** connection id → nodeId (reverse lookup for disconnect cleanup) */
 const socketToNode = new Map<string, string>()
-/** nodeIds observed live since process start (boot-grace bookkeeping) */
-const everSeen = new Set<string>()
-/** nodeId → epoch ms when the node went offline (drives user reassignment) */
-const offlineSince = new Map<string, number>()
-/** process start — grace anchor for nodes never seen since boot */
-const bootedAt = Date.now()
 
 /**
  * OBS ingest authority for a node — "host[:port]", the redundant :1935
@@ -58,7 +51,7 @@ export function rtmpAuthority(n: { publicOrigin: string; publicRtmpPort?: number
 }
 
 /** Derive a stable nodeId from the node's NODE_IDENTIFIER. */
-export function deriveNodeId(origin: string): string {
+function deriveNodeId(origin: string): string {
   return origin
     .replace(/^https?:\/\//, '')
     .replace(/[:/].*$/, '')
@@ -67,8 +60,7 @@ export function deriveNodeId(origin: string): string {
 }
 
 /** Register (or re-register) a node connection. Returns the nodeId.
- *  `peer` is anything with a stable connection id — a socket.io Socket or a
- *  crossws Peer (the protobuf WS transport) both fit. */
+ *  `peer` is anything with a stable connection id (the WS gateway peer). */
 export function register(
   peer: { id: string },
   // the public fields are optional at the call site (defaults applied below)
@@ -106,14 +98,12 @@ export function register(
     publicSrsUdpPort: info.publicSrsUdpPort ?? 0,
   }
   nodes.set(nodeId, entry)
-  offlineSince.delete(nodeId)
-  everSeen.add(nodeId)
   socketToNode.set(peer.id, nodeId)
   console.log(`[media-nodes] registered: ${nodeId} (${info.hostname}) flv=${entry.srsFlvBase}`)
   return nodeId
 }
 
-/** Remove a node on socket disconnect. Sessions stay (reconnect re-syncs). */
+/** Remove a node on disconnect. Sessions stay (reconnect re-syncs). */
 export function disconnect(socketId: string): string | null {
   const nodeId = socketToNode.get(socketId)
   if (!nodeId) return null
@@ -121,21 +111,9 @@ export function disconnect(socketId: string): string | null {
   const node = nodes.get(nodeId)
   if (node && node.socketId === socketId) {
     nodes.delete(nodeId)
-    offlineSince.set(nodeId, Date.now())
     console.log(`[media-nodes] disconnected: ${nodeId} (${node.hostname})`)
   }
   return nodeId
-}
-
-/**
- * How long a node has been offline (ms); null when it is live. Nodes unseen
- * since process start count from boot, so an app restart doesn't instantly
- * orphan users whose nodes simply haven't reconnected yet.
- */
-export function nodeOfflineForMs(nodeId: string): number | null {
-  if (nodes.has(nodeId)) return null
-  const since = offlineSince.get(nodeId) ?? (everSeen.has(nodeId) ? null : bootedAt)
-  return since == null ? null : Date.now() - since
 }
 
 /** Get a node's info by nodeId. */
@@ -148,28 +126,12 @@ export function listNodes(): MediaNodeInfo[] {
   return [...nodes.values()].sort((a, b) => a.connectedAt - b.connectedAt)
 }
 
-/** Pick the least-loaded node for new ingest (null if none registered). */
-export function pickIngestNode(): MediaNodeInfo | null {
-  const all = listNodes()
-  if (all.length === 0) return null
-  return all.reduce((min, n) => (n.activeStreams < min.activeStreams ? n : min))
-}
-
 /** Increment/decrement a node's active stream count. */
 export function adjustStreamCount(nodeId: string, delta: number): void {
   const node = nodes.get(nodeId)
   if (node) {
     node.activeStreams = Math.max(0, node.activeStreams + delta)
   }
-}
-
-/** Get the Socket.IO socket for a node (for emitting commands). */
-export function getSocket(io: SocketIOServer, nodeId: string): Socket | null {
-  const node = nodes.get(nodeId)
-  if (!node) return null
-  const ns = io.of('/media-node')
-  const socket = ns.sockets.get(node.socketId)
-  return socket ?? null
 }
 
 /**
@@ -187,17 +149,4 @@ export function getHostingNode(streamName: string): MediaNodeInfo | undefined {
   const session = PublishSessionsRepository.findActiveByStream(streamName)
   if (!session?.nodeId) return undefined
   return nodes.get(session.nodeId)
-}
-
-/** Emit an event to a specific node. Returns false if node not connected. */
-export function emitToNode(io: SocketIOServer, nodeId: string, event: string, payload: unknown): boolean {
-  const socket = getSocket(io, nodeId)
-  if (!socket) return false
-  socket.emit(event, payload)
-  return true
-}
-
-/** Emit an event to all connected nodes. */
-export function broadcastToNodes(io: SocketIOServer, event: string, payload: unknown): void {
-  io.of('/media-nodes').emit(event, payload)
 }

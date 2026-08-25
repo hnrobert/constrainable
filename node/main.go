@@ -1,7 +1,7 @@
 // media-node entry point: renders the SRS config, starts SRS as a child
-// process, waits for it, then starts the RTMP ingest server and the Socket.IO
-// connection to the Node control plane. The SRS config template is embedded
-// in the image — each container is fully self-contained.
+// process, waits for it, then starts the RTMP ingest server and the protobuf
+// WebSocket connection to the Node control plane. The SRS config template is
+// embedded in the image — each container is fully self-contained.
 package main
 
 import (
@@ -23,7 +23,7 @@ import (
 	"media-node/rtmp"
 )
 
-const version = "0.5.0"
+const version = "0.6.0"
 
 // startSRS renders the config template and starts SRS. The RENDER always
 // happens: when SRS runs as a sidecar container (SRS_BIN empty), the rendered
@@ -179,7 +179,6 @@ func main() {
 	// SRS client (stream info, killClient, health)
 	srsClient := media.NewSRSClient(cfg.SRSApiBase)
 
-	// Socket.IO client — ALL communication with the Node control plane
 	// Browser-side latency probe: STUN responder on its own UDP port (see
 	// node/probe.go). Failure is non-fatal — the rest of the node works; the
 	// control plane just reports the node as probe-less.
@@ -189,10 +188,9 @@ func main() {
 		}
 	}()
 
-	// Control-plane client — CONTROL_TRANSPORT picks the wire: "ws" (protobuf
-	// Envelope over a raw WebSocket) or "socketio" (legacy, the default
-	// during the fleet cutover). Both implement node.ControlClient, so the
-	// rest of the node is transport-agnostic.
+	// Control-plane client: the protobuf WebSocket (the only transport since
+	// v0.6.0 — socket.io was retired when the Bun app's node:http upgrade
+	// path broke).
 	registerPayload := node.RegisterPayload{
 		Identifier:         cfg.NodeIdentifier,
 		PublicOrigin:       cfg.PublicOrigin,
@@ -204,20 +202,11 @@ func main() {
 		Hostname:           cfg.Hostname,
 		Version:            version,
 	}
-	var socketClient node.ControlClient
-	if cfg.ControlTransport == "ws" {
-		w := node.NewWsClient(cfg.APIOrigin, cfg.ControlWsOrigin, cfg.AuthToken, registerPayload)
-		w.SRSWhepBase = strings.TrimSuffix(cfg.SRSApiBase, "/api/v1")
-		w.RecordDir = cfg.RecordDir
-		socketClient = w
-		log.Printf("[node] control transport: protobuf websocket (%s/ws/media-node)", cfg.ControlWsOrigin)
-	} else {
-		s := node.NewClient(cfg.APIOrigin, cfg.AuthToken, registerPayload)
-		s.SRSWhepBase = strings.TrimSuffix(cfg.SRSApiBase, "/api/v1")
-		s.RecordDir = cfg.RecordDir
-		socketClient = s
-		log.Printf("[node] control transport: socket.io (legacy)")
-	}
+	wsClient := node.NewWsClient(cfg.APIOrigin, cfg.ControlWsOrigin, cfg.AuthToken, registerPayload)
+	wsClient.SRSWhepBase = strings.TrimSuffix(cfg.SRSApiBase, "/api/v1")
+	wsClient.RecordDir = cfg.RecordDir
+	var socketClient node.ControlClient = wsClient
+	log.Printf("[node] control transport: protobuf websocket (%s/ws/media-node)", cfg.ControlWsOrigin)
 
 	// Session manager
 	manager := media.NewManager(
