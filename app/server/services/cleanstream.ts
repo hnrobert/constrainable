@@ -31,24 +31,26 @@ const IDLE_TTL_MS = 2 * 60_000
 const REAP_INTERVAL_MS = 30_000
 const READY_TIMEOUT_MS = 2_000
 
+/**
+ * SRS address as reachable from THIS container. The docker service name
+ * resolves on the shared network (ingest-shared) — the node-advertised
+ * flvBase hostname (e.g. http://unnc-nas-space:38081) is NOT safe here: it
+ * is a bare hostname that the NAS resolver feeds to the mihomo proxy's
+ * fake-IP range (198.18.x.x), so RTMP connects to the proxy and dies with
+ * "Cannot read RTMP handshake response". Override for non-docker setups.
+ */
+const SRS_HOST = process.env.SRS_INTERNAL_HOST || 'srs'
+const SRS_RTMP = `rtmp://${SRS_HOST}:1935`
+const SRS_FLV_BASE = `http://${SRS_HOST}:38081`
+
 interface Variant {
   proc: ReturnType<typeof Bun.spawn>
   /** hosting node — DVR directory cleanup on teardown */
   nodeId: string
-  /** hosting node's SRS FLV base — readiness polling */
-  flvBase: string
   lastWatchAt: number
 }
 
 const variants = new Map<string, Variant>()
-
-function rtmpHost(flvBase: string): string {
-  try {
-    return new URL(flvBase).hostname
-  } catch {
-    return flvBase
-  }
-}
 
 /** Wait (bounded) until SRS mounts the twin's HTTP-FLV endpoint — i.e. the
  *  re-encoded stream is live and answerable. Unreachable FLV base just
@@ -91,7 +93,7 @@ function teardown(stream: string, entry: Variant, notifyNode: boolean): void {
  * (starting it if needed), or the ORIGINAL stream when the concurrency cap
  * is hit (fallback = today's behavior).
  */
-export async function ensureCleanStream(stream: string, nodeId: string, flvBase: string): Promise<string> {
+export async function ensureCleanStream(stream: string, nodeId: string): Promise<string> {
   const cleanName = CLEAN_PREFIX + stream
   const existing = variants.get(stream)
   if (existing) {
@@ -103,7 +105,6 @@ export async function ensureCleanStream(stream: string, nodeId: string, flvBase:
     return stream
   }
 
-  const host = rtmpHost(flvBase)
   const proc = Bun.spawn(
     [
       env.ffmpegPath,
@@ -111,7 +112,7 @@ export async function ensureCleanStream(stream: string, nodeId: string, flvBase:
       '-loglevel',
       'error',
       '-i',
-      `rtmp://${host}:1935/live/${stream}`,
+      `${SRS_RTMP}/live/${stream}`,
       // strip B-frames (WebRTC cannot reference them) and guarantee a
       // decodable entry point every 2s regardless of the source frame rate
       '-c:v',
@@ -128,7 +129,7 @@ export async function ensureCleanStream(stream: string, nodeId: string, flvBase:
       'copy',
       '-f',
       'flv',
-      `rtmp://${host}:1935/live/${cleanName}`,
+      `${SRS_RTMP}/live/${cleanName}`,
     ],
     { stdin: 'ignore', stdout: 'ignore', stderr: 'pipe' },
   )
@@ -140,7 +141,7 @@ export async function ensureCleanStream(stream: string, nodeId: string, flvBase:
     })
     .catch(() => {})
 
-  const entry: Variant = { proc, nodeId, flvBase, lastWatchAt: Date.now() }
+  const entry: Variant = { proc, nodeId, lastWatchAt: Date.now() }
   variants.set(stream, entry)
 
   // source stream ended → ffmpeg EOFs → reap (and wipe the twin's DVR dir)
@@ -149,7 +150,7 @@ export async function ensureCleanStream(stream: string, nodeId: string, flvBase:
     teardown(stream, entry, true)
   })
 
-  await waitForMount(`${flvBase}/live/${cleanName}.flv`)
+  await waitForMount(`${SRS_FLV_BASE}/live/${cleanName}.flv`)
   console.log(`[clean] twin ready: ${cleanName} (${variants.size} active)`)
   return cleanName
 }

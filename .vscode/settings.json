@@ -70,6 +70,7 @@
     "linkify",
     "localtime",
     "matroska",
+    "mihomo",
     "misframed",
     "misframes",
     "mlen",
@@ -130,6 +131,7 @@
     "streamlabs",
     "studentkey",
     "suspensing",
+    "teardown",
     "testsrc",
     "textareas",
     "timezone",
@@ -149,6 +151,7 @@
     "unticked",
     "upserted",
     "upserts",
+    "veryfast",
     "vhost",
     "videodatarate",
     "viewmode",
@@ -158,7 +161,8 @@
     "wrongpw",
     "wsdial",
     "wxyz",
-    "xport"
+    "xport",
+    "zerolatency"
   ],
   "protobuf.externalLinter.enabled": true,
   "protobuf.externalLinter.linter": "buf",
