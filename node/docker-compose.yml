@@ -25,6 +25,12 @@ services:
     # build: .
     image: ghcr.io/hnrobert/constrainable-media-node:latest
     container_name: constrainable-media-node
+    # Run as root, same as the SRS sidecar: SRS creates the per-stream DVR
+    # directories, and on Synology the volume's ACLs deny the distroless
+    # default uid (65532) access to them — reportRecording then can't scan,
+    # move, or report ANY recording (2026-08-26 incident: files on disk, no
+    # DB rows). Root matches SRS's ownership and works everywhere.
+    user: "0:0"
     environment:
       # Timezone: on a LINUX host the read-only mounts below make the container
       # follow the HOST's timezone — leave TZ unset. On macOS (Docker Desktop)

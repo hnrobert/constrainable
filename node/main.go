@@ -86,7 +86,11 @@ func reportRecording(cfg *Config, c node.ControlClient, s *media.Session) {
 		dir := filepath.Join(cfg.RecordDir, s.StreamName)
 		entries, err := os.ReadDir(dir)
 		if err != nil {
-			return // no DVR output for this stream (nothing to report)
+			// PERMISSION failures land here too (e.g. Synology ACLs deny the
+			// non-root uid) and used to exit SILENTLY — the 2026-08-26
+			// incident: files on disk, no [dvr] log, no DB rows, nothing.
+			log.Printf("[dvr] scan %s failed: %v", dir, err)
+			return
 		}
 		// Recordings file under <eventKey>/<user>/ — first level the event
 		// KEY (slug, filesystem-safe [a-z0-9_-]), second the publisher.
