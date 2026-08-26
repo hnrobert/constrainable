@@ -321,9 +321,23 @@ func main() {
 		log.Printf("[node] config:limits received")
 	})
 	socketClient.SetOnDelete(func(del node.RecordingDelete) error {
-		log.Printf("[node] recording:delete %d segment(s)", len(del.Segments))
+		log.Printf("[node] recording:delete %d path(s)", len(del.Segments))
 		for _, seg := range del.Segments {
-			_ = os.Remove(filepath.Join(cfg.RecordDir, seg))
+			clean := filepath.Clean(seg)
+			if strings.Contains(clean, "..") || filepath.IsAbs(clean) {
+				continue // untrusted input — never escape RECORD_DIR
+			}
+			abs := filepath.Join(cfg.RecordDir, clean)
+			if !strings.HasPrefix(abs, filepath.Clean(cfg.RecordDir)+string(os.PathSeparator)) {
+				continue
+			}
+			if filepath.Ext(abs) == "" {
+				// no-extension sentinel = wipe a whole directory (the clean
+				// twin's watch-only DVR output; see app cleanstream.ts)
+				_ = os.RemoveAll(abs)
+			} else {
+				_ = os.Remove(abs)
+			}
 		}
 		return nil
 	})

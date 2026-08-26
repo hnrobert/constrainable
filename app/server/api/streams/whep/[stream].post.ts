@@ -18,6 +18,7 @@ import { createError, getRouterParam } from 'h3'
 import { env } from '../../../utils/env'
 import { resolveFlvBase, getHostingNode } from '../../../services/media-node-registry'
 import { wsRpcWhepRelay } from '../../../services/media-node-ws'
+import { ensureCleanStream } from '../../../services/cleanstream'
 import { getAuth } from '../../../utils/auth'
 import { UsersRepository } from '../../../repositories/users.repository'
 import { PublishSessionsRepository } from '../../../repositories/publish-sessions.repository'
@@ -52,11 +53,15 @@ export default defineEventHandler(async (event) => {
   // Remote-hosted stream → relay the SDP through the node's control channel
   // (whep_relay RPC over the protobuf WS transport; the node POSTs to its
   // colocated SRS itself — its API port is deliberately never published).
+  // The answer is served from a re-encoded clean twin of the stream (see
+  // services/cleanstream.ts) — immune to publisher B-frame/long-GOP
+  // settings; falls back to the original stream at the concurrency cap.
   const host = getHostingNode(stream)
   if (host) {
+    const watchStream = await ensureCleanStream(stream, host.nodeId, host.srsFlvBase)
     let answer: string
     try {
-      const bin = await wsRpcWhepRelay(host.nodeId, stream, new Uint8Array(Buffer.from(offer, 'utf8')))
+      const bin = await wsRpcWhepRelay(host.nodeId, watchStream, new Uint8Array(Buffer.from(offer, 'utf8')))
       answer = Buffer.from(bin).toString('utf8')
     } catch (e) {
       const message = e instanceof Error ? e.message : 'relay failed'

@@ -16,7 +16,7 @@ type Config struct {
 	APIOrigin       string // e.g. http://constrainable-app:31954 — control channel origin
 	AuthToken       string // shared secret with Node (Hello frame)
 	ControlWsOrigin string // dial origin of the control WebSocket ("" = derived from API_ORIGIN: same host+port, scheme swapped)
-	NodeIdentifier   string // stable unique identity (drives nodeId: user
+	NodeIdentifier  string // stable unique identity (drives nodeId: user
 	// assignments, session ownership, quotas). NOT an address.
 	// ADVERTISED identity ONLY (sent to the app in node:register; the app
 	// renders it into OBS URLs / ICE / probe targets for BROWSERS). These
