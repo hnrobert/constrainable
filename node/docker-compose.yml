@@ -35,9 +35,11 @@ services:
       # Timezone: on a LINUX host the read-only mounts below make the container
       # follow the HOST's timezone — leave TZ unset. On macOS (Docker Desktop)
       # host /etc isn't shared; uncomment TZ instead:
-      #   TZ: ${TZ:-Asia/Shanghai}
+      # TZ: ${TZ:-Asia/Shanghai}
+
       # The constrainable-app backend URL (control channel origin + auth)
-      API_ORIGIN: ${API_ORIGIN:-http://localhost:31954}
+      API_ORIGIN: ${API_ORIGIN:-}
+
       # The control channel is the protobuf WebSocket (sole transport since
       # node v0.6.0): it dials ws://<API_ORIGIN>/ws/media-node — SAME host and
       # port as the app (the app's gateway fronts HTTP and WS on one port).
@@ -45,9 +47,18 @@ services:
       # with zero extra plumbing; CONTROL_WS_ORIGIN overrides for exotic
       # routings only.
       # CONTROL_WS_ORIGIN: wss://api.example.com
+
+      # How the APP reaches this node's colocated SRS (FLV remux + the watch
+      # transcoding twin pull/push RTMP on the same host). Default derives to
+      # http://<NODE_IDENTIFIER>:38081 — which only resolves if something
+      # records that name; same-compose deployments point it at the service
+      # name, which docker DNS resolves on the shared network.
+      # SRS_FLV_BASE: ${SRS_FLV_BASE:-http://srs:38081}
+
       # Stable unique identity of this node (drives nodeId: user assignments,
       # session ownership, quotas). NOT an address.
       NODE_IDENTIFIER: ${NODE_IDENTIFIER:-$(hostname)}
+
       # Public reachability of this node — reported to the control plane and
       # handed through to browsers (the OBS ingest URL, the ICE latency-probe
       # port, the WebRTC media port). PUBLIC_MEDIA_NODE_ORIGIN empty = users push via the
@@ -56,6 +67,7 @@ services:
       PUBLIC_MEDIA_NODE_RTMP_PORT: ${PUBLIC_MEDIA_NODE_RTMP_PORT:-1935}
       PUBLIC_MEDIA_NODE_PROBE_UDP_PORT: ${PUBLIC_MEDIA_NODE_PROBE_UDP_PORT:-38111}
       PUBLIC_MEDIA_NODE_SRS_UDP_PORT: ${PUBLIC_MEDIA_NODE_SRS_UDP_PORT:-38000}
+
       # Shared auth token (must match the backend; empty = no auth)
       MEDIA_NODE_AUTH_TOKEN: ${MEDIA_NODE_AUTH_TOKEN:-}
     volumes:
@@ -106,6 +118,12 @@ services:
       - "38000:38000/udp"
     networks:
       - constrainable-ingest
+      # ingest-shared must ALSO carry the SRS service in split deployments:
+      # the app resolves the node-advertised SRS_FLV_BASE (http://srs:38081)
+      # over this network — the watch transcoding twin pulls/pushes RTMP to
+      # that host. Uncomment together with the media-node block + the app's
+      # compose when splitting projects across hosts.
+      # - ingest-shared   # external shared network (see header)
     depends_on:
       - media-node
     restart: unless-stopped

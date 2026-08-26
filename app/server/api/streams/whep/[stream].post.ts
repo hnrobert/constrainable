@@ -58,7 +58,7 @@ export default defineEventHandler(async (event) => {
   // settings; falls back to the original stream at the concurrency cap.
   const host = getHostingNode(stream)
   if (host) {
-    const watchStream = await ensureCleanStream(stream, host.nodeId)
+    const watchStream = await ensureCleanStream(stream, host.nodeId, host.srsFlvBase)
     let answer: string
     try {
       const bin = await wsRpcWhepRelay(host.nodeId, watchStream, new Uint8Array(Buffer.from(offer, 'utf8')))

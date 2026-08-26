@@ -32,16 +32,24 @@ const REAP_INTERVAL_MS = 30_000
 const READY_TIMEOUT_MS = 2_000
 
 /**
- * SRS address as reachable from THIS container. The docker service name
- * resolves on the shared network (ingest-shared) — the node-advertised
- * flvBase hostname (e.g. http://unnc-nas-space:38081) is NOT safe here: it
- * is a bare hostname that the NAS resolver feeds to the mihomo proxy's
- * fake-IP range (198.18.x.x), so RTMP connects to the proxy and dies with
- * "Cannot read RTMP handshake response". Override for non-docker setups.
+ * Derive the SRS address from the NODE-ADVERTISED FLV base (registered at
+ * hello: SRS_FLV_BASE on the node, default http://<identifier>:38081). The
+ * twin pulls RTMP (1935) and pushes back over the same host — the
+ * advertisement is the deployment's single source of truth for "how to
+ * reach this node's SRS", and it must resolve from THIS container. (Do NOT
+ * hardcode docker service names here: the app may live on a different
+ * host/network than the node. If the advertised hostname doesn't resolve —
+ * e.g. a bare identifier swallowed by a fake-IP DNS like mihomo — that is
+ * a deployment DNS problem to fix at the resolver, not code to work
+ * around.)
  */
-const SRS_HOST = process.env.SRS_INTERNAL_HOST || 'srs'
-const SRS_RTMP = `rtmp://${SRS_HOST}:1935`
-const SRS_FLV_BASE = `http://${SRS_HOST}:38081`
+function srsRtmpBase(flvBase: string): string {
+  try {
+    return `rtmp://${new URL(flvBase).hostname}:1935`
+  } catch {
+    return `rtmp://${flvBase}:1935`
+  }
+}
 
 interface Variant {
   proc: ReturnType<typeof Bun.spawn>
@@ -91,9 +99,10 @@ function teardown(stream: string, entry: Variant, notifyNode: boolean): void {
 /**
  * Returns the stream name a watch should be answered from: the clean twin
  * (starting it if needed), or the ORIGINAL stream when the concurrency cap
- * is hit (fallback = today's behavior).
+ * is hit (fallback = today's behavior). `flvBase` is the hosting node's
+ * advertised SRS FLV base — the RTMP host is its hostname.
  */
-export async function ensureCleanStream(stream: string, nodeId: string): Promise<string> {
+export async function ensureCleanStream(stream: string, nodeId: string, flvBase: string): Promise<string> {
   const cleanName = CLEAN_PREFIX + stream
   const existing = variants.get(stream)
   if (existing) {
@@ -105,6 +114,7 @@ export async function ensureCleanStream(stream: string, nodeId: string): Promise
     return stream
   }
 
+  const rtmp = srsRtmpBase(flvBase)
   const proc = Bun.spawn(
     [
       env.ffmpegPath,
@@ -112,7 +122,7 @@ export async function ensureCleanStream(stream: string, nodeId: string): Promise
       '-loglevel',
       'error',
       '-i',
-      `${SRS_RTMP}/live/${stream}`,
+      `${rtmp}/live/${stream}`,
       // strip B-frames (WebRTC cannot reference them) and guarantee a
       // decodable entry point every 2s regardless of the source frame rate
       '-c:v',
@@ -129,7 +139,7 @@ export async function ensureCleanStream(stream: string, nodeId: string): Promise
       'copy',
       '-f',
       'flv',
-      `${SRS_RTMP}/live/${cleanName}`,
+      `${rtmp}/live/${cleanName}`,
     ],
     { stdin: 'ignore', stdout: 'ignore', stderr: 'pipe' },
   )
@@ -150,7 +160,7 @@ export async function ensureCleanStream(stream: string, nodeId: string): Promise
     teardown(stream, entry, true)
   })
 
-  await waitForMount(`${SRS_FLV_BASE}/live/${cleanName}.flv`)
+  await waitForMount(`${flvBase.replace(/\/+$/, '')}/live/${cleanName}.flv`)
   console.log(`[clean] twin ready: ${cleanName} (${variants.size} active)`)
   return cleanName
 }
