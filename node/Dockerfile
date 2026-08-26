@@ -13,7 +13,9 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/media-node .
+RUN CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/media-node . \
+    # empty placeholder used to initialize volume-dir ownership below
+    && mkdir -p /out/voldir && touch /out/voldir/.placeholder
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/media-node /usr/local/bin/media-node
@@ -23,6 +25,11 @@ COPY --from=build /src/srs.conf.template /etc/media-node/srs.conf.template
 # can't be chowned at runtime, and named volumes initialize from image dir
 # ownership; without this the nonroot process couldn't write the config.
 COPY --from=build --chown=65532:65532 /src/srs.conf.template /srs-config/.placeholder
+# Same for the records mount: only relevant when a named volume is used
+# (see the compose "records" note) — bind mounts hide image content, and
+# the default deployment's permission contract is the records-init service
+# + the SRS umask instead.
+COPY --from=build --chown=65532:65532 /out/voldir/.placeholder /records/.placeholder
 
 EXPOSE 1935
 

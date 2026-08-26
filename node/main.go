@@ -23,7 +23,7 @@ import (
 	"media-node/rtmp"
 )
 
-const version = "0.6.0"
+const version = "0.7.0"
 
 // startSRS renders the config template and starts SRS. The RENDER always
 // happens: when SRS runs as a sidecar container (SRS_BIN empty), the rendered
@@ -72,10 +72,14 @@ func startSRS(cfg *Config) *exec.Cmd {
 	return cmd
 }
 
-// reportRecording scans RECORD_DIR/<stream>/ for the FLV segments SRS DVR wrote during the session and reports them under <eventKey>/<user>/
-// wrote during the session and reports them to the control plane
-// (recording:ready). Runs in its own goroutine with a short delay — SRS
-// finalizes (closes) the DVR file only after it sees the relay go away.
+// reportRecording scans RECORD_DIR/<eventKey>/<stream>/ for the FLV segments
+// SRS DVR wrote during the session and reports them to the control plane
+// (recording:ready). The relay publishes under app=<eventKey> and the SRS
+// dvr_path template is /records/[app]/[stream]/ — files land in their FINAL
+// layout at publish time; this function only scans and reports (NO move, no
+// directory creation — the node stays read-only on the records tree).
+// Runs in its own goroutine with a short delay — SRS finalizes (closes) the
+// DVR file only after it sees the relay go away.
 // Delivery is RETRIED for up to 15 minutes: a single emit can be lost to an
 // app restart mid-roll (production incident 2026-08: files on disk, no DB
 // rows), so keep re-reporting until it lands.
@@ -83,26 +87,23 @@ func reportRecording(cfg *Config, c node.ControlClient, s *media.Session) {
 	go func() {
 		time.Sleep(2 * time.Second)
 
-		dir := filepath.Join(cfg.RecordDir, s.StreamName)
+		// Same event-dir derivation as the relay's SRS app: <eventKey>,
+		// e<eventId> legacy fallback, then the plain "live" bucket.
+		eventDir := s.EventKey
+		if eventDir == "" && s.EventID != nil {
+			eventDir = fmt.Sprintf("e%d", *s.EventID)
+		}
+		if eventDir == "" {
+			eventDir = "live"
+		}
+		dir := filepath.Join(cfg.RecordDir, eventDir, s.StreamName)
 		entries, err := os.ReadDir(dir)
 		if err != nil {
-			// PERMISSION failures land here too (e.g. Synology ACLs deny the
-			// non-root uid) and used to exit SILENTLY — the 2026-08-26
-			// incident: files on disk, no [dvr] log, no DB rows, nothing.
+			// PERMISSION failures land here too and used to exit SILENTLY —
+			// the 2026-08-26 incident: files on disk, no [dvr] log, no DB
+			// rows, nothing.
 			log.Printf("[dvr] scan %s failed: %v", dir, err)
 			return
-		}
-		// Recordings file under <eventKey>/<user>/ — first level the event
-		// KEY (slug, filesystem-safe [a-z0-9_-]), second the publisher.
-		// SRS's dvr_path only knows the stream, so finished segments are
-		// MOVED into place before reporting. Falls back to e<eventId> when
-		// the control plane sent no key; event-less sessions keep the plain
-		// <stream>/ layout.
-		eventDir := ""
-		if s.EventKey != "" {
-			eventDir = s.EventKey
-		} else if s.EventID != nil {
-			eventDir = fmt.Sprintf("e%d", *s.EventID)
 		}
 		var segs []node.RecordingSegment
 		var total int64
@@ -114,17 +115,8 @@ func reportRecording(cfg *Config, c node.ControlClient, s *media.Session) {
 			if err != nil {
 				continue
 			}
-			rel := path.Join(s.StreamName, e.Name())
-			if eventDir != "" {
-				dst := filepath.Join(cfg.RecordDir, eventDir, s.StreamName, e.Name())
-				if err := os.MkdirAll(filepath.Dir(dst), 0o755); err == nil {
-					if err := os.Rename(filepath.Join(dir, e.Name()), dst); err == nil {
-						rel = path.Join(eventDir, s.StreamName, e.Name())
-					}
-				}
-			}
 			segs = append(segs, node.RecordingSegment{
-				RelPath:   rel,
+				RelPath:   path.Join(eventDir, s.StreamName, e.Name()),
 				SizeBytes: info.Size(),
 			})
 			total += info.Size()
@@ -277,7 +269,7 @@ func main() {
 			monitorLimits = nil
 		}
 		manager.Start(streamName, auth.SessionID, auth.EventID, auth.EventKey, "", monitorLimits, auth.Record)
-		return rtmp.PublishGrant{Allowed: true, Limits: limits, Strict: auth.Strict, Measured: auth.Measured}
+		return rtmp.PublishGrant{Allowed: true, Limits: limits, Strict: auth.Strict, Measured: auth.Measured, EventKey: auth.EventKey}
 	}
 	rtmp.OnUnpublish = func(streamName string) {
 		manager.End(streamName)
@@ -324,6 +316,10 @@ func main() {
 	socketClient.SetOnConfig(func(c node.ConfigLimits) {
 		log.Printf("[node] config:limits received")
 	})
+	// WHEP relay routing: subscribers must select the same SRS app the relay
+	// publishes under (app=<eventKey> since v0.7.0; clean- twins → "live").
+	node.SetSrsAppLookup(manager.EventKeyOf)
+
 	socketClient.SetOnDelete(func(del node.RecordingDelete) error {
 		log.Printf("[node] recording:delete %d path(s)", len(del.Segments))
 		for _, seg := range del.Segments {

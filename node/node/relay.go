@@ -15,6 +15,15 @@ import (
 	"strings"
 )
 
+// srsAppLookup resolves the SRS application a stream is published under (the
+// event key of its ACTIVE session). Set by main from the media manager;
+// nil/empty → the "live" bucket, which is also where the watch transcoding
+// twins (clean-<user>) are pushed.
+var srsAppLookup func(streamName string) string
+
+// SetSrsAppLookup wires the session→eventKey lookup used by the WHEP relay.
+func SetSrsAppLookup(f func(streamName string) string) { srsAppLookup = f }
+
 // whepRelayHTTP forwards a browser's WHEP offer to this node's colocated SRS.
 // Returns (answer, "") on 201, ("", error) otherwise. The SRS API port is
 // deliberately never published — this relay is the only path.
@@ -25,12 +34,23 @@ import (
 // the RTMP publisher feeds, and playback shows "connected, 0 bytes" forever
 // (verified against SRS 6.0.191 on 2026-08-25: literal @ reuses the
 // publisher's source, %40 spawns a fresh empty one).
+//
+// The app mirrors the relay's publish routing: publishes go to
+// app=<eventKey> (DVR lands in /records/<eventKey>/<user>/), so the
+// subscriber must select the same app. The watch transcoding twin
+// (clean-<user>, no session) resolves to "live" — where it is pushed.
 func whepRelayHTTP(whepBase, streamName string, offer []byte) (string, string) {
 	if whepBase == "" {
 		return "", "node has no SRS API base configured"
 	}
+	app := "live"
+	if srsAppLookup != nil {
+		if a := srsAppLookup(streamName); a != "" {
+			app = a
+		}
+	}
 	q := url.Values{}
-	q.Set("app", "live")
+	q.Set("app", app)
 	q.Set("stream", streamName)
 	target := strings.TrimRight(whepBase, "/") + "/rtc/v1/whep/?" + strings.ReplaceAll(q.Encode(), "%40", "@")
 	resp, err := http.Post(target, "application/sdp", bytes.NewReader(offer))

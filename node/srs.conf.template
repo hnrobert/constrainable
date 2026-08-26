@@ -34,11 +34,14 @@ vhost __defaultVhost__ {
     }
 
     # Native DVR recording: FLV written directly from the RTMP stream.
-    # Files land in /records/{stream}/YYYY-MM-DD_HH:MM:SS.mmm.flv
+    # The relay publishes under app=<eventKey>, so [app]/[stream] lands files
+    # straight in their FINAL layout /records/{eventKey}/{user}/ — no
+    # node-side move, no node-created directories. Anonymous/event-less
+    # publishes (app "live") land in /records/live/{user}/.
     # SRS closes files cleanly on stream end (no corruption).
     dvr {
         enabled         on;
-        dvr_path        /records/[stream]/[2006]-[01]-[02]_[15]:[04]:[05].[999].flv;
+        dvr_path        /records/[app]/[stream]/[2006]-[01]-[02]_[15]:[04]:[05].[999].flv;
         dvr_plan        session;
         dvr_duration    0;
         time_jitter     full;

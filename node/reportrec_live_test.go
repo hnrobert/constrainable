@@ -22,10 +22,12 @@ func TestReportRecordingLiveWs(t *testing.T) {
 	}
 	root := t.TempDir()
 	stream := "liveuser@e2e.test"
-	if err := os.MkdirAll(filepath.Join(root, stream), 0o755); err != nil {
+	// files already live at the FINAL layout (app=eventKey since v0.7.0 —
+	// SRS writes /records/[app]/[stream]/ directly)
+	if err := os.MkdirAll(filepath.Join(root, "test", stream), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, stream, "2026-08-26_09-00-00.000.flv"), make([]byte, 4096), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "test", stream, "2026-08-26_09-00-00.000.flv"), make([]byte, 4096), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -47,17 +49,18 @@ func TestReportRecordingLiveWs(t *testing.T) {
 	s := &media.Session{StreamName: stream, EventKey: "test", StartedAt: time.Now().Add(-30 * time.Second)}
 	reportRecording(cfg, c, s)
 
-	// the success log goes to stderr; assert via the file move instead
-	moved := filepath.Join(root, "test", stream, "2026-08-26_09-00-00.000.flv")
+	// the success log goes to stderr; assert the file is still present and
+	// untouched at the final layout (no move under the app=eventKey design)
+	final := filepath.Join(root, "test", stream, "2026-08-26_09-00-00.000.flv")
 	ok := false
 	for i := 0; i < 100 && !ok; i++ {
 		time.Sleep(100 * time.Millisecond)
-		if _, err := os.Stat(moved); err == nil {
+		if _, err := os.Stat(final); err == nil {
 			ok = true
 		}
 	}
 	if !ok {
-		t.Fatal("segment was NOT moved to <eventKey>/<stream>/ within 10s — reportRecording goroutine did not run")
+		t.Fatal("segment missing at <eventKey>/<stream>/ within 10s — reportRecording goroutine did not run")
 	}
-	t.Logf("moved to %s (emit should have reached the app)", moved)
+	t.Logf("final layout intact at %s (emit should have reached the app)", final)
 }

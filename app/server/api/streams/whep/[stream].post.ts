@@ -22,6 +22,7 @@ import { ensureCleanStream } from '../../../services/cleanstream'
 import { getAuth } from '../../../utils/auth'
 import { UsersRepository } from '../../../repositories/users.repository'
 import { PublishSessionsRepository } from '../../../repositories/publish-sessions.repository'
+import { EventsRepository } from '../../../repositories/events.repository'
 
 export default defineEventHandler(async (event) => {
   // admin: any stream; regular user: only their own (account email = stream
@@ -58,7 +59,12 @@ export default defineEventHandler(async (event) => {
   // settings; falls back to the original stream at the concurrency cap.
   const host = getHostingNode(stream)
   if (host) {
-    const watchStream = await ensureCleanStream(stream, host.nodeId, host.srsFlvBase)
+    // Event slug routes the SRS app the relay publishes under
+    // (app=<eventKey> → DVR /records/<eventKey>/<user>/); the clean twin
+    // pulls from that app. Event-less (anonymous) sessions → "live".
+    const evRow = session.eventId ? EventsRepository.findById(session.eventId) : null
+    const eventKey = evRow?.slug || 'live'
+    const watchStream = await ensureCleanStream(stream, host.nodeId, host.srsFlvBase, eventKey)
     let answer: string
     try {
       const bin = await wsRpcWhepRelay(host.nodeId, watchStream, new Uint8Array(Buffer.from(offer, 'utf8')))

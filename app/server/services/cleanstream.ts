@@ -90,9 +90,9 @@ function teardown(stream: string, entry: Variant, notifyNode: boolean): void {
     /* already dead */
   }
   if (notifyNode) {
-    // the twin's DVR files (records/clean-<stream>/) are junk — no-extension
-    // rel path = directory sentinel in the node's delete handler
-    sendRecordingDelete(entry.nodeId, [CLEAN_PREFIX + stream])
+    // the twin's DVR files (records/live/clean-<stream>/) are junk —
+    // no-extension rel path = directory sentinel in the node's delete handler
+    sendRecordingDelete(entry.nodeId, ['live/' + CLEAN_PREFIX + stream])
   }
 }
 
@@ -100,9 +100,19 @@ function teardown(stream: string, entry: Variant, notifyNode: boolean): void {
  * Returns the stream name a watch should be answered from: the clean twin
  * (starting it if needed), or the ORIGINAL stream when the concurrency cap
  * is hit (fallback = today's behavior). `flvBase` is the hosting node's
- * advertised SRS FLV base — the RTMP host is its hostname.
+ * advertised SRS FLV base (RTMP host = its hostname); `eventKey` is the
+ * event slug of the live session — the relay publishes the ORIGINAL under
+ * SRS app=<eventKey> (DVR → /records/<eventKey>/<user>/), so the twin must
+ * PULL from that app. The twin itself is PUSHED to the plain "live" app —
+ * watch-only junk at /records/live/clean-<user>/, which the node wipes via
+ * the directory-sentinel delete.
  */
-export async function ensureCleanStream(stream: string, nodeId: string, flvBase: string): Promise<string> {
+export async function ensureCleanStream(
+  stream: string,
+  nodeId: string,
+  flvBase: string,
+  eventKey: string,
+): Promise<string> {
   const cleanName = CLEAN_PREFIX + stream
   const existing = variants.get(stream)
   if (existing) {
@@ -122,7 +132,7 @@ export async function ensureCleanStream(stream: string, nodeId: string, flvBase:
       '-loglevel',
       'error',
       '-i',
-      `${rtmp}/live/${stream}`,
+      `${rtmp}/${eventKey}/${stream}`,
       // strip B-frames (WebRTC cannot reference them) and guarantee a
       // decodable entry point every 2s regardless of the source frame rate
       '-c:v',

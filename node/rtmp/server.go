@@ -66,14 +66,15 @@ type GateLimits struct {
 }
 
 // PublishGrant is the control plane's verdict for one publish: allow/deny,
-// the event's caps, and which enforcement modes are on. The node enforces
-// the DECLARED spec locally (metadata-time, OBS-terminal) when Strict, and
-// hands the caps to the measured monitor when Measured.
+// the event's caps, which enforcement modes are on, and the event KEY (slug)
+// — the relay publishes to SRS under app=<eventKey> so DVR lands directly
+// in /records/<eventKey>/<user>/ with zero node-side directory creation.
 type PublishGrant struct {
 	Allowed  bool
 	Limits   *GateLimits
 	Strict   bool
 	Measured bool
+	EventKey string
 }
 
 var (
@@ -528,17 +529,48 @@ func HandleOBS(conn net.Conn, app AppClient) {
 						"Stream rejected: your OBS output settings exceed this event's limits. Lower resolution/FPS/bitrate and start streaming again.")})
 					return
 				}
+				// Session gate FIRST: the control plane opens the session
+				// (row, limits, record flag) AND returns the event key that
+				// routes the SRS publish below. Deny or ack timeout is
+				// fail-closed — BadName is terminal for OBS, no retry loop.
+				grant := PublishGrant{Allowed: false}
+				if OnPublishGate != nil {
+					grant = OnPublishGate(final, token, authedUser)
+				}
+				if !grant.Allowed {
+					log.Printf("%s publish '%s' denied by control plane", remote, final)
+					writeBadName("Authentication failed: the server rejected this stream.")
+					_ = conn.Close()
+					return
+				}
+				grantLimits, grantStrict = grant.Limits, grant.Strict
+
+				// SRS app = the event key (slug, already sanitized by
+				// SafeStreamName — '/' becomes '_', no path escape): SRS then
+				// DVRs straight into /records/<eventKey>/<user>/ and the node
+				// never creates directories in the records root. Anonymous or
+				// event-less publishes land under the plain "live" app.
+				srsApp := SafeStreamName(grant.EventKey)
+				if srsApp == "" {
+					srsApp = "live"
+				}
 				rewritten := SafeStreamName(final) + "?token=" + token
-				log.Printf("%s publish key '%s' → stream '%s'", remote, token, rewritten)
+				log.Printf("%s publish key '%s' → stream '%s' (app=%s)", remote, token, rewritten, srsApp)
 				name = rewritten
-				u, err := DialUpstream(SRSAddr)
+				u, err := DialUpstream(SRSAddr, srsApp)
 				if err != nil {
 					log.Printf("%s upstream dial failed: %v", remote, err)
+					if OnUnpublish != nil {
+						OnUnpublish(final) // end the session the gate just opened
+					}
 					return
 				}
 				if err := u.Publish(name); err != nil {
 					u.Close()
 					log.Printf("%s upstream publish failed: %v", remote, err)
+					if OnUnpublish != nil {
+						OnUnpublish(final)
+					}
 					return
 				}
 				up = u
@@ -557,21 +589,6 @@ func HandleOBS(conn net.Conn, app AppClient) {
 						conn.Close()
 					})
 				}()
-				// Session gate: the control plane opens the session (row, limits,
-				// record flag) before we tell OBS "go". Deny or ack timeout is
-				// fail-closed — BadName is terminal for OBS, no retry loop.
-				grant := PublishGrant{Allowed: false}
-				if OnPublishGate != nil {
-					grant = OnPublishGate(final, token, authedUser)
-				}
-				if !grant.Allowed {
-					log.Printf("%s publish '%s' denied by control plane", remote, final)
-					writeBadName("Authentication failed: the server rejected this stream.")
-					up.Close()
-					_ = conn.Close()
-					return
-				}
-				grantLimits, grantStrict = grant.Limits, grant.Strict
 				published = final
 				relaysMu.Lock()
 				relays[published] = relayHandle{conn: conn, up: up}

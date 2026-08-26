@@ -153,6 +153,18 @@ func (m *Manager) Lookup(streamName string) (sessionID int64, eventID *int64, ok
 	return s.SessionID, s.EventID, true
 }
 
+// EventKeyOf returns the SRS application the stream is published under
+// (the event key; "" when unknown/not active — callers fall back to "live",
+// which is also where the watch transcoding twins live).
+func (m *Manager) EventKeyOf(streamName string) string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if s, found := m.sessions[streamName]; found {
+		return s.EventKey
+	}
+	return ""
+}
+
 // End stops tracking and reports final metrics + duration.
 // Recording finalization is handled by SRS DVR (on_unpublish closes the file).
 func (m *Manager) End(streamName string) {

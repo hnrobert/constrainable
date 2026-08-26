@@ -19,9 +19,12 @@ type Upstream struct {
 	StreamID float64
 }
 
-// dialUpstream connects to SRS, handshakes, sets chunk size, connect()s and
+// DialUpstream connects to SRS, handshakes, sets chunk size, connect()s and
 // createStream()s. The publish happens later (once we know OBS' stream name).
-func DialUpstream(addr string) (*Upstream, error) {
+// `app` is the RTMP application to publish under: the event key (slug), so
+// SRS DVRs straight into /records/<app>/<stream>/ — the records layout is
+// decided at publish time and the node never creates directories.
+func DialUpstream(addr, app string) (*Upstream, error) {
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		return nil, err
@@ -37,8 +40,8 @@ func DialUpstream(addr string) (*Upstream, error) {
 		up.Close()
 		return nil, err
 	}
-	tcURL := "rtmp://" + addr + "/live"
-	if err := up.Cw.WriteMessage(&Message{Type: 20, CSID: 3, Payload: CmdConnect("live", tcURL)}); err != nil {
+	tcURL := "rtmp://" + addr + "/" + app
+	if err := up.Cw.WriteMessage(&Message{Type: 20, CSID: 3, Payload: CmdConnect(app, tcURL)}); err != nil {
 		up.Close()
 		return nil, err
 	}

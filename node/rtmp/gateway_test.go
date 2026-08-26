@@ -455,6 +455,14 @@ func TestPublishPolicyEnforcement(t *testing.T) {
 	defer app.Close()
 	addr := startGateway(t, app.URL, token)
 
+	// The gate now runs BEFORE the SRS relay (it returns the event key that
+	// routes the publish app) and is fail-closed on nil — production always
+	// sets it (main.go). This test exercises the POLICY layer, so stub a
+	// permissive gate; empty EventKey → SRS app "live".
+	oldGate := OnPublishGate
+	OnPublishGate = func(_, _, _ string) PublishGrant { return PublishGrant{Allowed: true} }
+	defer func() { OnPublishGate = oldGate }()
+
 	names := make(chan string, 8)
 	oldSRS := SRSAddr
 	SRSAddr = fakeSRS(t, names)
