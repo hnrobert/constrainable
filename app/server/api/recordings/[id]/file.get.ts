@@ -50,7 +50,9 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'invalid id' })
   }
 
-  const segs = resolveSegments(id)
+  // Dedup: rows written before the merge was made idempotent can list a
+  // segment twice — the concat demuxer would play it twice.
+  const segs = [...new Set(resolveSegments(id))]
   const f = resolveRecordingFile(id)
   const isDownload = getQuery(event).download !== undefined
 

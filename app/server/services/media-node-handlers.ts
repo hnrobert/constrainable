@@ -251,18 +251,26 @@ export function handleRecordingReady(payload: RecordingReadyPayload): void {
     payload.eventId != null ? RecordingsRepository.findMergeTarget(payload.eventId, payload.streamName) : undefined
 
   if (existing) {
-    // Append segments to the existing recording
+    // Merge segments into the existing recording, DEDUPED by rel path. The
+    // node reports the session's files, but two deliveries can overlap (the
+    // node retries recording:ready for up to 15 minutes after an app
+    // restart) — a blind append would double-list segments and double-count
+    // size/duration. A delivery that adds nothing new only refreshes
+    // endedAt/metrics.
     const segs: string[] = existing.segments ? JSON.parse(existing.segments) : [existing.filePath]
-    segs.push(...payload.segments.map((s) => s.relPath))
+    const known = new Set(segs)
+    const fresh = payload.segments.filter((s) => !known.has(s.relPath))
+    segs.push(...fresh.map((s) => s.relPath))
+    const sizeAdd = fresh.reduce((n, s) => n + s.sizeBytes, 0)
     const prevDur = existing.durationSec ?? 0
+    const nextDur = fresh.length > 0 ? prevDur + payload.durationSec : prevDur
     RecordingsRepository.update(existing.id, {
       segments: JSON.stringify(segs),
-      sizeBytes: existing.sizeBytes + payload.sizeBytes,
-      durationSec: prevDur + payload.durationSec,
+      sizeBytes: existing.sizeBytes + sizeAdd,
+      durationSec: nextDur,
       avgFps:
         existing.avgFps && payload.avgFps
-          ? (existing.avgFps * prevDur + payload.avgFps * payload.durationSec) /
-            Math.max(1, prevDur + payload.durationSec)
+          ? (existing.avgFps * prevDur + payload.avgFps * (nextDur - prevDur)) / Math.max(1, nextDur)
           : (payload.avgFps ?? existing.avgFps),
       width: payload.width ?? existing.width,
       height: payload.height ?? existing.height,

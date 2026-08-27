@@ -228,6 +228,11 @@ export interface MaterializedSegments {
  * serve pipeline (ffmpeg concat) then runs unchanged against the copies.
  * Sequential per segment; sizes are recording-sized (tens–hundreds of MB) so
  * this is a download-time cost, not a listing one.
+ *
+ * A segment that fails to transfer (deleted on the node — e.g. another
+ * recording row's files were cleaned while this row's list still names one)
+ * is SKIPPED with a warning: the rest of the recording still plays. Only
+ * when nothing survives do we give up.
  */
 export async function materializeRemoteSegments(
   nodeId: string,
@@ -239,55 +244,69 @@ export async function materializeRemoteSegments(
   const dir = join(env.recordDir, '_remote', nodeId.replace(/[^\w.-]/g, '_'), String(recordingId))
   mkdirSync(dir, { recursive: true })
   const absPaths: string[] = []
+  let failures = 0
 
-  for (const rel of segs) {
+  for (const rel of [...new Set(segs)]) {
     const safe = rel.replace(/\.\.(\/|\\)/g, '').replace(/^\/+/, '')
     const abs = join(dir, safe.replaceAll('/', '__'))
     const reqId = `rec-${recordingId}-${Math.random().toString(36).slice(2, 10)}`
 
-    await new Promise<void>((resolve, reject) => {
-      const chunks: Buffer[] = []
-      let settled = false
-      let lastActivity = Date.now()
-      const cleanup = (): void => {
-        pendingPulls.delete(reqId)
-        clearInterval(stallTimer)
-      }
-      const stallTimer = setInterval(() => {
-        if (Date.now() - lastActivity > REC_PULL_TIMEOUT_MS) {
-          cancelRecordingPull(nodeId, reqId)
-          finish(new Error('node file transfer stalled'))
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const chunks: Buffer[] = []
+        let settled = false
+        let lastActivity = Date.now()
+        const cleanup = (): void => {
+          pendingPulls.delete(reqId)
+          clearInterval(stallTimer)
         }
-      }, 2_000)
-      const finish = (err: Error | null): void => {
-        if (settled) return
-        settled = true
-        cleanup()
-        if (err) reject(err)
-        else {
-          try {
-            writeFileSync(abs, Buffer.concat(chunks))
-            absPaths.push(abs)
-            resolve()
-          } catch (e) {
-            reject(e instanceof Error ? e : new Error('temp write failed'))
+        const stallTimer = setInterval(() => {
+          if (Date.now() - lastActivity > REC_PULL_TIMEOUT_MS) {
+            cancelRecordingPull(nodeId, reqId)
+            finish(new Error('node file transfer stalled'))
+          }
+        }, 2_000)
+        const finish = (err: Error | null): void => {
+          if (settled) return
+          settled = true
+          cleanup()
+          if (err) reject(err)
+          else {
+            try {
+              writeFileSync(abs, Buffer.concat(chunks))
+              absPaths.push(abs)
+              resolve()
+            } catch (e) {
+              reject(e instanceof Error ? e : new Error('temp write failed'))
+            }
           }
         }
-      }
-      function onData(payload: { reqId?: string; data?: Uint8Array }): void {
-        if (payload?.reqId !== reqId || !payload.data) return
-        lastActivity = Date.now()
-        chunks.push(Buffer.from(payload.data))
-      }
-      function onEnd(payload: { reqId?: string; error?: string }): void {
-        if (payload?.reqId !== reqId) return
-        finish(payload.error ? new Error(`node: ${payload.error}`) : null)
-      }
-      pendingPulls.set(reqId, { onData, onEnd })
-      wsRpcRecordingPull(nodeId, reqId, safe).catch((e: unknown) => {
-        finish(e instanceof Error ? e : new Error('node did not start the file transfer'))
+        function onData(payload: { reqId?: string; data?: Uint8Array }): void {
+          if (payload?.reqId !== reqId || !payload.data) return
+          lastActivity = Date.now()
+          chunks.push(Buffer.from(payload.data))
+        }
+        function onEnd(payload: { reqId?: string; error?: string }): void {
+          if (payload?.reqId !== reqId) return
+          finish(payload.error ? new Error(`node: ${payload.error}`) : null)
+        }
+        pendingPulls.set(reqId, { onData, onEnd })
+        wsRpcRecordingPull(nodeId, reqId, safe).catch((e: unknown) => {
+          finish(e instanceof Error ? e : new Error('node did not start the file transfer'))
+        })
       })
-    })
+    } catch (e) {
+      failures++
+      console.warn(
+        `[recordings] segment ${rel} unavailable on node ${nodeId} — skipping (${e instanceof Error ? e.message : e})`,
+      )
+    }
+  }
+  if (absPaths.length === 0) {
+    throw createError({ statusCode: 410, statusMessage: 'recording segments missing on node' })
+  }
+  if (failures > 0) {
+    console.warn(`[recordings] recording ${recordingId}: served ${absPaths.length} segment(s), skipped ${failures}`)
   }
   return { absPaths, dir }
 }

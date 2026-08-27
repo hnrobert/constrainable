@@ -166,7 +166,11 @@
     "wsdial",
     "wxyz",
     "xport",
-    "zerolatency"
+    "zerolatency",
+    "dedup",
+    "deduped",
+    "republish",
+    "Chtimes"
   ],
   "protobuf.externalLinter.enabled": true,
   "protobuf.externalLinter.linter": "buf",

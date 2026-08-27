@@ -72,12 +72,49 @@ func startSRS(cfg *Config) *exec.Cmd {
 	return cmd
 }
 
+// sweepCleanTwinJunk removes leftover watch-twin DVR directories under
+// live/. The app's watch transcoding twins (services/cleanstream.ts) push
+// re-encoded copies under SRS app "live" with the stream name prefixed
+// "clean-" (the prefix is the app-side contract — same one the teardown
+// sentinel relies on). Their DVR output is junk by design: the app wipes it
+// on twin teardown, but SRS's DVR finalize (.tmp → .flv rename) can land
+// AFTER those sentinels and re-create the directory (verified live, >15s
+// lag), and a crash or app restart mid-watch strands it too. Real
+// recordings never use the prefix: event publishes land under app
+// <eventKey>, anonymous ones under live/<stream> with their own name.
+// Run at boot AND on a ticker — unambiguous junk, so deleting even while a
+// twin is actively writing is fine (its finalize-rename then just misses).
+// No deployment ever needs manual records cleanup.
+func sweepCleanTwinJunk(recordDir string) {
+	entries, err := os.ReadDir(filepath.Join(recordDir, "live"))
+	if err != nil {
+		return // no live/ bucket — nothing to sweep
+	}
+	n := 0
+	for _, e := range entries {
+		if e.IsDir() && strings.HasPrefix(e.Name(), "clean-") {
+			if err := os.RemoveAll(filepath.Join(recordDir, "live", e.Name())); err == nil {
+				n++
+			}
+		}
+	}
+	if n > 0 {
+		log.Printf("[dvr] swept %d leftover clean-twin junk dir(s) under live/", n)
+	}
+}
+
 // reportRecording scans RECORD_DIR/<eventKey>/<stream>/ for the FLV segments
 // SRS DVR wrote during the session and reports them to the control plane
 // (recording:ready). The relay publishes under app=<eventKey> and the SRS
 // dvr_path template is /records/[app]/[stream]/ — files land in their FINAL
 // layout at publish time; this function only scans and reports (NO move, no
 // directory creation — the node stays read-only on the records tree).
+// The directory is SHARED by every session of that stream (the final layout
+// is also its archive), so only files WRITTEN during THIS session count:
+// mtime >= session start (small grace for clock jitter). Without the window,
+// a republish would re-report yesterday's segments — the app would append
+// duplicates, and files whose recording row was deleted in between would
+// come back as phantoms that 500 every later playback.
 // Runs in its own goroutine with a short delay — SRS finalizes (closes) the
 // DVR file only after it sees the relay go away.
 // Delivery is RETRIED for up to 15 minutes: a single emit can be lost to an
@@ -87,12 +124,11 @@ func reportRecording(cfg *Config, c node.ControlClient, s *media.Session) {
 	go func() {
 		time.Sleep(2 * time.Second)
 
-		// Same event-dir derivation as the relay's SRS app: <eventKey>,
-		// e<eventId> legacy fallback, then the plain "live" bucket.
+		// Same app derivation as the relay's SRS publish (rtmp/server.go):
+		// the event key, else the plain "live" bucket. There is NO e<eventId>
+		// middle step on the publish side, so there must be none here either —
+		// a mismatch would scan a directory SRS never wrote to.
 		eventDir := s.EventKey
-		if eventDir == "" && s.EventID != nil {
-			eventDir = fmt.Sprintf("e%d", *s.EventID)
-		}
 		if eventDir == "" {
 			eventDir = "live"
 		}
@@ -105,6 +141,9 @@ func reportRecording(cfg *Config, c node.ControlClient, s *media.Session) {
 			log.Printf("[dvr] scan %s failed: %v", dir, err)
 			return
 		}
+		// Session window: SRS creates (and keeps touching) this session's DVR
+		// file only after the relay starts pushing, i.e. after s.StartedAt.
+		since := s.StartedAt.Add(-2 * time.Second)
 		var segs []node.RecordingSegment
 		var total int64
 		for _, e := range entries {
@@ -114,6 +153,9 @@ func reportRecording(cfg *Config, c node.ControlClient, s *media.Session) {
 			info, err := e.Info()
 			if err != nil {
 				continue
+			}
+			if info.ModTime().Before(since) {
+				continue // a previous session's segment — already reported then
 			}
 			segs = append(segs, node.RecordingSegment{
 				RelPath:   path.Join(eventDir, s.StreamName, e.Name()),
@@ -388,6 +430,14 @@ func main() {
 		}
 	}()
 
+	sweepCleanTwinJunk(cfg.RecordDir)
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			sweepCleanTwinJunk(cfg.RecordDir)
+		}
+	}()
 	log.Printf("media-node ready (active streams: %d)", manager.ActiveStreams())
 
 	// graceful shutdown: stop media-node, then SRS

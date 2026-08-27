@@ -59,6 +59,8 @@ interface Variant {
 }
 
 const variants = new Map<string, Variant>()
+/** in-flight spawns, keyed by stream — concurrent watch requests share ONE twin */
+const spawning = new Map<string, Promise<string>>()
 
 /** Wait (bounded) until SRS mounts the twin's HTTP-FLV endpoint — i.e. the
  *  re-encoded stream is live and answerable. Unreachable FLV base just
@@ -82,8 +84,15 @@ async function waitForMount(url: string): Promise<void> {
 }
 
 function teardown(stream: string, entry: Variant, notifyNode: boolean): void {
-  if (variants.get(stream) !== entry) return
-  variants.delete(stream)
+  // Only the CURRENT map entry is unregistered — but the kill and the junk
+  // wipe always run for THIS entry. Skipping them on a stale entry leaks two
+  // ways: a twin replaced by a racing spawn keeps transcoding forever, and a
+  // twin whose reap already removed the map entry never sends its cleanup
+  // sentinel (verified live: records/live/clean-<user>/ accumulated a 21MB
+  // .flv exactly this way). The sentinel is idempotent — wiping the
+  // directory while a replacement twin writes into it just means SRS's
+  // finalize-rename misses and the junk never lands.
+  if (variants.get(stream) === entry) variants.delete(stream)
   try {
     entry.proc.kill()
   } catch {
@@ -119,10 +128,39 @@ export async function ensureCleanStream(
     existing.lastWatchAt = Date.now()
     return cleanName
   }
+  // A spawn already in flight for this stream? Share it — two watch requests
+  // racing through the "no existing twin" check would otherwise BOTH spawn,
+  // and the entry the second spawn overwrites is never killed (orphaned
+  // transcoder, forever pulling and pushing).
+  const inflight = spawning.get(stream)
+  if (inflight) return inflight
   if (variants.size >= MAX_CONCURRENT) {
     console.warn(`[clean] concurrency cap ${MAX_CONCURRENT} reached — answering from the original stream`)
     return stream
   }
+
+  const p = startTwin(stream, cleanName, nodeId, flvBase, eventKey)
+  spawning.set(stream, p)
+  try {
+    return await p
+  } finally {
+    spawning.delete(stream)
+  }
+}
+
+async function startTwin(
+  stream: string,
+  cleanName: string,
+  nodeId: string,
+  flvBase: string,
+  eventKey: string,
+): Promise<string> {
+  // Previous watch cycle's junk: the teardown sentinels can LOSE the race
+  // with SRS's DVR finalize (the .tmp→.flv rename re-creates the directory
+  // after our delete — verified live). At spawn time the previous twin has
+  // been dead for at least the idle TTL, so its finalize has certainly
+  // landed and this wipe deterministically wins.
+  sendRecordingDelete(nodeId, ['live/' + cleanName])
 
   const rtmp = srsRtmpBase(flvBase)
   const proc = Bun.spawn(
@@ -164,10 +202,15 @@ export async function ensureCleanStream(
   const entry: Variant = { proc, nodeId, lastWatchAt: Date.now() }
   variants.set(stream, entry)
 
-  // source stream ended → ffmpeg EOFs → reap (and wipe the twin's DVR dir)
+  // Source stream ended → ffmpeg EOFs → reap (and wipe the twin's DVR dir).
+  // The wipe is DELAYED a beat: SRS finalizes the twin's DVR (rename
+  // .tmp → .flv) only after it sees the push connection drop — a sentinel
+  // that beats the finalize deletes the directory and SRS's rename then
+  // RE-CREATES the junk (observed live). Two seconds comfortably covers the
+  // finalize on an idle stream.
   void proc.exited.then(() => {
     console.log(`[clean] ffmpeg(${stream}) exited`)
-    teardown(stream, entry, true)
+    setTimeout(() => teardown(stream, entry, true), 2_000).unref?.()
   })
 
   await waitForMount(`${flvBase.replace(/\/+$/, '')}/live/${cleanName}.flv`)
