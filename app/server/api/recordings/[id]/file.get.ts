@@ -187,7 +187,10 @@ export default defineEventHandler(async (event) => {
     scheduleGlueUnlink(glued)
     const size = statSync(glued).size
     if (isDownload) {
-      const downloadName = `${segs[0]!.split('/').pop()!.replace(/\.(mkv|flv)$/, '')}_merged.mkv`
+      const downloadName = `${segs[0]!
+        .split('/')
+        .pop()!
+        .replace(/\.(mkv|flv)$/, '')}_merged.mkv`
       return serveFile(event, glued, 'video/x-matroska', size, downloadName)
     }
     return serveFile(event, glued, 'video/mp4', size)
