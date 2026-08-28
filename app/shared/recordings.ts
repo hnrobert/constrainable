@@ -17,4 +17,9 @@ export interface RecordingView {
   endedAt: number | null
   retainedUntil: number | null
   createdAt: number
+  /** media node hosting the files (null = stored locally on the app) */
+  nodeId: string | null
+  /** false = hosting node currently disconnected: play/download unavailable,
+   * deleting only removes the record (files stay on the node). null = local. */
+  nodeOnline: boolean | null
 }

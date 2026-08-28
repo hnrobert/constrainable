@@ -29,6 +29,12 @@ export interface RecordingView {
   endedAt: number | null
   retainedUntil: number | null
   createdAt: number
+  /** media node hosting the files (null = stored locally on the app) */
+  nodeId: string | null
+  /** false = hosting node currently disconnected: play/download unavailable,
+   * deleting only removes the record (files stay on the node). null = local.
+   * Mirrors #shared/recordings RecordingView. */
+  nodeOnline: boolean | null
 }
 
 export interface RecordingFilters {
@@ -38,6 +44,7 @@ export interface RecordingFilters {
 }
 
 function toView(r: Recording): RecordingView {
+  const nodeId = hostingNodeIdOf(r)
   return {
     id: r.id,
     eventId: r.eventId ?? null,
@@ -54,6 +61,10 @@ function toView(r: Recording): RecordingView {
     endedAt: r.endedAt ? r.endedAt.getTime() : null,
     retainedUntil: r.retainedUntil ? r.retainedUntil.getTime() : null,
     createdAt: r.createdAt.getTime(),
+    nodeId,
+    // liveness at READ time — the UI shows an offline hint and refuses
+    // play/download before the request can fail deep in the relay path
+    nodeOnline: nodeId ? wsConnected(nodeId) : null,
   }
 }
 
@@ -239,7 +250,9 @@ export async function materializeRemoteSegments(
   segs: string[],
   recordingId: number,
 ): Promise<MaterializedSegments> {
-  if (!wsConnected(nodeId)) throw createError({ statusCode: 502, statusMessage: 'hosting node is offline' })
+  if (!wsConnected(nodeId)) {
+    throw createError({ statusCode: 503, statusMessage: 'hosting node is offline — playback needs the node online' })
+  }
 
   const dir = join(env.recordDir, '_remote', nodeId.replace(/[^\w.-]/g, '_'), String(recordingId))
   mkdirSync(dir, { recursive: true })

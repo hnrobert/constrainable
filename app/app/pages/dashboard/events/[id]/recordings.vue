@@ -83,6 +83,12 @@ async function onDeleted(): Promise<void> {
         >
           <template #cell-streamName="{ row }">
             <span class="font-medium">{{ row.streamName }}</span>
+            <span
+              v-if="row.nodeOnline === false"
+              class="ml-2 text-xs text-destructive"
+              title="Hosting node offline — playback and download unavailable"
+              >node offline</span
+            >
           </template>
           <template #cell-sizeBytes="{ row }">{{ fmtSize(row.sizeBytes) }}</template>
           <template #cell-durationSec="{ row }">{{ fmtDuration(row.durationSec) }}</template>
