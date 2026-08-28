@@ -157,12 +157,22 @@ type StreamSpec struct {
 }
 
 // ParseMetadata extracts the spec from an @setDataFrame/onMetaData payload.
-// vals layout: ["@setDataFrame", "onMetaData", {props}].
+// Two layouts: librtmp's command form ["@setDataFrame","onMetaData",{props}]
+// and the FLV/embedded form ffmpeg-based publishers send as a raw type-18
+// data message, ["onMetaData",{props}].
 func ParseMetadata(vals []interface{}) (StreamSpec, bool) {
-	if len(vals) < 3 {
+	if len(vals) < 2 {
 		return StreamSpec{}, false
 	}
-	props, ok := vals[2].(map[string]interface{})
+	// librtmp's command form carries the props at [2]; the FLV/embedded
+	// form at [1]. Prefer [2] when it is the props object.
+	idx := 1
+	if len(vals) >= 3 {
+		if _, ok := vals[2].(map[string]interface{}); ok {
+			idx = 2
+		}
+	}
+	props, ok := vals[idx].(map[string]interface{})
 	if !ok {
 		return StreamSpec{}, false
 	}
@@ -301,7 +311,7 @@ func HandleOBS(conn net.Conn, app AppClient) {
 			// identical to a wrong password. Metadata and everything after
 			// never reach SRS.
 			if msg.Type == 18 && published != "" {
-				if vals := AmfDecodeAll(msg.Payload); len(vals) >= 3 {
+				if vals := AmfDecodeAll(msg.Payload); len(vals) >= 2 {
 					if sp, ok := ParseMetadata(vals); ok && OnPublishSpec != nil {
 						allow, rejectReason := OnPublishSpec(published, sp, grantLimits, grantStrict)
 						if !allow {

@@ -109,6 +109,33 @@ func (m *Manager) Start(
 	log.Printf("[session] started %s (session=%d record=%v)", streamName, sessionID, record)
 }
 
+// SetDeclaredSpec records the publisher's DECLARED width/height/fps from
+// onMetaData. The monitor's measured polls overwrite width/height (SRS's
+// video object is authoritative) and fps only when a real frame-delta
+// exists — so the declared spec is also the FALLBACK that keeps recording
+// rows complete for streams too short for a poll, or when SRS never
+// populates the frames counter (observed 2026-08-27 on ossrs/srs:6: frames
+// stays 0 for RTMP publishes, which left avgFps null on every recording).
+func (m *Manager) SetDeclaredSpec(streamName string, width, height int, fps float64) {
+	m.mu.Lock()
+	s, ok := m.sessions[streamName]
+	m.mu.Unlock()
+	if !ok {
+		return
+	}
+	s.mu.Lock()
+	if width > 0 {
+		s.Width = width
+	}
+	if height > 0 {
+		s.Height = height
+	}
+	if fps > 0 {
+		s.Fps = fps
+	}
+	s.mu.Unlock()
+}
+
 // SetDeclaredAudioBitrateKbps records the publisher's DECLARED audio bitrate
 // (onMetaData audiodatarate) so the monitor can subtract it from the
 // received total — the reported/judged bitrate is the VIDEO bitrate, the

@@ -1,58 +1,88 @@
 package media
 
+// The SRS streams-API decoder: SRS ≥5 emits snake_case field names (captured
+// live from ossrs/srs:6 on 2026-08-27), older builds camelCase — both must
+// decode, and neither may silently zero the byte counters (a zero RecvBytes
+// used to blank every measured bitrate).
+
 import (
 	"encoding/json"
 	"testing"
 )
 
-// Captured verbatim from the live NAS SRS (2026-08-20): kbps is an OBJECT,
-// video/audio null right after publish start. The old struct failed to decode
-// this ENTIRE payload (int ← object) → GetStreamInfo nil → no metrics ever.
-const livePayloadEarly = `{"code":0,"server":"vid-pyk6w54","streams":[
-{"id":"vid-a1446l8","name":"123123@nottingham.edu.cn","vhost":"vid-ve07er2","app":"live",
-"live_ms":1787194232074,"clients":1,"frames":0,"send_bytes":4210,"recv_bytes":3346,
-"kbps":{"recv_30s":0,"send_30s":0},"publish":{"active":true,"cid":"yrv265o8"},
-"video":null,"audio":null}]}`
+// captured verbatim from ossrs/srs:6 /api/v1/streams while a real 640x360
+// H264 stream was live (abridged to the fields we decode)
+const srs6SnakeCase = `{
+  "id": "vid-m084xs8",
+  "name": "probe4@x.test",
+  "vhost": "vid-8s933hj",
+  "app": "test",
+  "live_ms": 1787839365658,
+  "clients": 1,
+  "frames": 0,
+  "send_bytes": 4387,
+  "recv_bytes": 918404,
+  "kbps": { "recv_30s": 373, "send_30s": 0 },
+  "publish": { "active": true, "cid": "2a02u288" },
+  "video": { "codec": "H264", "profile": "High", "level": "3", "width": 640, "height": 360 },
+  "audio": null
+}`
 
-const livePayloadSteady = `{"code":0,"streams":[
-{"name":"123123@nottingham.edu.cn","live_ms":1,"clients":1,"frames":900,
-"send_bytes":9,"recv_bytes":9,"kbps":{"recv_30s":2450,"send_30s":2400},
-"publish":{"active":true,"cid":"z"},
-"video":{"codec":"H264","profile":"Main","level":"3.1","width":1920,"height":1080,"fps":29.97},
-"audio":{"codec":"AAC","sample_rate":44100,"channel":2,"profile":"LC"}}]}`
+const srsLegacyCamelCase = `{
+  "name": "user@x.test",
+  "liveMs": 1787839365658,
+  "frames": 250,
+  "sendBytes": 4387,
+  "recvBytes": 918404,
+  "kbps": { "recv_30s": 373, "send_30s": 0 },
+  "video": { "codec": "H264", "width": 1920, "height": 1080 }
+}`
 
-func TestSRSStreamInfoDecodesLivePayloads(t *testing.T) {
-	var early struct {
-		Streams []SRSStreamInfo `json:"streams"`
-	}
-	if err := json.Unmarshal([]byte(livePayloadEarly), &early); err != nil {
-		t.Fatalf("EARLY payload must decode (old struct failed here): %v", err)
-	}
-	s := early.Streams[0]
-	if s.Name != "123123@nottingham.edu.cn" {
-		t.Fatalf("name: %q", s.Name)
-	}
-	if s.Video != nil || s.Audio != nil {
-		t.Fatal("video/audio should be nil early in the stream")
-	}
-	if s.TotalBitrateKbps() != 0 {
-		t.Fatalf("early bitrate: %d", s.TotalBitrateKbps())
-	}
-	if !s.Publish.Active || s.Publish.Cid != "yrv265o8" {
-		t.Fatalf("publish block: %+v", s.Publish)
-	}
-
-	var steady struct {
-		Streams []SRSStreamInfo `json:"streams"`
-	}
-	if err := json.Unmarshal([]byte(livePayloadSteady), &steady); err != nil {
+func TestSRSStreamInfoSnakeCase(t *testing.T) {
+	var s SRSStreamInfo
+	if err := json.Unmarshal([]byte(srs6SnakeCase), &s); err != nil {
 		t.Fatal(err)
 	}
-	v := steady.Streams[0]
-	if v.Video == nil || v.Video.Width != 1920 || v.Video.Height != 1080 || v.Video.Fps != 29.97 {
-		t.Fatalf("video: %+v", v.Video)
+	if s.RecvBytes != 918404 || s.SendBytes != 4387 || s.LiveMs != 1787839365658 {
+		t.Fatalf("byte/time counters did not decode: %+v", s)
 	}
-	if v.TotalBitrateKbps() != 2450 {
-		t.Fatalf("bitrate (recv_30s): %d", v.TotalBitrateKbps())
+	if s.Video == nil || s.Video.Width != 640 || s.Video.Height != 360 {
+		t.Fatalf("video object did not decode: %+v", s.Video)
+	}
+	if s.Kbps.Recv30s != 373 {
+		t.Fatalf("kbps did not decode: %+v", s.Kbps)
+	}
+	if s.TotalBitrateKbps() != 373 {
+		t.Fatalf("total bitrate = %d, want 373", s.TotalBitrateKbps())
+	}
+}
+
+func TestSRSStreamInfoCamelCaseFallback(t *testing.T) {
+	var s SRSStreamInfo
+	if err := json.Unmarshal([]byte(srsLegacyCamelCase), &s); err != nil {
+		t.Fatal(err)
+	}
+	if s.RecvBytes != 918404 || s.LiveMs != 1787839365658 || s.Frames != 250 {
+		t.Fatalf("legacy camelCase fields did not decode: %+v", s)
+	}
+}
+
+// Declared-spec fallback: recordings of streams shorter than the first
+// monitor poll (or on SRS builds whose frames counter stays 0) still carry
+// the onMetaData geometry/framerate.
+func TestSetDeclaredSpecFallback(t *testing.T) {
+	m := NewManager(nil, func(int64, *Session) {}, func(int64, []string, *Session) {}, func(int64, int64, int, *Session) {})
+	m.Start("u@x.com", 1, nil, "ev", "", nil, true)
+	m.SetDeclaredSpec("u@x.com", 1280, 720, 29.97)
+
+	s, ok := m.sessions["u@x.com"]
+	if !ok {
+		t.Fatal("session not tracked")
+	}
+	s.mu.Lock()
+	w, h, fps := s.Width, s.Height, s.Fps
+	s.mu.Unlock()
+	if w != 1280 || h != 720 || fps != 29.97 {
+		t.Fatalf("declared spec not stored: %dx%d@%v", w, h, fps)
 	}
 }

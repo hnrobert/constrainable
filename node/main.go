@@ -320,6 +320,9 @@ func main() {
 		// Record the declared audio rate so the measured monitor can report
 		// and judge the VIDEO bitrate (OBS' "Video Bitrate" field semantics).
 		manager.SetDeclaredAudioBitrateKbps(streamName, int(spec.AudioBitrateKbps))
+		// Declared geometry/framerate: the recording report and the measured
+		// monitor's fallback (see Manager.SetDeclaredSpec).
+		manager.SetDeclaredSpec(streamName, spec.Width, spec.Height, spec.Fps)
 		// Ask the control plane for a verdict on this declared spec (fresh every
 		// time — the event's caps/strict may have changed). Transport failure
 		// falls back to the publish grant's caps.

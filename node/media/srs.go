@@ -30,14 +30,18 @@ func NewSRSClient(apiBase string) *SRSClient {
 // VERIFIED against a live response: `kbps` is an OBJECT {recv_30s,send_30s}
 // (NOT a number — decoding it as an int fails the WHOLE payload, so metrics
 // never reach the dashboard), and `video`/`audio` are null until the first
-// frames arrive — hence the pointers.
+// frames arrive — hence the pointers. SRS ≥5 emits snake_case names
+// (live_ms/send_bytes/recv_bytes — re-verified 2026-08-27 against
+// ossrs/srs:6: with camelCase tags these silently decoded as 0, taking
+// every measured bitrate down with them); older builds used camelCase,
+// covered by the fallback in UnmarshalJSON.
 type SRSStreamInfo struct {
 	Name      string `json:"name"`
-	LiveMs    int64  `json:"liveMs"`
+	LiveMs    int64  `json:"live_ms"`
 	Clients   int    `json:"clients"`
 	Frames    int    `json:"frames"`
-	SendBytes int64  `json:"sendBytes"`
-	RecvBytes int64  `json:"recvBytes"` // cumulative bytes SRS received FROM the publisher
+	SendBytes int64  `json:"send_bytes"`
+	RecvBytes int64  `json:"recv_bytes"` // cumulative bytes SRS received FROM the publisher
 	Kbps      struct {
 		Recv30s int `json:"recv_30s"` // what SRS receives FROM the publisher
 		Send30s int `json:"send_30s"`
@@ -60,6 +64,34 @@ type SRSStreamInfo struct {
 		Channel    int    `json:"channel"`
 		Profile    string `json:"profile"`
 	} `json:"audio"`
+}
+
+// UnmarshalJSON decodes the snake_case names above, then fills the camelCase
+// variants (SRS <5) when those fields came back absent.
+func (i *SRSStreamInfo) UnmarshalJSON(b []byte) error {
+	type alias SRSStreamInfo // shed the custom unmarshaler, avoid recursion
+	var a alias
+	if err := json.Unmarshal(b, &a); err != nil {
+		return err
+	}
+	*i = SRSStreamInfo(a)
+	var legacy struct {
+		LiveMs    int64 `json:"liveMs"`
+		SendBytes int64 `json:"sendBytes"`
+		RecvBytes int64 `json:"recvBytes"`
+	}
+	if json.Unmarshal(b, &legacy) == nil {
+		if i.LiveMs == 0 {
+			i.LiveMs = legacy.LiveMs
+		}
+		if i.SendBytes == 0 {
+			i.SendBytes = legacy.SendBytes
+		}
+		if i.RecvBytes == 0 {
+			i.RecvBytes = legacy.RecvBytes
+		}
+	}
+	return nil
 }
 
 // TotalBitrateKbps is the publish-side TOTAL bitrate SRS receives from OBS
